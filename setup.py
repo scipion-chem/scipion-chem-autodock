@@ -36,6 +36,6 @@ setup(
        'pwchem': ['autodock.png'],
     },
     entry_points={
-        'pyworkflow.plugin': 'pwchem = pwchem'
+        'pyworkflow.plugin': 'autodock = autodock'
     }
 )
