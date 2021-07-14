@@ -27,3 +27,4 @@
 from .protocol_preparation_receptor import ProtChemADTPrepareReceptor
 from .protocol_preparation_ligands import ProtChemADTPrepareLigands
 from .protocol_autodock import ProtChemAutodock
+from .protocol_autoLigand import ProtChemAutoLigand
