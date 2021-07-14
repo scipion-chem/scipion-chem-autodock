@@ -33,7 +33,7 @@ from pwchem import Plugin as pwchem_plugin
 from pyworkflow.utils.path import makePath, createLink, cleanPattern
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
-class ProtBioinformaticsAutodock(EMProtocol):
+class ProtChemAutodock(EMProtocol):
     """Perform a docking experiment with autodock. See the help at
        http://autodock.scripps.edu/faqs-help/manual/autodock-4-2-user-guide/AutoDock4.2_UserGuide.pdf"""
     _label = 'autodock'

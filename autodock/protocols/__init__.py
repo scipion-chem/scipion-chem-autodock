@@ -24,6 +24,6 @@
 # *
 # **************************************************************************
 
-from .protocol_preparation_receptor import ProtBioinformaticsADTPrepareReceptor
-from .protocol_preparation_ligands import ProtBioinformaticsADTPrepareLigands
-from .protocol_autodock import ProtBioinformaticsAutodock
+from .protocol_preparation_receptor import ProtChemADTPrepareReceptor
+from .protocol_preparation_ligands import ProtChemADTPrepareLigands
+from .protocol_autodock import ProtChemAutodock

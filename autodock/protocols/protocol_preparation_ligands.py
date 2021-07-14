@@ -27,10 +27,10 @@ import glob
 import os
 
 from pyworkflow.protocol.params import PointerParam
-from .protocol_preparation_receptor import ProtBioinformaticsADTPrepare
+from .protocol_preparation_receptor import ProtChemADTPrepare
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 
-class ProtBioinformaticsADTPrepareLigands(ProtBioinformaticsADTPrepare):
+class ProtChemADTPrepareLigands(ProtChemADTPrepare):
         """Prepare ligands using Autodocking Tools from MGL"""
         _label = 'ligand preparation ADT'
         _program = ""
@@ -41,7 +41,7 @@ class ProtBioinformaticsADTPrepareLigands(ProtBioinformaticsADTPrepare):
             form.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules",
                           label='Set of small molecules:', allowsNull=False,
                           help='It must be in pdb or mol2 format, you may use Schrodinger convert to change it')
-            ProtBioinformaticsADTPrepare._defineParamsBasic(self, form)
+            ProtChemADTPrepare._defineParamsBasic(self, form)
 
         def preparationStep(self):
             for mol in self.inputSmallMols.get():
@@ -51,7 +51,7 @@ class ProtBioinformaticsADTPrepareLigands(ProtBioinformaticsADTPrepare):
                 fnOut = self._getExtraPath(fnRoot+".pdbqt")
 
                 args = ' -v -l %s -o %s' % (fnSmall, fnOut)
-                ProtBioinformaticsADTPrepare.callPrepare(self, "prepare_ligand4", args)
+                ProtChemADTPrepare.callPrepare(self, "prepare_ligand4", args)
 
         def createOutput(self):
             outputSmallMolecules = SetOfSmallMolecules().create(path=self._getPath(), suffix='SmallMols')

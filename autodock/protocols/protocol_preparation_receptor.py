@@ -32,7 +32,7 @@ from pwem.convert.atom_struct import AtomicStructHandler
 from pwchem import Plugin as pwchem_plugin
 from pwem.objects.data import AtomStruct
 
-class ProtBioinformaticsADTPrepare(EMProtocol):
+class ProtChemADTPrepare(EMProtocol):
     def _defineParamsBasic(self, form):
         choicesRepair = ['None', 'Bonds hydrogens', 'Bonds', 'Hydrogens']
         if self.typeRL=="target":
@@ -118,7 +118,7 @@ class ProtBioinformaticsADTPrepare(EMProtocol):
             self._defineOutputs(outputStructure=target)
             self._defineSourceRelation(self.inputStructure, target)
 
-class ProtBioinformaticsADTPrepareReceptor(ProtBioinformaticsADTPrepare):
+class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
     """Prepare receptor using Autodocking Tools from MGL"""
     _label = 'target preparation ADT'
     _program = ""
@@ -129,7 +129,7 @@ class ProtBioinformaticsADTPrepareReceptor(ProtBioinformaticsADTPrepare):
         form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
                       label='Atomic Structure:', allowsNull=False,
                       help='It must be in pdb,mol2,pdbq,pdbqs,pdbqt format, you may use Schrodinger convert to change it')
-        ProtBioinformaticsADTPrepare._defineParamsBasic(self, form)
+        ProtChemADTPrepare._defineParamsBasic(self, form)
 
     def preparationStep(self):
         if self.inputStructure.get().getFileName().endswith('.cif'):
@@ -141,7 +141,7 @@ class ProtBioinformaticsADTPrepareReceptor(ProtBioinformaticsADTPrepare):
         fnOut = self._getExtraPath('atomStruct.pdbqt')
 
         args = ' -v -r %s -o %s'%(fnIn,fnOut)
-        ProtBioinformaticsADTPrepare.callPrepare(self,"prepare_receptor4",args)
+        ProtChemADTPrepare.callPrepare(self,"prepare_receptor4",args)
 
     def createOutput(self):
         fnOut = self._getExtraPath('atomStruct.pdbqt')
