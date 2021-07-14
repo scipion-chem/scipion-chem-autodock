@@ -25,10 +25,48 @@
 
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
-
+from pwchem.objects import proteinPocket
 
 
 class AutodockGrid(data.EMFile):
     """A search grid in the file format of Autodock"""
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
+
+
+class autoLigandPocket(proteinPocket):
+    """ Represent a pocket file from autoLigand"""
+
+    def __init__(self, filename=None, resultsFile=None, **kwargs):
+        proteinPocket.__init__(self, filename, **kwargs)
+        print(filename)
+        print(filename.split('out'))
+        print(filename.split('out')[1].split('.'))
+        self.pocketId = int(filename.split('out')[1].split('.')[0])
+        self.properties = self.parseFile(resultsFile)
+        self.setObjId(self.pocketId)
+
+    def __str__(self):
+        s = 'Fpocket pocket {}\nFile: {}'.format(self.pocketId, self.getFileName())
+        return s
+
+    def getVolume(self):
+        return self.properties['Total Volume']
+
+    def getEnergyPerVol(self):
+        return self.properties['Total Energy per Vol']
+
+    def parseFile(self, filename):
+        props, i = {}, 1
+        with open(filename) as f:
+            for line in f:
+                if i==self.pocketId:
+                    line = line.split(',')
+                    print(line)
+                    #Volume
+                    props[line[1].split('=')[0].strip()] = float(line[1].split('=')[1].strip())
+                    #Energy/vol
+                    props[line[2].strip()] = float(line[3].split('=')[1].strip())
+
+        return props
+

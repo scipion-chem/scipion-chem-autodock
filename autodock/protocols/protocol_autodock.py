@@ -29,7 +29,7 @@ import os
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam
 import pyworkflow.object as pwobj
-from pwchem import Plugin as pwchem_plugin
+from autodock import Plugin as autodock_plugin
 from pyworkflow.utils.path import makePath, createLink, cleanPattern
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
@@ -106,23 +106,23 @@ class ProtChemAutodock(EMProtocol):
         args += " -p ga_run=%d"%self.gaRun.get()
         args += " -p rmstol=%f"%self.rmsTol.get()
 
-        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
-                    pwchem_plugin.getADTPath('Utilities24/prepare_dpf42.py')+args)
+        self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+                    autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py')+args)
 
         fnSmallLocal = os.path.split(fnSmall)[1]
         createLink(fnSmall,os.path.join(fnSmallDir,fnSmallLocal))
         createLink(fnReceptor,os.path.join(fnSmallDir,"atomStruct.pdbqt"))
 
         args = " -r atomStruct.pdbqt -l %s -o library.gpf"%fnSmallLocal
-        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
-                    pwchem_plugin.getADTPath('Utilities24/prepare_gpf4.py') + args,
+        self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+                    autodock_plugin.getADTPath('Utilities24/prepare_gpf4.py') + args,
                     cwd=fnSmallDir)
 
         args = "-p library.gpf -l library.glg"
-        self.runJob(pwchem_plugin.getAutodockPath("autogrid4"), args, cwd=fnSmallDir)
+        self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=fnSmallDir)
 
         args = "-p %s.dpf -l %s.dlg"%(fnBase,fnBase)
-        self.runJob(pwchem_plugin.getAutodockPath("autodock4"), args, cwd=fnSmallDir)
+        self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=fnSmallDir)
 
         # Clean a bit
         cleanPattern(os.path.join(fnSmallDir,"atomStruct.*.map"))
@@ -137,16 +137,16 @@ class ProtChemAutodock(EMProtocol):
             fnDlg = os.path.join(fnSmallDir,fnBase+".dlg")
             if os.path.exists(fnDlg):
                 args = " -d . -b -o bestDock.txt"
-                self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
-                            pwchem_plugin.getADTPath('Utilities24/summarize_results4.py') + args,
+                self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+                            autodock_plugin.getADTPath('Utilities24/summarize_results4.py') + args,
                             cwd=fnSmallDir)
                 args = " -d . -o bestCluster.txt"
-                self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
-                            pwchem_plugin.getADTPath('Utilities24/summarize_results4.py') + args,
+                self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+                            autodock_plugin.getADTPath('Utilities24/summarize_results4.py') + args,
                             cwd=fnSmallDir)
                 args = " -f %s.dlg -o %s_top.pdbqt"%(fnBase,fnBase)
-                self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
-                            pwchem_plugin.getADTPath('Utilities24/write_lowest_energy_ligand.py') + args,
+                self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+                            autodock_plugin.getADTPath('Utilities24/write_lowest_energy_ligand.py') + args,
                             cwd=fnSmallDir)
 
                 newSmallMol = SmallMolecule()

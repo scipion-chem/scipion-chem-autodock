@@ -29,7 +29,7 @@ from pyworkflow.protocol.params import PointerParam, EnumParam, StringParam, Boo
 
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import AtomicStructHandler
-from pwchem import Plugin as pwchem_plugin
+from autodock import Plugin as autodock_plugin
 from pwem.objects.data import AtomStruct
 
 class ProtChemADTPrepare(EMProtocol):
@@ -108,8 +108,8 @@ class ProtChemADTPrepare(EMProtocol):
             if self.nonstd.get():
                 args+=" -e"
 
-        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
-                    pwchem_plugin.getADTPath('Utilities24/%s.py'%prog)+args)
+        self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+                    autodock_plugin.getADTPath('Utilities24/%s.py'%prog)+args)
 
     def createOutput(self):
         fnOut = self._getExtraPath('atomStruct.pdbqt')
