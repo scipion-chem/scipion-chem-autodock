@@ -1,6 +1,9 @@
+# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
+# * Authors:  Alberto Manuel Parra Pérez (amparraperez@gmail.com)
+# *
+# * Biocomputing Unit, CNB-CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -22,15 +25,28 @@
 # *
 # **************************************************************************
 
-import pwem.viewers.views as views
-import pwem.viewers.showj as showj
+"""
+This wizard will extract the chains from a atomic structure (pdb) file in
+order to select it in the protocol.
+Then, it will load the structure and will take all chain related
+information such as name and number of residues.
+"""
 
-class SetOfDatabaseIDView(views.ObjectView):
-    """ Customized ObjectView for SetOfDatabaseID. """
-    def __init__(self, project, inputid, path, other='',
-                 viewParams={}, **kwargs):
-        defaultViewParams = {showj.MODE: 'metadata',
-                             showj.RENDER: '_PDBLigandImage'}
-        defaultViewParams.update(viewParams)
-        views.ObjectView.__init__(self, project, inputid, path, other,
-                                  defaultViewParams, **kwargs)
+# Imports
+from pwem.wizards.wizard import EmWizard
+from pwem.wizards.wizards_3d.mask_structure_wizard import MaskStructureWizard
+from ..protocols.protocol_generate_grid import Autodock_GridGeneration
+
+
+class GetDistance2Center(EmWizard):
+    _targets = [(Autodock_GridGeneration, ['radius'])]
+
+    def show(self, form):
+        protocol = form.protocol
+        structure = protocol.inputpdb.get()
+        if not structure:
+            print('You must specify input structure')
+            return
+        plt = MaskStructureWizard(structure.getFileName())
+        plt.initializePlot()
+        form.setVar('radius', plt.radius)

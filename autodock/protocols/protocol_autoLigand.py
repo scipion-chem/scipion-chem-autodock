@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
+# * Authors:     Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -29,7 +29,7 @@ import os
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, IntParam, EnumParam
 from autodock import Plugin as autodock_plugin
-from autodock.objects import autoLigandPocket
+from autodock.objects import AutoLigandPocket
 from pwchem.objects import SetOfPockets
 from pyworkflow.utils.path import copyTree
 
@@ -41,7 +41,7 @@ class ProtChemAutoLigand(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputGrid', PointerParam, pointerClass="GridAGD",
+        form.addParam('inputGrid', PointerParam, pointerClass="GridADT",
                        label='Input grid:', allowsNull=False,
                        help="The grid must be prepared for autodock")
 
@@ -63,7 +63,7 @@ class ProtChemAutoLigand(EMProtocol):
                #               condition="fillType==1",
                 #              help="Number of fill points to use. The resulting grids will have this size")'''
 
-        form.addParallelSection(threads=1, mpi=1)
+        #form.addParallelSection(threads=1, mpi=1)
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
@@ -74,7 +74,7 @@ class ProtChemAutoLigand(EMProtocol):
     def convertInputStep(self):
         '''Moves necessary files to current extra path'''
         gridPath = self.inputGrid.get().getFileName()
-        prevExtraPath = '/'.join(gridPath.split('/')[:-1]) + '/extra/'
+        prevExtraPath = '/'.join(gridPath.split('/')[:-1])
         copyTree(prevExtraPath, self._getExtraPath())
 
     def predictPocketStep(self):
@@ -99,7 +99,7 @@ class ProtChemAutoLigand(EMProtocol):
 
         outPockets = SetOfPockets(filename=self._getExtraPath('pockets.sqlite'))
         for oFile in outFiles:
-            pock = autoLigandPocket(oFile, resultsFile)
+            pock = AutoLigandPocket(oFile, resultsFile)
             outPockets.append(pock)
         self._defineOutputs(outputPockets=outPockets)
 
