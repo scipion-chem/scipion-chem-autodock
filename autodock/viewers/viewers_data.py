@@ -34,3 +34,4 @@ class SetOfDatabaseIDView(views.ObjectView):
         defaultViewParams.update(viewParams)
         views.ObjectView.__init__(self, project, inputid, path, other,
                                   defaultViewParams, **kwargs)
+
