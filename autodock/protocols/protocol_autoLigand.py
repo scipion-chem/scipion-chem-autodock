@@ -66,7 +66,7 @@ class ProtChemAutoLigand(EMProtocol):
 
         #form.addParallelSection(threads=1, mpi=1)
 
-    # --------------------------- INSERT steps functions --------------------
+    # --------------------------- Steps functions --------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('convertInputStep')
         self._insertFunctionStep('predictPocketStep')
@@ -105,9 +105,7 @@ class ProtChemAutoLigand(EMProtocol):
             outPockets.append(pock)
         self._defineOutputs(outputPockets=outPockets)
 
-    def _citations(self):
-        return ['Morris2009']
-
+    # --------------------------- Utils functions --------------------
 
     def getPDBName(self):
         extraFiles = os.listdir(self._getExtraPath())
@@ -132,7 +130,6 @@ class ProtChemAutoLigand(EMProtocol):
       # Creates the pml for pymol visualization
       with open(pmlFile, 'w') as f:
         f.write(PML_STR.format(outFile.split('/')[-1]))
-
 
     def formatPocketStr(self, pocketFile):
       numId = pocketFile.split('out')[1].split('.')[0]
@@ -162,3 +159,21 @@ class ProtChemAutoLigand(EMProtocol):
       j[12] = j[12].rjust(3)  # elname
       return "\n%s%s %s %s %s%s    %s%s%s%s%s%s%s" % \
              (j[0], j[1], j[2], j[3], j[4], j[5], j[6], j[7], j[8], j[9], j[10], j[11], j[12])
+
+    # --------------------------- INFO functions -----------------------------------
+
+    def _citations(self):
+        return []
+
+    def _warnings(self):
+      """ Try to find warnings on define params. """
+      import re
+      warnings = []
+      inpFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
+      with open(inpFile) as f:
+        fileStr = f.read()
+      if re.search('\nHETATM', fileStr):
+        warnings.append('The structure you are inputing has some *heteroatoms* (ligands).\n'
+                        'This will affect the results as its volume is also taken as target.')
+
+      return warnings
