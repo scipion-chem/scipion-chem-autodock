@@ -32,6 +32,7 @@ from autodock import Plugin as autodock_plugin
 from autodock.objects import AutoLigandPocket
 from pwchem.objects import SetOfPockets
 from pyworkflow.utils.path import copyTree
+from ..constants import PML_STR
 
 class ProtChemAutoLigand(EMProtocol):
     """Perform a pocket find experiment with autoLigand. See the help at
@@ -96,6 +97,7 @@ class ProtChemAutoLigand(EMProtocol):
           elif 'Result' in file:
             os.rename(self._getExtraPath(file), self._getPath(file))
             resultsFile = self._getPath(file)
+        self.createPML(outFiles)
 
         outPockets = SetOfPockets(filename=self._getExtraPath('pockets.sqlite'))
         for oFile in outFiles:
@@ -110,5 +112,53 @@ class ProtChemAutoLigand(EMProtocol):
     def getPDBName(self):
         extraFiles = os.listdir(self._getExtraPath())
         for file in extraFiles:
-            if '.pdbqt' in file:
+            if '.gpf' in file:
                 return file.split('/')[-1].split('.')[0]
+
+    def createPML(self, pocketFiles):
+      pdbName = self.getPDBName()
+      pdbFile = self._getExtraPath('{}.pdbqt'.format(pdbName))
+      outFile = self._getExtraPath('{}_out.pdbqt'.format(pdbName))
+      pmlFile = self._getExtraPath('{}.pml'.format(pdbName))
+      with open(pdbFile) as fpdb:
+        outStr = '\n'.join(fpdb.read().split('\n')[:-2])
+
+      # Creates a pdb(qt) with the HETATOM corresponding to pocket points
+      for file in pocketFiles:
+        outStr += self.formatPocketStr(file)
+      with open(outFile, 'w') as f:
+        f.write(outStr)
+
+      # Creates the pml for pymol visualization
+      with open(pmlFile, 'w') as f:
+        f.write(PML_STR.format(outFile.split('/')[-1]))
+
+
+    def formatPocketStr(self, pocketFile):
+      numId = pocketFile.split('out')[1].split('.')[0]
+      outStr = ''
+      with open(pocketFile) as f:
+        for line in f:
+          line = line.split()
+          replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], 'Ve']
+          pdbLine = self.writePDBLine(replacements)
+          outStr += pdbLine
+      return outStr
+
+    def writePDBLine(self, j):
+      '''j: elements to write in the pdb'''
+      j[0] = j[0].ljust(6)  # atom#6s
+      j[1] = j[1].rjust(5)  # aomnum#5d
+      j[2] = j[2].center(4)  # atomname$#4s
+      j[3] = j[3].ljust(3)  # resname#1s
+      j[4] = j[4].rjust(1)  # Astring
+      j[5] = j[5].rjust(4)  # resnum
+      j[6] = str('%8.3f' % (float(j[6]))).rjust(8)  # x
+      j[7] = str('%8.3f' % (float(j[7]))).rjust(8)  # y
+      j[8] = str('%8.3f' % (float(j[8]))).rjust(8)  # z\
+      j[9] = str('%6.2f' % (float(j[9]))).rjust(6)  # occ
+      j[10] = str('%6.2f' % (float(j[10]))).ljust(6)  # temp
+      j[11] = str('%8.3f' % (float(j[11]))).rjust(10)
+      j[12] = j[12].rjust(3)  # elname
+      return "\n%s%s %s %s %s%s    %s%s%s%s%s%s%s" % \
+             (j[0], j[1], j[2], j[3], j[4], j[5], j[6], j[7], j[8], j[9], j[10], j[11], j[12])

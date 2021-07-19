@@ -24,6 +24,10 @@
 
 import pwem.viewers.views as views
 import pwem.viewers.showj as showj
+import pyworkflow.viewer as pwviewer
+from ..protocols import ProtChemAutoLigand
+from pwchem.viewers import PyMolViewer
+import os
 
 class SetOfDatabaseIDView(views.ObjectView):
     """ Customized ObjectView for SetOfDatabaseID. """
@@ -34,3 +38,26 @@ class SetOfDatabaseIDView(views.ObjectView):
         defaultViewParams.update(viewParams)
         views.ObjectView.__init__(self, project, inputid, path, other,
                                   defaultViewParams, **kwargs)
+
+class AutoLigandViewer(pwviewer.Viewer):
+  _label = 'Viewer pockets'
+  _environments = [pwviewer.DESKTOP_TKINTER]
+  _targets = [ProtChemAutoLigand]
+
+  def _validate(self):
+    return []
+
+  # =========================================================================
+  # ShowAtomStructs
+  # =========================================================================
+
+  def getInputAtomStructFile(self):
+    return os.path.abspath(self.protocol.inputAtomStruct.get().getFileName())
+
+  def _visualize(self, obj, **kwargs):
+    pdbFileName = self.protocol.getPDBName()
+    outDir = os.path.abspath(self.protocol._getExtraPath())
+    pymolFile = outDir + '/' + pdbFileName + '.pml'
+
+    pymolV = PyMolViewer(project=self.getProject())
+    pymolV.visualize(pymolFile, cwd=outDir)
