@@ -41,3 +41,7 @@ for my_index in range(2,int(lastSTP)+2): cmd.color(my_index,"pocket"+str(my_inde
 for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(my_index))
 for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(my_index))
 for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(my_index))'''
+
+ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',
+                      'Total Volume': 'volume', 'Total Energy per Vol': 'energy',
+                      'contactAtoms': 'contactAtoms', 'contactResidues': 'contactResidues'}

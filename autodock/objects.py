@@ -24,6 +24,7 @@
 # **************************************************************************
 
 import pwem.objects.data as data
+from .constants import ATTRIBUTES_MAPPING as AM
 from pwchem.objects import ProteinPocket
 from pyworkflow.object import (Object, Float, Integer, String,
                                OrderedDict, CsvList, Boolean, Set, Pointer,
@@ -41,9 +42,10 @@ class AutoLigandPocket(ProteinPocket):
     """ Represent a pocket file from autoLigand"""
 
     def __init__(self, filename=None, resultsFile=None, **kwargs):
-        ProteinPocket.__init__(self, filename, **kwargs)
         self.pocketId = int(filename.split('out')[1].split('.')[0])
-        self.properties = self.parseFile(resultsFile)
+        self.properties = self.parseFile(resultsFile, filename)
+        kwargs.update(self.getKwargs(self.properties))
+        ProteinPocket.__init__(self, filename, **kwargs)
         self.setObjId(self.pocketId)
 
     def __str__(self):
@@ -56,9 +58,9 @@ class AutoLigandPocket(ProteinPocket):
     def getEnergyPerVol(self):
         return self.properties['Total Energy per Vol']
 
-    def parseFile(self, filename):
+    def parseFile(self, resultsFile, filename):
         props, i = {}, 1
-        with open(filename) as f:
+        with open(resultsFile) as f:
             for line in f:
                 if i==self.pocketId:
                     line = line.split(',')
@@ -66,8 +68,28 @@ class AutoLigandPocket(ProteinPocket):
                     props[line[1].split('=')[0].strip()] = float(line[1].split('=')[1].strip())
                     #Energy/vol
                     props[line[2].strip()] = float(line[3].split('=')[1].strip())
+                i+=1
+
+        with open(filename) as f:
+            npts, points = 0, []
+            for line in f:
+                line = line.split()
+                points += [tuple(map(float, line[5:8]))]
+                npts += 1
+            props['nPoints'] = npts
+            self._points = points
 
         return props
+
+    def getKwargs(self, props):
+        nkwargs = {}
+        for k in props:
+            if k in AM:
+                nkwargs[AM[k]] = props[k]
+        return nkwargs
+
+    def getPoints(self):
+        return self._points
 
 
 class GridADT(data.EMFile):
