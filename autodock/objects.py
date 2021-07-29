@@ -45,7 +45,7 @@ class AutoLigandPocket(ProteinPocket):
         self.pocketId = int(filename.split('out')[1].split('.')[0])
         self.properties = self.parseFile(resultsFile, filename)
         kwargs.update(self.getKwargs(self.properties, AM))
-        ProteinPocket.__init__(self, filename, proteinFile, **kwargs)
+        super().__init__(filename, proteinFile, **kwargs)
         self.setObjId(self.pocketId)
 
         #Build contact atoms
