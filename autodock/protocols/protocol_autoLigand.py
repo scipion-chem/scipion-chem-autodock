@@ -137,7 +137,7 @@ class ProtChemAutoLigand(EMProtocol):
 
         outPockets = SetOfPockets(filename=self._getExtraPath('pockets.sqlite'))
         for oFile in outFiles:
-            pock = AutoLigandPocket(oFile, resultsFile)
+            pock = AutoLigandPocket(os.path.abspath(oFile), os.path.abspath(self.getOutFileName()), resultsFile)
             outPockets.append(pock)
         self._defineOutputs(outputPockets=outPockets)
 
@@ -195,8 +195,14 @@ class ProtChemAutoLigand(EMProtocol):
     def organizeOutput(self):
         '''Scan the Tmp for the output and cleans it'''
         if self.fillType.get() == NUMBER:
-            pocketSize = self.nFillPoints.get()
-            outFiles, resultsFile = self.getOutFiles(pocketSize)
+            pocketSize, outFiles = self.nFillPoints.get(), []
+            oldFiles, oldResultsFile = self.getOutFiles(pocketSize)
+            for oFile in oldFiles:
+              outFiles.append(self._getPath(os.path.basename(oFile)))
+              os.rename(oFile, outFiles[-1])
+            
+            resultsFile = self._getPath(os.path.basename(oldResultsFile))
+            os.rename(oldResultsFile, resultsFile)
         else:
             resultsFiles = {}
             outFiles = self.getPocketsFiles(self.finalPockets)
@@ -262,10 +268,14 @@ class ProtChemAutoLigand(EMProtocol):
           if '.pdbqt' in file:
             return self._getExtraPath(file)
 
+    def getOutFileName(self):
+      pdbName = self.getPDBName()
+      return self._getExtraPath('{}_out.pdbqt'.format(pdbName))
+
     def createPML(self, pocketFiles):
       pdbName = self.getPDBName()
       pdbFile = self._getExtraPath('{}.pdbqt'.format(pdbName))
-      outFile = self._getExtraPath('{}_out.pdbqt'.format(pdbName))
+      outFile = self.getOutFileName()
       pmlFile = self._getExtraPath('{}.pml'.format(pdbName))
       with open(pdbFile) as fpdb:
         outStr = '\n'.join(fpdb.read().split('\n')[:-2])

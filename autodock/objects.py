@@ -41,12 +41,18 @@ class AutodockGrid(data.EMFile):
 class AutoLigandPocket(ProteinPocket):
     """ Represent a pocket file from autoLigand"""
 
-    def __init__(self, filename=None, resultsFile=None, **kwargs):
+    def __init__(self, filename=None, proteinFile=None, resultsFile=None, **kwargs):
         self.pocketId = int(filename.split('out')[1].split('.')[0])
         self.properties = self.parseFile(resultsFile, filename)
-        kwargs.update(self.getKwargs(self.properties))
-        ProteinPocket.__init__(self, filename, **kwargs)
+        kwargs.update(self.getKwargs(self.properties, AM))
+        ProteinPocket.__init__(self, filename, proteinFile, **kwargs)
         self.setObjId(self.pocketId)
+
+        #Build contact atoms
+        cAtoms = self.buildContactAtoms(calculate=True)
+        self.setContactAtoms(self.encodeIds(self.getAtomsIds(cAtoms)))
+        cResidues = self.getResiduesFromAtoms(cAtoms)
+        self.setContactResidues(self.encodeIds(self.getResiduesIds(cResidues)))
 
     def __str__(self):
         s = 'Fpocket pocket {}\nFile: {}'.format(self.pocketId, self.getFileName())
@@ -78,15 +84,8 @@ class AutoLigandPocket(ProteinPocket):
                 npts += 1
             props['nPoints'] = npts
             self._points = points
-
+        props['class'] = 'AutoLigand'
         return props
-
-    def getKwargs(self, props):
-        nkwargs = {}
-        for k in props:
-            if k in AM:
-                nkwargs[AM[k]] = props[k]
-        return nkwargs
 
     def getPoints(self):
         return self._points
