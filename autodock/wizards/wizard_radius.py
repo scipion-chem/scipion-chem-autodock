@@ -26,10 +26,8 @@
 # **************************************************************************
 
 """
-This wizard will extract the chains from a atomic structure (pdb) file in
-order to select it in the protocol.
-Then, it will load the structure and will take all chain related
-information such as name and number of residues.
+This wizard will show the structure of the pdb using a matplotlib viewer 
+to select the radius of the sphere that contains the protein or a desired zone.
 """
 
 # Imports
