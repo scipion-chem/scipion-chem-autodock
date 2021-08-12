@@ -42,21 +42,37 @@ class AutoLigandPocket(ProteinPocket):
     """ Represent a pocket file from autoLigand"""
 
     def __init__(self, filename=None, proteinFile=None, resultsFile=None, **kwargs):
-        self.pocketId = int(filename.split('out')[1].split('.')[0])
-        self.properties = self.parseFile(resultsFile, filename)
-        kwargs.update(self.getKwargs(self.properties, AM))
+        if filename != None:
+            self.pocketId = int(filename.split('out')[1].split('.')[0])
+            if resultsFile != None:
+                self.properties = self.parseFile(resultsFile, filename)
+                kwargs.update(self.getKwargs(self.properties, AM))
+
         super().__init__(filename, proteinFile, **kwargs)
-        self.setObjId(self.pocketId)
+        self._nClusters = Integer(kwargs.get('nClusters', 1))
+        if hasattr(self, 'pocketId'):
+            self.setObjId(self.pocketId)
 
         #Build contact atoms
-        cAtoms = self.buildContactAtoms(calculate=True)
-        self.setContactAtoms(self.encodeIds(self.getAtomsIds(cAtoms)))
-        cResidues = self.getResiduesFromAtoms(cAtoms)
-        self.setContactResidues(self.encodeIds(self.getResiduesIds(cResidues)))
+        if proteinFile != None:
+            cAtoms = self.buildContactAtoms(calculate=True)
+            self.setContactAtoms(self.encodeIds(self.getAtomsIds(cAtoms)))
+            cResidues = self.getResiduesFromAtoms(cAtoms)
+            self.setContactResidues(self.encodeIds(self.getResiduesIds(cResidues)))
 
     def __str__(self):
-        s = 'Fpocket pocket {}\nFile: {}'.format(self.pocketId, self.getFileName())
+        s = 'Autoligand pocket {}\nFile: {}'.format(self.getObjId(), self.getFileName())
         return s
+
+    def incrNClusters(self):
+        '''Increase in 1 the number of clusters which support a autoligand pocket'''
+        self._nClusters.set(self.getNClusters()+1)
+
+    def getNClusters(self):
+        return int(self._nClusters)
+
+    def setNClusters(self, value):
+        self._nClusters.set(value)
 
     def getVolume(self):
         return self.properties['Total Volume']
@@ -69,11 +85,14 @@ class AutoLigandPocket(ProteinPocket):
         with open(resultsFile) as f:
             for line in f:
                 if i==self.pocketId:
-                    line = line.split(',')
+                    sline = line.split(',')
                     #Volume
-                    props[line[1].split('=')[0].strip()] = float(line[1].split('=')[1].strip())
+                    props[sline[1].split('=')[0].strip()] = float(sline[1].split('=')[1].strip())
                     #Energy/vol
-                    props[line[2].strip()] = float(line[3].split('=')[1].strip())
+                    props[sline[2].strip()] = float(sline[3].split('=')[1].strip())
+                    if 'NumberOfClusters' in line:
+                        print(int(sline[4].split('=')[1].strip()))
+                        props['nClusters'] = int(sline[4].split('=')[1].strip())
                 i+=1
 
         with open(filename) as f:

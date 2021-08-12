@@ -24,16 +24,24 @@
 # *
 # **************************************************************************
 
+"""
+This protocol is used to perform a pocket search on a autodock grid from
+protein structure using the AutoLigand software
+
+"""
+
 import os
 
 from pwem.protocols import EMProtocol
+from pwem.objects.data import AtomStruct
 from pyworkflow.protocol.params import PointerParam, IntParam, EnumParam, FloatParam
 from autodock import Plugin as autodock_plugin
 from autodock.objects import AutoLigandPocket
 from pwchem.objects import SetOfPockets
 from pyworkflow.utils.path import copyTree, cleanPath
 from pyworkflow.protocol import params
-from ..constants import PML_STR
+from pwchem.constants import *
+from pwchem.utils import writePDBLine, writeSurfPML
 
 NUMBER, RANGE = 0, 1
 
@@ -55,7 +63,7 @@ class ProtChemAutoLigand(EMProtocol):
                        help="The grid must be prepared for autodock")
 
         form.addParam('fillType', EnumParam, default=NUMBER,
-                       label='Parameters to write',
+                       label='Mode of use',
                        choices=self.fillChoices,
                        help='List of parameters which will be written from the selected protocol')
 
@@ -115,7 +123,7 @@ class ProtChemAutoLigand(EMProtocol):
         for oFile in outFiles:
             overlaps = []
             curPockets = self.finalPockets.copy()
-            newPock = AutoLigandPocket(oFile, resFile)
+            newPock = AutoLigandPocket(oFile, None, resFile)
             for curPock in curPockets:
               propOverlap = self.calculateOverlap(newPock, curPock)
               if propOverlap > self.propShared.get():
@@ -126,20 +134,31 @@ class ProtChemAutoLigand(EMProtocol):
               if self.getMinEnergy(overlaps) > newPock.getEnergyPerVol():
                 for overPock in overlaps:
                   self.finalPockets.remove(overPock)
+                newPock.setNClusters(len(overlaps)+1)
                 self.finalPockets += [newPock]
+              else:
+                for overPock in overlaps:
+                  self.finalPockets[self.finalPockets.index(overPock)].incrNClusters()
             else:
               self.finalPockets += [newPock]
 
 
     def createOutputStep(self):
         outFiles, resultsFile = self.organizeOutput()
-        self.createPML(outFiles)
+        self.createOutputProteinFile(outFiles)
+        self.createPML()
 
-        outPockets = SetOfPockets(filename=self._getExtraPath('pockets.sqlite'))
+        outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
         for oFile in outFiles:
             pock = AutoLigandPocket(os.path.abspath(oFile), os.path.abspath(self.getOutFileName()), resultsFile)
             outPockets.append(pock)
         self._defineOutputs(outputPockets=outPockets)
+
+        pmlFileName = '{}/{}_surf.pml'.format(self._getExtraPath(), self.getPDBName())
+        writeSurfPML(outPockets, pmlFileName)
+
+        outStruct = AtomStruct(self.getOutFileName())
+        self._defineOutputs(outputAtomStruct=outStruct)
 
     # --------------------------- Utils functions --------------------
     def getIdFromFile(self, file):
@@ -151,7 +170,6 @@ class ProtChemAutoLigand(EMProtocol):
         else:
             return int(os.path.basename(file).split('_')[1].split('out')[0])
 
-    #Do in setofpockets defs
     def getAverageEnergy(self, pockets):
         return sum(self.getPocketEnergies(pockets)) / len(pockets)
 
@@ -205,24 +223,27 @@ class ProtChemAutoLigand(EMProtocol):
             os.rename(oldResultsFile, resultsFile)
         else:
             resultsFiles = {}
-            outFiles = self.getPocketsFiles(self.finalPockets)
             for pocketSize in self.getPocketsSizes(self.finalPockets):
                 _, resFile = self.getOutFiles(pocketSize)
                 resultsFiles[pocketSize] = resFile
-            outFiles, resultsFile = self.manageIds(outFiles, resultsFiles)
+            outFiles, resultsFile = self.manageIds(self.finalPockets, resultsFiles)
 
         return outFiles, resultsFile
 
-    def manageIds(self, outFiles, resultsFiles):
+    def manageIds(self, finalPockets, resultsFiles):
         newResFile = self._getPath('{}_Results.txt'.format(self.getPDBName()))
         newOutFiles, i = [], 1
         with open(newResFile, 'w') as fOut:
-          for oFile in outFiles:
+          for pocket in finalPockets:
+            oFile = pocket.getFileName()
             resFile = resultsFiles[self.getSizeFromFile(oFile)]
             oldId = self.getIdFromFile(oFile)
-            rline = self.getResultsLine(resFile, oldId)
 
-            fOut.write(rline.replace('Output #  {},'.format(oldId), 'Output #  {},'.format(i)))
+            rline = self.getResultsLine(resFile, oldId)
+            rline = rline.replace('Output #  {},'.format(oldId), 'Output #  {},'.format(i))
+            rline = rline.replace('\n', ', NumberOfClusters = {}\n'.format(pocket.getNClusters()))
+
+            fOut.write(rline)
             newFile = self._getPath(os.path.basename(oFile.replace('out{}.pdb'.format(oldId), 'out{}.pdb'.format(i))))
             os.rename(oFile, newFile)
             newOutFiles.append(newFile)
@@ -272,20 +293,27 @@ class ProtChemAutoLigand(EMProtocol):
       pdbName = self.getPDBName()
       return self._getExtraPath('{}_out.pdbqt'.format(pdbName))
 
-    def createPML(self, pocketFiles):
+    def createOutputProteinFile(self, pocketFiles):
       pdbName = self.getPDBName()
       pdbFile = self._getExtraPath('{}.pdbqt'.format(pdbName))
       outFile = self.getOutFileName()
-      pmlFile = self._getExtraPath('{}.pml'.format(pdbName))
+
       with open(pdbFile) as fpdb:
-        outStr = '\n'.join(fpdb.read().split('\n')[:-2])
+        outStr = ''
+        for line in fpdb:
+          if line.startswith('ATOM') or line.startswith('HETATM'):
+            outStr += line
 
       # Creates a pdb(qt) with the HETATOM corresponding to pocket points
       for file in pocketFiles:
         outStr += self.formatPocketStr(file)
       with open(outFile, 'w') as f:
         f.write(outStr)
+        f.write('\nTER')
 
+    def createPML(self):
+      outFile = self.getOutFileName()
+      pmlFile = self._getExtraPath('{}.pml'.format(self.getPDBName()))
       # Creates the pml for pymol visualization
       with open(pmlFile, 'w') as f:
         f.write(PML_STR.format(outFile.split('/')[-1]))
@@ -297,27 +325,9 @@ class ProtChemAutoLigand(EMProtocol):
         for line in f:
           line = line.split()
           replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], 'Ve']
-          pdbLine = self.writePDBLine(replacements)
+          pdbLine = writePDBLine(replacements)
           outStr += pdbLine
       return outStr
-
-    def writePDBLine(self, j):
-      '''j: elements to write in the pdb'''
-      j[0] = j[0].ljust(6)  # atom#6s
-      j[1] = j[1].rjust(5)  # aomnum#5d
-      j[2] = j[2].center(4)  # atomname$#4s
-      j[3] = j[3].ljust(3)  # resname#1s
-      j[4] = j[4].rjust(1)  # Astring
-      j[5] = j[5].rjust(4)  # resnum
-      j[6] = str('%8.3f' % (float(j[6]))).rjust(8)  # x
-      j[7] = str('%8.3f' % (float(j[7]))).rjust(8)  # y
-      j[8] = str('%8.3f' % (float(j[8]))).rjust(8)  # z\
-      j[9] = str('%6.2f' % (float(j[9]))).rjust(6)  # occ
-      j[10] = str('%6.2f' % (float(j[10]))).ljust(6)  # temp
-      j[11] = str('%8.3f' % (float(j[11]))).rjust(10)
-      j[12] = j[12].rjust(3)  # elname
-      return "\n%s%s %s %s %s%s    %s%s%s%s%s%s%s" % \
-             (j[0], j[1], j[2], j[3], j[4], j[5], j[6], j[7], j[8], j[9], j[10], j[11], j[12])
 
     # --------------------------- INFO functions -----------------------------------
 
