@@ -26,7 +26,8 @@
 
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pwem.protocols import ProtImportPdb
-from ..protocols import ProtChemAutoLigand
+from ..protocols import ProtChemAutoLigand, Autodock_GridGeneration
+
 
 class TestAutoLigand(BaseTest):
     @classmethod
@@ -45,17 +46,31 @@ class TestAutoLigand(BaseTest):
         cls.launchProtocol(protImportPDB)
         cls.protImportPDB = protImportPDB
 
-    def _runFPocketFind(self):
-        protP2Rank = self.newProtocol(
-            P2RankFindPockets,
-            inputAtomStruct=self.protImportPDB.outputPdb)
+    def _runCreateGrid(self):
+        protGrid = self.newProtocol(
+            Autodock_GridGeneration,
+            inputAtomStruct=self.protImportPDB.outputPdb,
+            radius=37.0,
+            spacing=1.0)
 
-        self.launchProtocol(protP2Rank)
-        pdbOut = getattr(protP2Rank, 'outputAtomStruct', None)
+        self.launchProtocol(protGrid)
+        gridOut = getattr(protGrid, 'outputGrid', None)
+        self.assertIsNotNone(gridOut)
+        return protGrid
+
+    def _runAutoLigandFind(self, protGrid):
+        protAutoLigand = self.newProtocol(
+            ProtChemAutoLigand,
+            inputGrid=protGrid.outputGrid,
+            nFillPoints=10)
+
+        self.launchProtocol(protAutoLigand)
+        pdbOut = getattr(protAutoLigand, 'outputAtomStruct', None)
         self.assertIsNotNone(pdbOut)
 
-    def test_mutateResidue(self):
-        self._runFPocketFind()
+    def testAutoLigand(self):
+        protGrid = self._runCreateGrid()
+        self._runAutoLigandFind(protGrid)
 
 
 

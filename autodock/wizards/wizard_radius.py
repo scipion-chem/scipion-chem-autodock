@@ -43,7 +43,7 @@ class GetDistance2Center(EmWizard):
 
     def show(self, form):
         protocol = form.protocol
-        structure = protocol.inputpdb.get()
+        structure = protocol.inputAtomStruct.get()
         if not structure:
             print('You must specify input structure')
             return

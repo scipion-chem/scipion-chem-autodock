@@ -56,7 +56,7 @@ class Autodock_GridGeneration(EMProtocol):
     def _defineParams(self, form):
         form.addSection(label='Input')
 
-        form.addParam('inputpdb', PointerParam, pointerClass="AtomStruct",
+        form.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
                       label='Input structure:',
                       allowsNull=False,
                       help="Select the prepared atomic structure of "
@@ -83,7 +83,7 @@ class Autodock_GridGeneration(EMProtocol):
     def getpdbqt(self):
         """ Prepare the pdbqt used to generate the grid file e-map"""
 
-        filename = self.inputpdb.get().getFileName()
+        filename = self.inputAtomStruct.get().getFileName()
         if filename.endswith('.cif'):
             fnIn = self._getTmpPath("atomStruct.pdb")
             name_protein = (os.path.basename(filename)).split(".")[0]
@@ -107,9 +107,9 @@ class Autodock_GridGeneration(EMProtocol):
         """
         """
         # Name of the grid
-        inputpdb = self.inputpdb.get().getFileName()
-        filename = os.path.abspath(inputpdb)
-        name_protein = (os.path.basename(inputpdb)).split(".")[0]
+        inputAtomStruct = self.inputAtomStruct.get().getFileName()
+        filename = os.path.abspath(inputAtomStruct)
+        name_protein = (os.path.basename(inputAtomStruct)).split(".")[0]
 
         # pdbqt gasteiger path
         pdbqt = self._getExtraPath('%s.pdbqt' % name_protein)
@@ -137,7 +137,7 @@ class Autodock_GridGeneration(EMProtocol):
 
     def createOutput(self):
         self._defineOutputs(outputGrid=self.grid)
-        #self._defineSourceRelation(self.inputpdb, self.grid)
+        #self._defineSourceRelation(self.inputAtomStruct, self.grid)
 
     # --------------------------- Utils functions --------------------
 

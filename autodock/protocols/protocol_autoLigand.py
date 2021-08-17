@@ -92,7 +92,7 @@ class ProtChemAutoLigand(EMProtocol):
         iniDep = [self._insertFunctionStep('convertInputStep')]
         predDeps, clustDeps = [], iniDep.copy()
         if self.fillType.get() == NUMBER:
-            predDeps += [self._insertFunctionStep('predictPocketStep', self.nFillPoints.get(), prerequisites=iniDep)]
+            clustDeps += [self._insertFunctionStep('predictPocketStep', self.nFillPoints.get(), prerequisites=iniDep)]
         else:
             for pocketSize in range(self.iniFillPoints.get(), self.endFillPoints.get()+1, self.stepFillPoints.get()):
                 predDeps += [self._insertFunctionStep('predictPocketStep', pocketSize, prerequisites=iniDep)]
