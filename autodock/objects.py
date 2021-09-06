@@ -42,21 +42,37 @@ class AutoLigandPocket(ProteinPocket):
     """ Represent a pocket file from autoLigand"""
 
     def __init__(self, filename=None, proteinFile=None, resultsFile=None, **kwargs):
-        self.pocketId = int(filename.split('out')[1].split('.')[0])
-        self.properties = self.parseFile(resultsFile, filename)
-        kwargs.update(self.getKwargs(self.properties, AM))
+        if filename != None:
+            self.pocketId = int(filename.split('out')[1].split('.')[0])
+            if resultsFile != None:
+                self.properties = self.parseFile(resultsFile, filename)
+                kwargs.update(self.getKwargs(self.properties, AM))
+
         super().__init__(filename, proteinFile, **kwargs)
-        self.setObjId(self.pocketId)
+        self._nClusters = Integer(kwargs.get('nClusters', 1))
+        if hasattr(self, 'pocketId'):
+            self.setObjId(self.pocketId)
 
         #Build contact atoms
-        cAtoms = self.buildContactAtoms(calculate=True)
-        self.setContactAtoms(self.encodeIds(self.getAtomsIds(cAtoms)))
-        cResidues = self.getResiduesFromAtoms(cAtoms)
-        self.setContactResidues(self.encodeIds(self.getResiduesIds(cResidues)))
+        if proteinFile != None:
+            cAtoms = self.buildContactAtoms(calculate=True)
+            self.setContactAtoms(self.encodeIds(self.getAtomsIds(cAtoms)))
+            cResidues = self.getResiduesFromAtoms(cAtoms)
+            self.setContactResidues(self.encodeIds(self.getResiduesIds(cResidues)))
 
     def __str__(self):
-        s = 'Fpocket pocket {}\nFile: {}'.format(self.pocketId, self.getFileName())
+        s = 'Autoligand pocket {}\nFile: {}'.format(self.getObjId(), self.getFileName())
         return s
+
+    def incrNClusters(self):
+        '''Increase in 1 the number of clusters which support a autoligand pocket'''
+        self._nClusters.set(self.getNClusters()+1)
+
+    def getNClusters(self):
+        return int(self._nClusters)
+
+    def setNClusters(self, value):
+        self._nClusters.set(value)
 
     def getVolume(self):
         return self.properties['Total Volume']
@@ -69,11 +85,14 @@ class AutoLigandPocket(ProteinPocket):
         with open(resultsFile) as f:
             for line in f:
                 if i==self.pocketId:
-                    line = line.split(',')
+                    sline = line.split(',')
                     #Volume
-                    props[line[1].split('=')[0].strip()] = float(line[1].split('=')[1].strip())
+                    props[sline[1].split('=')[0].strip()] = float(sline[1].split('=')[1].strip())
                     #Energy/vol
-                    props[line[2].strip()] = float(line[3].split('=')[1].strip())
+                    props[sline[2].strip()] = float(sline[3].split('=')[1].strip())
+                    if 'NumberOfClusters' in line:
+                        print(int(sline[4].split('=')[1].strip()))
+                        props['nClusters'] = int(sline[4].split('=')[1].strip())
                 i+=1
 
         with open(filename) as f:
@@ -97,32 +116,36 @@ class GridADT(data.EMFile):
         data.EMFile.__init__(self, filename, **kwargs)
         self._radius = Float(kwargs.get('radius', None))
         self._spacing = Float(kwargs.get('spacing', None))
-        self._massCenter = List(kwargs.get('massCenter', None))
+        self._massCX = Float(kwargs.get('massCX', None))
+        self._massCY = Float(kwargs.get('massCY', None))
+        self._massCZ = Float(kwargs.get('massCZ', None))
         self._npts = Integer(kwargs.get('npts', None))
 
     def __str__(self):
         return '{} (Radius={}, Spacing={})'.format(self.__class__.__name__, self.getRadius(), self.getSpacing())
 
     def getRadius(self):
-        return self._radius
+        return self._radius.get()
 
     def setRadius(self, value):
         self._radius.set(value)
 
     def getSpacing(self):
-        return self._spacing
+        return self._spacing.get()
 
     def setSpacing(self, value):
         self._spacing.set(value)
 
     def getMassCenter(self):
-        return self._massCenter
+        return [self._massCX.get(), self._massCY.get(), self._massCZ.get()]
 
     def setMassCenter(self, values):
-        self._massCenter.set(values)
+        self._massCX.set(values[0])
+        self._massCY.set(values[1])
+        self._massCZ.set(values[2])
 
     def getNumberOfPoints(self):
-        return self._npts
+        return self._npts.get()
 
     def setNumberOfPoints(self, value):
         self._npts.set(value)
