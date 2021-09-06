@@ -116,32 +116,36 @@ class GridADT(data.EMFile):
         data.EMFile.__init__(self, filename, **kwargs)
         self._radius = Float(kwargs.get('radius', None))
         self._spacing = Float(kwargs.get('spacing', None))
-        self._massCenter = List(kwargs.get('massCenter', None))
+        self._massCX = Float(kwargs.get('massCX', None))
+        self._massCY = Float(kwargs.get('massCY', None))
+        self._massCZ = Float(kwargs.get('massCZ', None))
         self._npts = Integer(kwargs.get('npts', None))
 
     def __str__(self):
         return '{} (Radius={}, Spacing={})'.format(self.__class__.__name__, self.getRadius(), self.getSpacing())
 
     def getRadius(self):
-        return self._radius
+        return self._radius.get()
 
     def setRadius(self, value):
         self._radius.set(value)
 
     def getSpacing(self):
-        return self._spacing
+        return self._spacing.get()
 
     def setSpacing(self, value):
         self._spacing.set(value)
 
     def getMassCenter(self):
-        return self._massCenter
+        return [self._massCX.get(), self._massCY.get(), self._massCZ.get()]
 
     def setMassCenter(self, values):
-        self._massCenter.set(values)
+        self._massCX.set(values[0])
+        self._massCY.set(values[1])
+        self._massCZ.set(values[2])
 
     def getNumberOfPoints(self):
-        return self._npts
+        return self._npts.get()
 
     def setNumberOfPoints(self, value):
         self._npts.set(value)
