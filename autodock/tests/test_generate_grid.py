@@ -1,14 +1,12 @@
 # **************************************************************************
 # *
-# * Name:     test of protocol_generate_grid.py
+# * Authors:     Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
 # *
-# * Authors:    Alberto M. Parra Pérez (amparraperez@gmail.com)
-# *
-# * Biocomputing Unit, CNB-CSIC
+# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
-# * the Free Software Foundation; either version 2 of the License, or
+# * the Free Software Foundation; either version 3 of the License, or
 # * (at your option) any later version.
 # *
 # * This program is distributed in the hope that it will be useful,
@@ -26,66 +24,55 @@
 # *
 # **************************************************************************
 
-from pathlib import Path
-
-from pyworkflow.tests import *
-from pwem.protocols.protocol_import import ProtImportPdb
-
-from autodock.protocols.protocol_generate_grid import Autodock_GridGeneration as Grid
+from pyworkflow.tests import BaseTest, setupTestProject, DataSet
+from pwem.protocols import ProtImportPdb
+from ..protocols import Autodock_GridGeneration
+import os
 
 
-
-class TestImportBase(BaseTest):
-
+class TestGridADT(BaseTest):
     @classmethod
     def setUpClass(cls):
+        cls.ds = DataSet.getDataSet('model_building_tutorial')
+
         setupTestProject(cls)
-        path_test = Path(__file__).parent
-        cls.path_data = os.path.join(path_test, "../../../scipion-chem-rosetta/rosetta/tests/data")
+        cls._runImportPDB()
 
     @classmethod
-    def _importPDB(cls, path):
-        inputPdbData = 1  # file
-        args = {'inputPdbData': inputPdbData,
-                'pdbFile': path
-                }
+    def _runImportPDB(cls):
+        protImportPDB = cls.newProtocol(
+            ProtImportPdb,
+            inputPdbData=1,
+            pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.pdb'))
+        cls.launchProtocol(protImportPDB)
+        cls.protImportPDB = protImportPDB
 
-        protocol = cls.newProtocol(ProtImportPdb, **args)
-        cls.launchProtocol(protocol)
-        pdb = protocol.outputPdb
-        return pdb
+    def _runCreateGrid(self, spacing, radius):
+        protGrid = self.newProtocol(
+            Autodock_GridGeneration,
+            inputAtomStruct=self.protImportPDB.outputPdb,
+            radius=radius,
+            spacing=spacing)
 
+        self.launchProtocol(protGrid)
+        gridOut = getattr(protGrid, 'outputGrid', None)
+        self.assertIsNotNone(gridOut)
+        return protGrid
 
-class TestGridGeneration(TestImportBase):
+    def testGridGeneration(self):
+        spacing, radius = 1.0, 37.0
 
-    def test_1(self):
-        """ Generate the grid of a prepared protein by DARC
-        """
-        print("\n Generate the grid of a protein by AutoDock Tools \n")
-
-        prot_path = os.path.abspath(os.path.join(self.path_data, "4erf.pdb"))
-
-        # Import PDB as Scipion object and prepare it
-        target = self._importPDB(prot_path)
-
-        # Generate grid
-        radius = 37
-        spacing = 1
-        args = {'inputpdb': target,
-                'radius': radius,
-                'spacing': spacing
-                }
-
-        protocol = self.newProtocol(Grid, **args)
-        self.launchProtocol(protocol)
-        grid = protocol.outputGrid
+        gridProt = self._runCreateGrid(spacing, radius)
+        grid = gridProt.outputGrid
         grid_path = os.path.abspath(grid.getFileName())
 
         self.assertIsNotNone(grid,
                              "There was a problem with grid generation - Please check it")
 
         self.assertTrue(grid_path.endswith(".map"),
-                             "Format grid is incorrect")
+                        "Format grid is incorrect")
 
         print('Grid  stored radius: ', grid.getRadius())
         self.assertEqual(spacing, grid.getSpacing(), 'Parameters of the grid incorrectly saved')
+
+
