@@ -48,7 +48,7 @@ class AutoLigandPocket(ProteinPocket):
                 self.properties = self.parseFile(resultsFile, filename)
                 kwargs.update(self.getKwargs(self.properties, AM))
 
-        super().__init__(filename, proteinFile, **kwargs)
+        super().__init__(filename, proteinFile, resultsFile, **kwargs)
         self._nClusters = Integer(kwargs.get('nClusters', 1))
         if hasattr(self, 'pocketId'):
             self.setObjId(self.pocketId)

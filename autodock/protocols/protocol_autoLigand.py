@@ -145,12 +145,12 @@ class ProtChemAutoLigand(EMProtocol):
 
     def createOutputStep(self):
         outFiles, resultsFile = self.organizeOutput()
-        self.createOutputProteinFile(outFiles)
+        outFile = self.createOutputProteinFile(outFiles)
         self.createPML()
 
         outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
         for oFile in outFiles:
-            pock = AutoLigandPocket(os.path.abspath(oFile), os.path.abspath(self.getOutFileName()), resultsFile)
+            pock = AutoLigandPocket(os.path.abspath(oFile), outFile, os.path.abspath(resultsFile))
             outPockets.append(pock)
         self._defineOutputs(outputPockets=outPockets)
 
@@ -278,16 +278,11 @@ class ProtChemAutoLigand(EMProtocol):
         return self._getTmpPath('Size_{}/{}'.format(pocketSize, file))
 
     def getPDBName(self):
-        extraFiles = os.listdir(self._getExtraPath())
-        for file in extraFiles:
-            if '.gpf' in file:
-                return file.split('/')[-1].split('.')[0]
+        return self.inputGrid.get().getFileName().split('/')[-1].split('.')[0]
 
     def getPDBFileName(self):
-        extraFiles = os.listdir(self._getExtraPath())
-        for file in extraFiles:
-          if '.pdbqt' in file:
-            return self._getExtraPath(file)
+        inDir = '/'.join(self.inputGrid.get().getFileName().split('/')[:-1])
+        return os.path.join(inDir, self.getPDBName()+'.pdbqt')
 
     def getOutFileName(self):
       pdbName = self.getPDBName()
@@ -310,6 +305,8 @@ class ProtChemAutoLigand(EMProtocol):
       with open(outFile, 'w') as f:
         f.write(outStr)
         f.write('\nTER')
+
+      return os.path.abspath(outFile)
 
     def createPML(self):
       outFile = self.getOutFileName()
