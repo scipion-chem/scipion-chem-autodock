@@ -112,8 +112,9 @@ class AutoLigandPocket(ProteinPocket):
 
 class GridADT(data.EMFile):
     """ Represent a grid file in map (ASCIII) format generated with ADT"""
-    def __init__(self, filename=None, **kwargs):
+    def __init__(self, filename=None, proteinFile=None, **kwargs):
         data.EMFile.__init__(self, filename, **kwargs)
+        self._proteinFile = String(proteinFile)
         self._radius = Float(kwargs.get('radius', None))
         self._spacing = Float(kwargs.get('spacing', None))
         self._massCX = Float(kwargs.get('massCX', None))

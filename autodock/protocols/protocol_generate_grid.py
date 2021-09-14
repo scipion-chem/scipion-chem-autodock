@@ -131,7 +131,7 @@ class Autodock_GridGeneration(EMProtocol):
         args = "-p %s -l %s" % (gpf_file, glg_file)
         self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=self._getExtraPath())
         e_map_file = self._getExtraPath("%s.e.map" %name_protein)
-        self.grid = GridADT(e_map_file, radius=self.radius.get(), spacing=self.spacing.get(),
+        self.grid = GridADT(e_map_file, inputAtomStruct, radius=self.radius.get(), spacing=self.spacing.get(),
                             massCX=x_center, massCY=y_center, massCZ=z_center, npts=npts)
 
 
