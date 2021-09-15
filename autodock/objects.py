@@ -48,7 +48,7 @@ class AutoLigandPocket(ProteinPocket):
                 self.properties = self.parseFile(resultsFile, filename)
                 kwargs.update(self.getKwargs(self.properties, AM))
 
-        super().__init__(filename, proteinFile, **kwargs)
+        super().__init__(filename, proteinFile, resultsFile, **kwargs)
         self._nClusters = Integer(kwargs.get('nClusters', 1))
         if hasattr(self, 'pocketId'):
             self.setObjId(self.pocketId)
@@ -112,8 +112,9 @@ class AutoLigandPocket(ProteinPocket):
 
 class GridADT(data.EMFile):
     """ Represent a grid file in map (ASCIII) format generated with ADT"""
-    def __init__(self, filename=None, **kwargs):
+    def __init__(self, filename=None, proteinFile=None, **kwargs):
         data.EMFile.__init__(self, filename, **kwargs)
+        self._proteinFile = String(proteinFile)
         self._radius = Float(kwargs.get('radius', None))
         self._spacing = Float(kwargs.get('spacing', None))
         self._massCX = Float(kwargs.get('massCX', None))

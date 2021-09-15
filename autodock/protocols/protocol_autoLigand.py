@@ -38,10 +38,9 @@ from pyworkflow.protocol.params import PointerParam, IntParam, EnumParam, FloatP
 from autodock import Plugin as autodock_plugin
 from autodock.objects import AutoLigandPocket
 from pwchem.objects import SetOfPockets
-from pyworkflow.utils.path import copyTree, cleanPath
+from pyworkflow.utils.path import copyTree
 from pyworkflow.protocol import params
 from pwchem.constants import *
-from pwchem.utils import writePDBLine, writeSurfPML
 
 NUMBER, RANGE = 0, 1
 
@@ -144,21 +143,20 @@ class ProtChemAutoLigand(EMProtocol):
 
 
     def createOutputStep(self):
+        inAtomStruct = os.path.abspath(self.inputGrid.get()._proteinFile.get())
         outFiles, resultsFile = self.organizeOutput()
-        self.createOutputProteinFile(outFiles)
-        self.createPML()
 
         outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
         for oFile in outFiles:
-            pock = AutoLigandPocket(os.path.abspath(oFile), os.path.abspath(self.getOutFileName()), resultsFile)
+            pock = AutoLigandPocket(os.path.abspath(oFile), inAtomStruct, os.path.abspath(resultsFile))
             outPockets.append(pock)
+
+        outHETMFile = outPockets.buildPocketsFiles()
+        outStruct = AtomStruct(outHETMFile)
+
         self._defineOutputs(outputPockets=outPockets)
-
-        pmlFileName = '{}/{}_surf.pml'.format(self._getExtraPath(), self.getPDBName())
-        writeSurfPML(outPockets, pmlFileName)
-
-        outStruct = AtomStruct(self.getOutFileName())
         self._defineOutputs(outputAtomStruct=outStruct)
+
 
     # --------------------------- Utils functions --------------------
     def getIdFromFile(self, file):
@@ -193,7 +191,6 @@ class ProtChemAutoLigand(EMProtocol):
         for p in pockets:
           sizes.add(int(p.getNumberOfPoints()))
         return sizes
-
 
     def calculateOverlap(self, pock1, pock2):
         p1, p2 = pock1.getPoints(), pock2.getPoints()
@@ -278,56 +275,15 @@ class ProtChemAutoLigand(EMProtocol):
         return self._getTmpPath('Size_{}/{}'.format(pocketSize, file))
 
     def getPDBName(self):
-        extraFiles = os.listdir(self._getExtraPath())
-        for file in extraFiles:
-            if '.gpf' in file:
-                return file.split('/')[-1].split('.')[0]
+        return self.inputGrid.get().getFileName().split('/')[-1].split('.')[0]
 
     def getPDBFileName(self):
-        extraFiles = os.listdir(self._getExtraPath())
-        for file in extraFiles:
-          if '.pdbqt' in file:
-            return self._getExtraPath(file)
+        inDir = '/'.join(self.inputGrid.get().getFileName().split('/')[:-1])
+        return os.path.join(inDir, self.getPDBName()+'.pdbqt')
 
     def getOutFileName(self):
       pdbName = self.getPDBName()
       return self._getExtraPath('{}_out.pdbqt'.format(pdbName))
-
-    def createOutputProteinFile(self, pocketFiles):
-      pdbName = self.getPDBName()
-      pdbFile = self._getExtraPath('{}.pdbqt'.format(pdbName))
-      outFile = self.getOutFileName()
-
-      with open(pdbFile) as fpdb:
-        outStr = ''
-        for line in fpdb:
-          if line.startswith('ATOM') or line.startswith('HETATM'):
-            outStr += line
-
-      # Creates a pdb(qt) with the HETATOM corresponding to pocket points
-      for file in pocketFiles:
-        outStr += self.formatPocketStr(file)
-      with open(outFile, 'w') as f:
-        f.write(outStr)
-        f.write('\nTER')
-
-    def createPML(self):
-      outFile = self.getOutFileName()
-      pmlFile = self._getExtraPath('{}.pml'.format(self.getPDBName()))
-      # Creates the pml for pymol visualization
-      with open(pmlFile, 'w') as f:
-        f.write(PML_STR.format(outFile.split('/')[-1]))
-
-    def formatPocketStr(self, pocketFile):
-      numId = pocketFile.split('out')[1].split('.')[0]
-      outStr = ''
-      with open(pocketFile) as f:
-        for line in f:
-          line = line.split()
-          replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], 'Ve']
-          pdbLine = writePDBLine(replacements)
-          outStr += pdbLine
-      return outStr
 
     # --------------------------- INFO functions -----------------------------------
 
