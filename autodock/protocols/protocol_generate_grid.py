@@ -44,6 +44,7 @@ from pwem.convert import AtomicStructHandler
 
 from autodock import Plugin as autodock_plugin
 from autodock.objects import GridADT
+from autodock.utils import generate_gpf, calculate_centerMass
 
 
 class Autodock_GridGeneration(EMProtocol):
@@ -115,14 +116,14 @@ class Autodock_GridGeneration(EMProtocol):
         pdbqt = self._getExtraPath('%s.pdbqt' % name_protein)
 
         # Center of the molecule
-        structure, x_center, y_center, z_center = self.calculate_centerMass(filename)
+        structure, x_center, y_center, z_center = calculate_centerMass(filename)
 
         # Create the GPF file, required by autogrid to build the grid and glg
         npts = (self.radius.get()*2)/self.spacing.get()  # x,y,z points of the grid
 
-        gpf_file = self.generate_gpf(filename=pdbqt, spacing=self.spacing.get(),
+        gpf_file = generate_gpf(name_protein, spacing=self.spacing.get(),
                                      xc=x_center, yc=y_center, zc=z_center,
-                                     npts=npts)
+                                     npts=npts, outDir=self._getExtraPath())
 
         # Create GLG file
         glg_file = os.path.abspath(self._getExtraPath("library.glg"))
@@ -138,74 +139,3 @@ class Autodock_GridGeneration(EMProtocol):
     def createOutput(self):
         self._defineOutputs(outputGrid=self.grid)
         #self._defineSourceRelation(self.inputAtomStruct, self.grid)
-
-    # --------------------------- Utils functions --------------------
-
-    def calculate_centerMass(self, filename):
-        """
-        Returns the geometric center of mass of an Entity (anything with a get_atoms function in biopython).
-        Geometric assumes all masses are equal
-        """
-
-        try:
-            structureHandler = AtomicStructHandler()
-            structureHandler.read(filename)
-            center_coord = structureHandler.centerOfMass(geometric=True)
-            structure = structureHandler.getStructure()
-
-            return structure, center_coord[0], center_coord[1], center_coord[2]  # structure, x,y,z
-
-        except Exception as e:
-            print("ERROR: ", "A pdb file was not entered in the Atomic structure field. Please enter it.", e)
-            return
-
-
-
-    def generate_gpf(self, filename, spacing, xc, yc, zc, npts):
-        """
-        Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
-        """
-
-        filename = filename
-        name_protein = (os.path.basename(filename)).split(".")[0]
-        gpf_file = self._getExtraPath("%s.gpf" % name_protein)
-        npts = round(npts, None)
-
-        list_receptor = []
-        index = 0
-        # Read, parse and take receptor types atoms
-        df = pd.read_csv(os.path.abspath(filename), sep='\s{1,}', header=None, engine='python')
-        df.fillna(0)
-
-        df_type_atoms = df[12].fillna("NA").tolist()
-        for type in df_type_atoms:
-            if not type in list_receptor:
-                if not df[0][index] == "TER":
-                    list_receptor.append(type)
-            index += 1
-        list_receptor = " ".join(list_receptor)
-
-
-
-        with open(os.path.abspath(gpf_file), "w") as file:
-            file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts, npts, npts))
-            file.write("gridfld %s.maps.fld                # grid_data_file\n" % (name_protein))
-            file.write("spacing %s                          # spacing(A)\n" % (spacing))
-            file.write("receptor_types %s     # receptor atom types\n" % (list_receptor))
-            file.write("ligand_types A C HD N NA OA SA       # ligand atom types\n")
-            file.write("receptor %s                  # macromolecule\n" % (os.path.abspath(filename)))
-            file.write("gridcenter %s %s %s           # xyz-coordinates or auto\n" % (xc, yc, zc))
-            file.write("smooth 0.5                           # store minimum energy w/in rad(A)\n")
-            file.write("map %s.A.map                       # atom-specific affinity map\n" % (name_protein))
-            file.write("map %s.C.map                       # atom-specific affinity map\n" % (name_protein))
-            file.write("map %s.HD.map                      # atom-specific affinity map\n" % (name_protein))
-            file.write("map %s.N.map                       # atom-specific affinity map\n" % (name_protein))
-            file.write("map %s.NA.map                      # atom-specific affinity map\n" % (name_protein))
-            file.write("map %s.OA.map                      # atom-specific affinity map\n" % (name_protein))
-            file.write("map %s.SA.map                      # atom-specific affinity map\n" % (name_protein))
-            file.write("elecmap %s.e.map                   # electrostatic potential map\n" % (name_protein))
-            file.write("dsolvmap %s.d.map                  # desolvation potential map\n" % (name_protein))
-            file.write("dielectric -0.1465                   # <0, AD4 distance-dep.diel;>0, constant" )
-
-
-        return os.path.abspath(gpf_file)

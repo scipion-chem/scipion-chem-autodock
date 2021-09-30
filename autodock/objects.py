@@ -150,3 +150,6 @@ class GridADT(data.EMFile):
 
     def setNumberOfPoints(self, value):
         self._npts.set(value)
+
+    def getProteinFile(self):
+        return self._proteinFile.get()
