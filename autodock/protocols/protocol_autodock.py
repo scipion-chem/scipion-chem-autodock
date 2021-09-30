@@ -47,7 +47,7 @@ class ProtChemAutodock(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('input', PointerParam, pointerClass="GridADT",
+        form.addParam('inputGrid', PointerParam, pointerClass="GridADT",
                        label='Input grid:', allowsNull=False,
                        help="The grid must be prepared for autodock")
         form.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
