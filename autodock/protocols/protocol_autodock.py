@@ -51,11 +51,14 @@ class ProtChemAutodock(EMProtocol):
         group.addParam('wholeProt', BooleanParam, label='Dock on whole protein: ', default=True,
                       help='Whether to dock on a whole protein surface or on specific regions')
         group.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
-                      label='Input atomic structure:', allowsNull=False, condition='wholeProt',
+                      label='Input atomic structure:', condition='wholeProt',
                       help="The atom structure to dock in")
         group.addParam('inputPockets', PointerParam, pointerClass="SetOfPockets",
-                      label='Input pockets:', allowsNull=False, condition='not wholeProt',
+                      label='Input pockets:', condition='not wholeProt',
                       help="The protein pockets to dock in")
+        group.addParam('mergeOutput', BooleanParam, default=False,
+                       label='Merge outputs from pockets:', condition='not wholeProt',
+                       help="Merge the outputs from the different pockets")
         group.addParam('spacing', FloatParam, label='Spacing of the grids: ', default=0.5, allowsNull=False,
                        help='Spacing of the generated Autodock grids')
         group.addParam('radius', FloatParam, label='Grid radius for whole protein: ',
@@ -97,24 +100,18 @@ class ProtChemAutodock(EMProtocol):
     def _insertAllSteps(self):
         cId = self._insertFunctionStep('convertStep', prerequisites=[])
 
-        gridSteps = []
-        if self.wholeProt:
-            stepId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
-            gridSteps.append(stepId)
-        else:
-            for pocket in self.inputPockets.get():
-                stepId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
-                gridSteps.append(stepId)
-
         dockSteps = []
         if self.wholeProt:
+            gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
             for mol in self.inputLibrary.get():
-                stepId = self._insertFunctionStep('dockStep', mol.clone(), prerequisites=gridSteps)
-                dockSteps.append(stepId)
+                dockId = self._insertFunctionStep('dockStep', mol.clone(), prerequisites=[gridId])
+                dockSteps.append(dockId)
         else:
             for pocket in self.inputPockets.get():
-                stepId = self._insertFunctionStep('dockStep', pocket.clone(), prerequisites=gridSteps)
-                dockSteps.append(stepId)
+                gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
+                for mol in self.inputLibrary.get():
+                    dockId = self._insertFunctionStep('dockStep', mol.clone(), pocket.clone(), prerequisites=[gridId])
+                    dockSteps.append(dockId)
 
         self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
@@ -137,7 +134,7 @@ class ProtChemAutodock(EMProtocol):
             radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
             x_center, y_center, z_center = pocket.calculateMassCenter()
 
-        outDir = self.getOutputGridDir()
+        outDir = self.getOutputGridDir(pocket)
         makePath(outDir)
 
         npts = (radius * 2) / self.spacing.get()
@@ -188,8 +185,13 @@ class ProtChemAutodock(EMProtocol):
         self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
 
     def createOutputStep(self):
-        outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
-        for gridDir in self.getGridDirs():
+        if self.checkSingleOutput():
+            outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
+
+        for i, gridDir in enumerate(self.getGridDirs()):
+            if not self.checkSingleOutput():
+                outputSet = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix=i+1)
+
             for smallMol in self.inputLibrary.get():
                 smallFn = smallMol.getFileName()
                 smallName = os.path.splitext(os.path.basename(smallFn))[0]
@@ -209,11 +211,17 @@ class ProtChemAutodock(EMProtocol):
                         newSmallMol.dockingScoreLE = pwobj.Float(molDic[posId]['energy'])
                         newSmallMol.ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
                         newSmallMol.poseFile.set(pdbFile)
+                        newSmallMol.gridId.set(i+1)
 
                         outputSet.append(newSmallMol)
 
-        self._defineOutputs(outputSmallMolecules=outputSet)
-        self._defineSourceRelation(self.inputLibrary, outputSet)
+            if not self.checkSingleOutput():
+                self._defineOutputs(**{'outputSmallMolecules_{}'.format(i+1): outputSet})
+                self._defineSourceRelation(self.inputLibrary, outputSet)
+
+        if self.checkSingleOutput():
+            self._defineOutputs(outputSmallMolecules = outputSet)
+            self._defineSourceRelation(self.inputLibrary, outputSet)
       
 ########################### Utils functions ############################
 
@@ -285,6 +293,7 @@ class ProtChemAutodock(EMProtocol):
             d = self._getExtraPath(file)
             if os.path.isdir(d) and 'grid' in file:
                 dirs.append(d)
+        dirs.sort()
         return dirs
 
     def getMolLigandName(self, mol):
@@ -311,6 +320,9 @@ class ProtChemAutodock(EMProtocol):
                     molDic[posId]['pdb'] += line[8:]
                     i+=1
         return molDic
+
+    def checkSingleOutput(self):
+        return self.mergeOutput.get() or len(self.getGridDirs()) == 1
 
     def _citations(self):
         return ['Morris2009']

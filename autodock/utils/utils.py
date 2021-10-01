@@ -26,6 +26,7 @@
 
 import os
 from pwem.convert import AtomicStructHandler
+from pwchem.utils import splitPDBLine
 
 def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None):
   """
@@ -34,7 +35,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None):
 
   protName, protExt = os.path.splitext(os.path.basename(protFile))
   gpf_file = os.path.join(outDir, protName + '.gpf')
-  npts = round(npts, None)
+  npts = int(round(npts))
 
   protAtomTypes = parseAtomTypes(protFile)
   protAtomTypes = ' '.join(sortSet(protAtomTypes))
@@ -73,7 +74,11 @@ def parseAtomTypes(pdbFile):
         for line in f:
             if line.startswith('ATOM') or line.startswith('HETATM'):
               pLine = line.split()
-              at = pLine[12]
+              try:
+                  at = pLine[12]
+              except:
+                  at = splitPDBLine(line, rosetta=True)[12]
+
               atomTypes.add(at)
     return atomTypes
 
