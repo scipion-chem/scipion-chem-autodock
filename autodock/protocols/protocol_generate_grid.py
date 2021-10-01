@@ -108,9 +108,9 @@ class Autodock_GridGeneration(EMProtocol):
         """
         """
         # Name of the grid
-        inputAtomStruct = self.inputAtomStruct.get().getFileName()
-        filename = os.path.abspath(inputAtomStruct)
-        name_protein = (os.path.basename(inputAtomStruct)).split(".")[0]
+        atomStructFn = self.inputAtomStruct.get().getFileName()
+        filename = os.path.abspath(atomStructFn)
+        name_protein = (os.path.basename(atomStructFn)).split(".")[0]
 
         # pdbqt gasteiger path
         pdbqt = self._getExtraPath('%s.pdbqt' % name_protein)
@@ -121,7 +121,7 @@ class Autodock_GridGeneration(EMProtocol):
         # Create the GPF file, required by autogrid to build the grid and glg
         npts = (self.radius.get()*2)/self.spacing.get()  # x,y,z points of the grid
 
-        gpf_file = generate_gpf(name_protein, spacing=self.spacing.get(),
+        gpf_file = generate_gpf(atomStructFn, spacing=self.spacing.get(),
                                      xc=x_center, yc=y_center, zc=z_center,
                                      npts=npts, outDir=self._getExtraPath())
 
@@ -132,7 +132,7 @@ class Autodock_GridGeneration(EMProtocol):
         args = "-p %s -l %s" % (gpf_file, glg_file)
         self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=self._getExtraPath())
         e_map_file = self._getExtraPath("%s.e.map" %name_protein)
-        self.grid = GridADT(e_map_file, inputAtomStruct, radius=self.radius.get(), spacing=self.spacing.get(),
+        self.grid = GridADT(e_map_file, atomStructFn, radius=self.radius.get(), spacing=self.spacing.get(),
                             massCX=x_center, massCY=y_center, massCZ=z_center, npts=npts)
 
 

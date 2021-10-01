@@ -153,3 +153,6 @@ class GridADT(data.EMFile):
 
     def getProteinFile(self):
         return self._proteinFile.get()
+
+    def getFilesDirectory(self):
+        return '/'.join(self.getProteinFile().split('/')[:-1])

@@ -27,15 +27,15 @@
 import os
 from pwem.convert import AtomicStructHandler
 
-def generate_gpf(protName, spacing, xc, yc, zc, npts, outDir, ligandFns=None):
+def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None):
   """
   Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
   """
 
-  protFile = os.path.join(outDir, protName+'.pdbqt')
-  gpf_file = os.path.join(outDir, protName + '_2.gpf')
+  protName, protExt = os.path.splitext(os.path.basename(protFile))
+  gpf_file = os.path.join(outDir, protName + '.gpf')
   npts = round(npts, None)
-  
+
   protAtomTypes = parseAtomTypes(protFile)
   protAtomTypes = ' '.join(sortSet(protAtomTypes))
 
