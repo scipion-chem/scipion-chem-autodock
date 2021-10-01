@@ -120,29 +120,27 @@ class ProtChemAutodock(EMProtocol):
     def convertStep(self):
         self.ligandFileNames = []
         for mol in self.inputLibrary.get():
-            fnSmall, smallDir = self.convert2PDBQT(mol.clone())
+            fnSmall, smallDir = self.convert2PDBQT(mol.clone(), self._getExtraPath())
             self.ligandFileNames.append(fnSmall)
 
-        #todo: check receptor input as pdb or pdbqt
-        self.receptorFile, _ = self.convertReceptor2PDBQT(self.getOriginalReceptorFile())
+        self.receptorFile = self.convertReceptor2PDBQT(self.getOriginalReceptorFile())
 
     def generateGridsStep(self, pocket=None):
         self.gridDirs = []
-        protFile = self.receptorFile
+        fnReceptor = self.receptorFile
         if self.wholeProt:
             radius = self.radius.get()
-            pdbFile = protFile.replace('.pdbqt', '.pdb')
-            shutil.copy(protFile, pdbFile)
-            structure, x_center, y_center, z_center = calculate_centerMass(pdbFile)
-            outDir = self._getExtraPath('grid')
+            #Use the original pdb for mass center
+            structure, x_center, y_center, z_center = calculate_centerMass(self.getOriginalReceptorFile())
         else:
             radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
             x_center, y_center, z_center = pocket.calculateMassCenter()
-            outDir = self._getExtraPath('grid_{}'.format(pocket.getObjId()))
+
+        outDir = self.getOutputGridDir()
         makePath(outDir)
 
         npts = (radius * 2) / self.spacing.get()
-        gpf_file = generate_gpf(protFile, spacing=self.spacing.get(),
+        gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(),
                                 xc=x_center, yc=y_center, zc=z_center,
                                 npts=npts, outDir=outDir, ligandFns=self.ligandFileNames)
 
@@ -152,33 +150,39 @@ class ProtChemAutodock(EMProtocol):
 
     def dockStep(self, pocket=None):
         #Prepare grid
-        fnReceptor = self.getReceptorFile()
+        fnReceptor = self.receptorFile
         nameReceptor, extReceptor = os.path.splitext(os.path.basename(fnReceptor))
-        dirReceptor = self.getReceptorDir()
+        outDir = self.getOutputGridDir(pocket)
+        shutil.copy(self.receptorFile, os.path.join(outDir, self.getReceptorName()+'.pdbqt'))
 
-        fnDPF = os.path.join(smallDir, smallName+".dpf")
-        args = " -l %s -r %s -o %s"%(fnSmall, fnReceptor, fnDPF)
-        args += " -p ga_pop_size=%d"%self.gaPop.get()
-        args += " -p ga_num_evals=%d"%self.gaNumEvals.get()
-        args += " -p ga_num_generations=%d"%self.gaNumGens.get()
-        args += " -p ga_elitism=%d"%self.gaElitism.get()
-        args += " -p ga_mutation_rate=%f"%self.gaMutationRate.get()
-        args += " -p ga_crossover_rate=%f"%self.gaCrossOverRate.get()
-        args += " -p ga_window_size=%d"%self.gaWindowSize.get()
-        args += " -p sw_max_its=%d"%self.swMaxIts.get()
-        args += " -p sw_max_succ=%d"%self.swMaxSucc.get()
-        args += " -p sw_max_fail=%d"%self.swMaxFail.get()
-        args += " -p sw_rho=%f"%self.swRho.get()
-        args += " -p sw_lb_rho=%d"%self.swLbRho.get()
-        args += " -p ls_search_freq=%f"%self.lsFreq.get()
-        args += " -p ga_run=%d"%self.gaRun.get()
-        args += " -p rmstol=%f"%self.rmsTol.get()
+        for mol in self.inputLibrary.get():
+            smallDir = os.path.join(outDir, mol.getMolName())
+            makePath(smallDir)
 
-        self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
-                    autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py')+args)
+            fnDPF = os.path.join(outDir, nameReceptor+".dpf")
+            args = " -l %s -r %s -o %s"%(nameReceptor, fnReceptor, fnDPF)
+            args += " -p ga_pop_size=%d"%self.gaPop.get()
+            args += " -p ga_num_evals=%d"%self.gaNumEvals.get()
+            args += " -p ga_num_generations=%d"%self.gaNumGens.get()
+            args += " -p ga_elitism=%d"%self.gaElitism.get()
+            args += " -p ga_mutation_rate=%f"%self.gaMutationRate.get()
+            args += " -p ga_crossover_rate=%f"%self.gaCrossOverRate.get()
+            args += " -p ga_window_size=%d"%self.gaWindowSize.get()
+            args += " -p sw_max_its=%d"%self.swMaxIts.get()
+            args += " -p sw_max_succ=%d"%self.swMaxSucc.get()
+            args += " -p sw_max_fail=%d"%self.swMaxFail.get()
+            args += " -p sw_rho=%f"%self.swRho.get()
+            args += " -p sw_lb_rho=%d"%self.swLbRho.get()
+            args += " -p ls_search_freq=%f"%self.lsFreq.get()
+            args += " -p ga_run=%d"%self.gaRun.get()
+            args += " -p rmstol=%f"%self.rmsTol.get()
 
-        args = "-p %s.dpf -l %s.dlg"%(smallName, smallName)
-        self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=smallDir)
+            self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+                        autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py')+args,
+                        cwd=outDir)
+
+            args = "-p %s.dpf -l %s.dlg"%(nameReceptor, nameReceptor)
+            self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
 
     def parseDockedMolsDLG(self, fnDlg):
         molDic = {}
@@ -228,13 +232,10 @@ class ProtChemAutodock(EMProtocol):
       
 ########################### Utils functions ############################
 
-    def convert2PDBQT(self, smallMol):
+    def convert2PDBQT(self, smallMol, oDir):
         '''Convert ligand to pdbqt using obabel'''
         inFile = smallMol.getFileName()
         inName, inExt = os.path.splitext(os.path.basename(inFile))
-        oDir = self._getExtraPath(inName)
-        if not os.path.exists(oDir):
-            makePath(oDir)
         oFile = os.path.abspath(os.path.join(oDir, inName+'.pdbqt'))
 
         if inExt != '.pdbqt':
@@ -244,19 +245,15 @@ class ProtChemAutodock(EMProtocol):
             createLink(inFile, oFile)
         return oFile, oDir
 
-    def convertReceptor2PDBQT(self, proteinFile, outDir=None):
+    def convertReceptor2PDBQT(self, proteinFile):
         inName, inExt = os.path.splitext(os.path.basename(proteinFile))
-        if outDir == None:
-            outDir = self._getExtraPath()
-        if not os.path.exists(outDir):
-            makePath(outDir)
-        oFile = os.path.abspath(os.path.join(outDir, inName + '.pdbqt'))
-        if inExt != '.pdbqt':
-            args = '-i{} {} -opdbqt -O {}'.format(inExt[1:], proteinFile, oFile)
-            self.runJob('obabel', args)
-        else:
-            createLink(proteinFile, oFile)
-        return oFile, outDir
+        oFile = os.path.abspath(os.path.join(self._getExtraPath(inName + '.pdbqt')))
+
+        args = ' -v -r %s -o %s' % (proteinFile, oFile)
+        self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+                    autodock_plugin.getADTPath('Utilities24/prepare_receptor4.py') + args)
+
+        return oFile
 
     def getReceptorName(self):
         if self.wholeProt:
@@ -282,6 +279,13 @@ class ProtChemAutodock(EMProtocol):
         ligFns = []
         for mol in self.inputLibrary.get():
             ligFns.append(mol.getFileName())
+
+    def getOutputGridDir(self, pocket=None):
+        if pocket==None:
+            outDir = self._getExtraPath('grid')
+        else:
+            outDir = self._getExtraPath('grid_{}'.format(pocket.getObjId()))
+        return outDir
 
     def getGridDirs(self):
         dirs = []

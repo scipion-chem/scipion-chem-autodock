@@ -84,19 +84,19 @@ class Autodock_GridGeneration(EMProtocol):
     def getpdbqt(self):
         """ Prepare the pdbqt used to generate the grid file e-map"""
 
-        filename = self.inputAtomStruct.get().getFileName()
+        filename = self.getProteinFile()
         if filename.endswith('.cif'):
-            fnIn = self._getTmpPath("atomStruct.pdb")
+            self.pdbFile = self._getTmpPath("atomStruct.pdb")
             name_protein = (os.path.basename(filename)).split(".")[0]
             aStruct1 = AtomicStructHandler(filename)
-            aStruct1.write(fnIn)
+            aStruct1.write(self.pdbFile)
         else:
-            fnIn = filename
-            name_protein = (os.path.basename(fnIn)).split(".")[0]
+            self.pdbFile = filename
+            name_protein = (os.path.basename(self.pdbFile)).split(".")[0]
 
-        fnOut = self._getExtraPath('%s.pdbqt' %name_protein)
+        fnOut = self._getExtraPath('%s.pdbqt' % name_protein)
 
-        args = ' -v -r %s -o %s' % (fnIn, fnOut)
+        args = ' -v -r %s -o %s' % (self.pdbFile, fnOut)
 
         program = "prepare_receptor4"
         self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
@@ -108,15 +108,11 @@ class Autodock_GridGeneration(EMProtocol):
         """
         """
         # Name of the grid
-        atomStructFn = self.inputAtomStruct.get().getFileName()
-        filename = os.path.abspath(atomStructFn)
+        atomStructFn = os.path.abspath(self.getPDBQTFile())
         name_protein = (os.path.basename(atomStructFn)).split(".")[0]
 
-        # pdbqt gasteiger path
-        pdbqt = self._getExtraPath('%s.pdbqt' % name_protein)
-
-        # Center of the molecule
-        structure, x_center, y_center, z_center = calculate_centerMass(filename)
+        # Center of the molecule (use the pdb file)
+        structure, x_center, y_center, z_center = calculate_centerMass(self.pdbFile)
 
         # Create the GPF file, required by autogrid to build the grid and glg
         npts = (self.radius.get()*2)/self.spacing.get()  # x,y,z points of the grid
@@ -139,3 +135,12 @@ class Autodock_GridGeneration(EMProtocol):
     def createOutput(self):
         self._defineOutputs(outputGrid=self.grid)
         #self._defineSourceRelation(self.inputAtomStruct, self.grid)
+
+    def getProteinFile(self):
+        return self.inputAtomStruct.get().getFileName()
+
+    def getProteinName(self):
+        return os.path.basename(self.getProteinFile()).split(".")[0]
+
+    def getPDBQTFile(self):
+        return self._getExtraPath('%s.pdbqt' % self.getProteinName())
