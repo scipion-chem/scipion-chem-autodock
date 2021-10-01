@@ -114,7 +114,7 @@ class ProtAutodockDockingViewer(ProtocolViewer):
     def buildPMLDockingSingleStr(self, mol, molName, addTarget=True):
         pmlStr = ''
         if addTarget:
-            pmlStr = 'load {}\n'.format(os.path.abspath(self.protocol.inputGrid.get().getProteinFile()))
+            pmlStr = 'load {}\n'.format(os.path.abspath(self.protocol.getOriginalReceptorFile()))
 
         pdbFile = os.path.abspath(mol.getPoseFile())
         pmlStr += 'load {}, {}\nhide spheres, {}\nshow sticks, {}\n'.format(pdbFile, molName, molName, molName)
@@ -124,7 +124,7 @@ class ProtAutodockDockingViewer(ProtocolViewer):
         molSet = getattr(self.protocol, outName)
         pmlStr = ''
         if addTarget:
-            pmlStr = 'load {}\n'.format(os.path.abspath(self.protocol.inputGrid.get().getProteinFile()))
+            pmlStr = 'load {}\n'.format(os.path.abspath(self.protocol.getOriginalReceptorFile()))
         if not os.path.exists(self.getPDBsDir(outName)):
             molDic = {}
             for i, mol in enumerate(molSet):

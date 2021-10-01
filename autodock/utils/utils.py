@@ -26,16 +26,17 @@
 
 import os
 from pwem.convert import AtomicStructHandler
+from pwchem.utils import splitPDBLine
 
-def generate_gpf(protName, spacing, xc, yc, zc, npts, outDir, ligandFns=None):
+def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None):
   """
   Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
   """
 
-  protFile = os.path.join(outDir, protName+'.pdbqt')
-  gpf_file = os.path.join(outDir, protName + '_2.gpf')
-  npts = round(npts, None)
-  
+  protName, protExt = os.path.splitext(os.path.basename(protFile))
+  gpf_file = os.path.join(outDir, protName + '.gpf')
+  npts = int(round(npts))
+
   protAtomTypes = parseAtomTypes(protFile)
   protAtomTypes = ' '.join(sortSet(protAtomTypes))
 
@@ -59,13 +60,8 @@ def generate_gpf(protName, spacing, xc, yc, zc, npts, outDir, ligandFns=None):
     file.write("receptor %s                  # macromolecule\n" % (os.path.abspath(protFile)))
     file.write("gridcenter %s %s %s           # xyz-coordinates or auto\n" % (xc, yc, zc))
     file.write("smooth 0.5                           # store minimum energy w/in rad(A)\n")
-    file.write("map %s.A.map                       # atom-specific affinity map\n" % (protName))
-    file.write("map %s.C.map                       # atom-specific affinity map\n" % (protName))
-    file.write("map %s.HD.map                      # atom-specific affinity map\n" % (protName))
-    file.write("map %s.N.map                       # atom-specific affinity map\n" % (protName))
-    file.write("map %s.NA.map                      # atom-specific affinity map\n" % (protName))
-    file.write("map %s.OA.map                      # atom-specific affinity map\n" % (protName))
-    file.write("map %s.SA.map                      # atom-specific affinity map\n" % (protName))
+    for ligType in ligAtomTypes.split():
+        file.write("map %s.%s.map                       # atom-specific affinity map\n" % (protName, ligType))
     file.write("elecmap %s.e.map                   # electrostatic potential map\n" % (protName))
     file.write("dsolvmap %s.d.map                  # desolvation potential map\n" % (protName))
     file.write("dielectric -0.1465                   # <0, AD4 distance-dep.diel;>0, constant")
@@ -78,7 +74,11 @@ def parseAtomTypes(pdbFile):
         for line in f:
             if line.startswith('ATOM') or line.startswith('HETATM'):
               pLine = line.split()
-              at = pLine[12]
+              try:
+                  at = pLine[12]
+              except:
+                  at = splitPDBLine(line, rosetta=True)[12]
+
               atomTypes.add(at)
     return atomTypes
 

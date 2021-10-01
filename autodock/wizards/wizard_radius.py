@@ -34,10 +34,12 @@ to select the radius of the sphere that contains the protein or a desired zone.
 from pwem.wizards.wizard import EmWizard
 from pwem.wizards.wizards_3d.mask_structure_wizard import MaskStructureWizard
 from ..protocols.protocol_generate_grid import Autodock_GridGeneration
+from ..protocols.protocol_autodock import ProtChemAutodock
 
 
 class GetDistance2Center(EmWizard):
-    _targets = [(Autodock_GridGeneration, ['radius'])]
+    _targets = [(Autodock_GridGeneration, ['radius']),
+                (ProtChemAutodock, ['radius'])]
 
     def show(self, form):
         protocol = form.protocol
