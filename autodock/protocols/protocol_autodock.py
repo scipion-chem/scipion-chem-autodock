@@ -103,16 +103,17 @@ class ProtChemAutodock(EMProtocol):
             gridSteps.append(stepId)
         else:
             for pocket in self.inputPockets.get():
-                stepId = self._insertFunctionStep('generateGridsStep', pocket, prerequisites=[cId])
+                stepId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
                 gridSteps.append(stepId)
 
         dockSteps = []
         if self.wholeProt:
-            stepId = self._insertFunctionStep('dockStep', prerequisites=gridSteps)
-            dockSteps.append(stepId)
+            for mol in self.inputLibrary.get():
+                stepId = self._insertFunctionStep('dockStep', mol.clone(), prerequisites=gridSteps)
+                dockSteps.append(stepId)
         else:
             for pocket in self.inputPockets.get():
-                stepId = self._insertFunctionStep('dockStep', pocket, prerequisites=gridSteps)
+                stepId = self._insertFunctionStep('dockStep', pocket.clone(), prerequisites=gridSteps)
                 dockSteps.append(stepId)
 
         self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
@@ -148,86 +149,70 @@ class ProtChemAutodock(EMProtocol):
         self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=outDir)
 
 
-    def dockStep(self, pocket=None):
+    def dockStep(self, mol, pocket=None):
         #Prepare grid
         fnReceptor = self.receptorFile
         nameReceptor, extReceptor = os.path.splitext(os.path.basename(fnReceptor))
         outDir = self.getOutputGridDir(pocket)
-        shutil.copy(self.receptorFile, os.path.join(outDir, self.getReceptorName()+'.pdbqt'))
 
-        for mol in self.inputLibrary.get():
-            smallDir = os.path.join(outDir, mol.getMolName())
-            makePath(smallDir)
+        molFn = self.getMolLigandName(mol)
+        molName, _ = os.path.splitext(os.path.basename(molFn))
+        createLink(molFn, os.path.join(outDir, molName+'.pdbqt'))
+        smallDir = os.path.join(outDir, molName)
+        makePath(smallDir)
 
-            fnDPF = os.path.join(outDir, nameReceptor+".dpf")
-            args = " -l %s -r %s -o %s"%(nameReceptor, fnReceptor, fnDPF)
-            args += " -p ga_pop_size=%d"%self.gaPop.get()
-            args += " -p ga_num_evals=%d"%self.gaNumEvals.get()
-            args += " -p ga_num_generations=%d"%self.gaNumGens.get()
-            args += " -p ga_elitism=%d"%self.gaElitism.get()
-            args += " -p ga_mutation_rate=%f"%self.gaMutationRate.get()
-            args += " -p ga_crossover_rate=%f"%self.gaCrossOverRate.get()
-            args += " -p ga_window_size=%d"%self.gaWindowSize.get()
-            args += " -p sw_max_its=%d"%self.swMaxIts.get()
-            args += " -p sw_max_succ=%d"%self.swMaxSucc.get()
-            args += " -p sw_max_fail=%d"%self.swMaxFail.get()
-            args += " -p sw_rho=%f"%self.swRho.get()
-            args += " -p sw_lb_rho=%d"%self.swLbRho.get()
-            args += " -p ls_search_freq=%f"%self.lsFreq.get()
-            args += " -p ga_run=%d"%self.gaRun.get()
-            args += " -p rmstol=%f"%self.rmsTol.get()
+        fnDPF = os.path.abspath(os.path.join(smallDir, nameReceptor+".dpf"))
+        args = " -l %s -r %s -o %s"%(molFn, fnReceptor, fnDPF)
+        args += " -p ga_pop_size=%d"%self.gaPop.get()
+        args += " -p ga_num_evals=%d"%self.gaNumEvals.get()
+        args += " -p ga_num_generations=%d"%self.gaNumGens.get()
+        args += " -p ga_elitism=%d"%self.gaElitism.get()
+        args += " -p ga_mutation_rate=%f"%self.gaMutationRate.get()
+        args += " -p ga_crossover_rate=%f"%self.gaCrossOverRate.get()
+        args += " -p ga_window_size=%d"%self.gaWindowSize.get()
+        args += " -p sw_max_its=%d"%self.swMaxIts.get()
+        args += " -p sw_max_succ=%d"%self.swMaxSucc.get()
+        args += " -p sw_max_fail=%d"%self.swMaxFail.get()
+        args += " -p sw_rho=%f"%self.swRho.get()
+        args += " -p sw_lb_rho=%d"%self.swLbRho.get()
+        args += " -p ls_search_freq=%f"%self.lsFreq.get()
+        args += " -p ga_run=%d"%self.gaRun.get()
+        args += " -p rmstol=%f"%self.rmsTol.get()
 
-            self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
-                        autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py')+args,
-                        cwd=outDir)
+        self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+                    autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py')+args,
+                    cwd=outDir)
 
-            args = "-p %s.dpf -l %s.dlg"%(nameReceptor, nameReceptor)
-            self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
-
-    def parseDockedMolsDLG(self, fnDlg):
-        molDic = {}
-        i=1
-        with open(fnDlg) as fRes:
-            for line in fRes:
-                if line.startswith('DOCKED: MODEL'):
-                    posId = line.split()[-1]
-                    molDic[posId] = {'pdb': ''}
-                elif line.startswith('DOCKED: USER    Estimated Free Energy'):
-                    molDic[posId]['energy'] = line.split()[8]
-                elif line.startswith('DOCKED: USER    Estimated Inhibition'):
-                    molDic[posId]['ki'] = line.split()[7]
-                elif line.startswith('DOCKED: REMARK') or line.startswith('TER'):
-                    molDic[posId]['pdb'] += line[8:]
-                elif line.startswith('DOCKED: ATOM'):
-                    molDic[posId]['pdb'] += line[8:]
-                    i+=1
-        return molDic
+        fnDLG = fnDPF.replace('.dpf', '.dlg')
+        args = "-p %s -l %s" % (fnDPF, fnDLG)
+        self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
 
     def createOutputStep(self):
         outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
-        for smallMol in self.inputLibrary.get():
-            fnSmall = smallMol.getFileName()
-            fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
-            fnSmallDir = self._getExtraPath(fnBase)
-            fnDlg = os.path.join(fnSmallDir, fnBase+".dlg")
-            if os.path.exists(fnDlg):
-                molDic = self.parseDockedMolsDLG(fnDlg)
-                for posId in molDic:
-                    pdbFile = '{}/{}_{}.pdb'.format(fnSmallDir, fnBase, posId)
-                    with open(pdbFile, 'w') as f:
-                        f.write(molDic[posId]['pdb'])
+        for gridDir in self.getGridDirs():
+            for smallMol in self.inputLibrary.get():
+                smallFn = smallMol.getFileName()
+                smallName = os.path.splitext(os.path.basename(smallFn))[0]
+                fnSmallDir = os.path.join(gridDir, smallName)
 
-                    newSmallMol = SmallMolecule()
-                    newSmallMol.copy(smallMol)
-                    newSmallMol.cleanObjId()
-                    newSmallMol.dockingScoreLE = pwobj.Float(molDic[posId]['energy'])
-                    newSmallMol.ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
-                    newSmallMol.poseFile.set(pdbFile)
+                fnDlg = os.path.join(fnSmallDir, self.getReceptorName()+".dlg")
+                if os.path.exists(fnDlg):
+                    molDic = self.parseDockedMolsDLG(fnDlg)
+                    for posId in molDic:
+                        pdbFile = '{}/{}_{}.pdb'.format(fnSmallDir, smallName, posId)
+                        with open(pdbFile, 'w') as f:
+                            f.write(molDic[posId]['pdb'])
 
-                    outputSet.append(newSmallMol)
+                        newSmallMol = SmallMolecule()
+                        newSmallMol.copy(smallMol)
+                        newSmallMol.cleanObjId()
+                        newSmallMol.dockingScoreLE = pwobj.Float(molDic[posId]['energy'])
+                        newSmallMol.ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
+                        newSmallMol.poseFile.set(pdbFile)
+
+                        outputSet.append(newSmallMol)
 
         self._defineOutputs(outputSmallMolecules=outputSet)
-        self._defineSourceRelation(self.inputGrid, outputSet)
         self._defineSourceRelation(self.inputLibrary, outputSet)
       
 ########################### Utils functions ############################
@@ -279,6 +264,13 @@ class ProtChemAutodock(EMProtocol):
         ligFns = []
         for mol in self.inputLibrary.get():
             ligFns.append(mol.getFileName())
+        return ligFns
+
+    def getLigandsNames(self):
+        ligNames = []
+        for mol in self.inputLibrary.get():
+            ligNames.append(mol.getMolName())
+        return ligNames
 
     def getOutputGridDir(self, pocket=None):
         if pocket==None:
@@ -294,6 +286,31 @@ class ProtChemAutodock(EMProtocol):
             if os.path.isdir(d) and 'grid' in file:
                 dirs.append(d)
         return dirs
+
+    def getMolLigandName(self, mol):
+        molName = mol.getMolName()
+        for ligName in self.ligandFileNames:
+            if molName in ligName:
+                return ligName
+
+    def parseDockedMolsDLG(self, fnDlg):
+        molDic = {}
+        i=1
+        with open(fnDlg) as fRes:
+            for line in fRes:
+                if line.startswith('DOCKED: MODEL'):
+                    posId = line.split()[-1]
+                    molDic[posId] = {'pdb': ''}
+                elif line.startswith('DOCKED: USER    Estimated Free Energy'):
+                    molDic[posId]['energy'] = line.split()[8]
+                elif line.startswith('DOCKED: USER    Estimated Inhibition'):
+                    molDic[posId]['ki'] = line.split()[7]
+                elif line.startswith('DOCKED: REMARK') or line.startswith('TER'):
+                    molDic[posId]['pdb'] += line[8:]
+                elif line.startswith('DOCKED: ATOM'):
+                    molDic[posId]['pdb'] += line[8:]
+                    i+=1
+        return molDic
 
     def _citations(self):
         return ['Morris2009']
