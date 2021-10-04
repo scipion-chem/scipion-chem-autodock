@@ -232,8 +232,9 @@ class ProtChemAutodock(EMProtocol):
         oFile = os.path.abspath(os.path.join(oDir, inName+'.pdbqt'))
 
         if inExt != '.pdbqt':
-            args = '-i{} {} -opdbqt -O {}'.format(inExt[1:], inFile, oFile)
-            self.runJob('obabel', args)
+            args = ' -l {} -o {}'.format(inFile, oFile)
+            self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+                        autodock_plugin.getADTPath('Utilities24/prepare_ligand4.py') + args)
         else:
             createLink(inFile, oFile)
         return oFile, oDir

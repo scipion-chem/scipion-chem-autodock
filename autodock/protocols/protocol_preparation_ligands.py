@@ -54,7 +54,7 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
                 ProtChemADTPrepare.callPrepare(self, "prepare_ligand4", args)
 
         def createOutput(self):
-            outputSmallMolecules = SetOfSmallMolecules().create(path=self._getPath(), suffix='SmallMols')
+            outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
             for fnOut in glob.glob(self._getExtraPath("*.pdbqt")):
                 smallMolecule = SmallMolecule(smallMolFilename=fnOut)
                 outputSmallMolecules.append(smallMolecule)
