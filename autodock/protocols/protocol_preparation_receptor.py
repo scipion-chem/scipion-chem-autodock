@@ -37,27 +37,28 @@ class ProtChemADTPrepare(EMProtocol):
         choicesRepair = ['None', 'Bonds hydrogens', 'Bonds', 'Hydrogens']
         if self.typeRL=="target":
             choicesRepair.append('Check hydrogens')
-        form.addParam('repair', EnumParam, choices=choicesRepair,
+        preparation = form.addGroup('Preparation')
+        preparation.addParam('repair', EnumParam, choices=choicesRepair,
                       default=0, label='Repair action:',
                       help='Bonds hydrogens: build bonds and add hydrogens\n'
                            'Bonds: build a single bond from each atom with no bonds to its closest neighbor\n'
                            'Hydrogens: add hydrogens\n'
                            'Check hydrogens: add hydrogens only if there are none already')
-        form.addParam('preserveCharges', EnumParam, choices=['Add gasteiger charges','Preserve input charges',
+        preparation.addParam('preserveCharges', EnumParam, choices=['Add gasteiger charges','Preserve input charges',
                                                              'Preserve charges of specific atoms'],
                       default=0, label='Charge handling')
-        form.addParam('chargeAtoms', StringParam, default="", condition='preserveCharges==2',
+        preparation.addParam('chargeAtoms', StringParam, default="", condition='preserveCharges==2',
                       label='Atoms to preserve charge', help='Separated by commas: Zn, Fe, ...')
-        form.addParam('nphs', BooleanParam, default=True,
+        preparation.addParam('nphs', BooleanParam, default=True,
                       label='Merge charges and remove non-polar hydrogens')
-        form.addParam('lps', BooleanParam, default=True,
+        preparation.addParam('lps', BooleanParam, default=True,
                       label='Merge charges and remove lone pairs')
-        form.addParam('waters', BooleanParam, default=True,
+        preparation.addParam('waters', BooleanParam, default=True,
                       label='Remove water residues')
         if self.typeRL=="target":
-            form.addParam('nonstdres', BooleanParam, default=True,
+            preparation.addParam('nonstdres', BooleanParam, default=True,
                           label='Remove chains composed entirely of non-standard residues')
-            form.addParam('nonstd', BooleanParam, default=False,
+            preparation.addParam('nonstd', BooleanParam, default=False,
                           label='Remove non-standard residues from all chains')
 
     # --------------------------- INSERT steps functions --------------------

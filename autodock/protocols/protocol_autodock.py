@@ -118,7 +118,9 @@ class ProtChemAutodock(EMProtocol):
     def convertStep(self):
         self.ligandFileNames = []
         for mol in self.inputLibrary.get():
-            fnSmall, smallDir = self.convert2PDBQT(mol.clone(), self._getExtraPath())
+            fnSmall = mol.getFileName()
+            if not '.pdbqt' in fnSmall:
+                fnSmall, smallDir = self.convert2PDBQT(mol.clone(), self._getExtraPath())
             self.ligandFileNames.append(fnSmall)
 
         self.receptorFile = self.convertReceptor2PDBQT(self.getOriginalReceptorFile())
