@@ -26,8 +26,9 @@
 import re, shutil
 import os
 
-from pwchem.utils import runOpenBabel
+from pwchem.utils import runOpenBabel, splitConformerFile
 from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, LEVEL_ADVANCED
+import pyworkflow.object as pwobj
 from .protocol_preparation_receptor import ProtChemADTPrepare
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 
@@ -80,7 +81,7 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
                 fnSmall = mol.smallMoleculeFile.get()
                 fnMol = os.path.split(fnSmall)[1]
                 fnRoot = os.path.splitext(fnMol)[0]
-                fnOut = self._getExtraPath(fnRoot+"_prep.pdbqt")
+                fnOut = self._getExtraPath(fnRoot+"-prep.pdbqt")
                 self.preparedFiles.append(fnOut)
 
                 args = ' -v -l %s -o %s' % (fnSmall, fnOut)
@@ -92,7 +93,7 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
           """
 
           for file in self.preparedFiles:
-            fnRoot = re.split("_", os.path.split(file)[1])[0]  # ID or filename without _prep.mol2
+            fnRoot = re.split("-", os.path.split(file)[1])[0]  # ID or filename without -prep.mol2
 
             if self.method_conf.get() == 0:  # Genetic algorithm
               args = " %s --conformer --nconf %s --score rmsd --writeconformers -O %s_conformers.pdbqt" % \
@@ -104,44 +105,23 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
             runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
 
         def createOutput(self):
-            outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
+            outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
             for file in self.preparedFiles:
-                fnRoot = re.split("_", os.path.split(file)[1])[0]
+                fnRoot = re.split("-", os.path.split(file)[1])[0]
                 outDir = self._getExtraPath(fnRoot)
                 os.mkdir(outDir)
                 shutil.copy(file, os.path.join(outDir, '{}-{}.pdbqt'.format(fnRoot, 1)))
 
-                confDir = self.splitConformerFile(self._getExtraPath("{}_conformers.pdbqt".format(fnRoot)))
+                confFile = self._getExtraPath("{}_conformers.pdbqt".format(fnRoot))
+                confDir = splitConformerFile(confFile, outDir=self._getExtraPath(fnRoot))
                 for molFile in os.listdir(confDir):
                     molFile = os.path.abspath(os.path.join(confDir, molFile))
-                    outputSmallMolecules.append(SmallMolecule(smallMolFilename=molFile, type='AutoDock'))
+                    newSmallMol = SmallMolecule(smallMolFilename=molFile, type='AutoDock')
+                    newSmallMol._ConformersFile = pwobj.String(confFile)
+                    outputSmallMolecules.append(newSmallMol)
 
             self._defineOutputs(outputSmallMols=outputSmallMolecules)
             self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
 
 
         ####################### UTILS ######################
-        def splitConformerFile(self, confFile):
-            fnRoot = re.split("_", os.path.split(confFile)[1])[0]
-            outDir = self._getExtraPath(fnRoot)
-            iConf, lastRemark, towrite = 2, True, ''
-            with open(confFile) as fConf:
-                for line in fConf:
-                    if line.startswith('REMARK'):
-                        if lastRemark:
-                            towrite += line
-                        else:
-                            newFile = os.path.join(outDir, '{}-{}.pdbqt'.format(fnRoot, iConf))
-                            self.writeFile(towrite, newFile)
-                            towrite, lastRemark = line, True
-                            iConf += 1
-                    else:
-                        towrite += line
-                        lastRemark = False
-            newFile = os.path.join(outDir, '{}-{}.pdbqt'.format(fnRoot, iConf))
-            self.writeFile(towrite, newFile)
-            return outDir
-
-        def writeFile(self, towrite, file):
-            with open(file, 'w') as f:
-                f.write(towrite)

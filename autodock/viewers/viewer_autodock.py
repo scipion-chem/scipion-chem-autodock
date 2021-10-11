@@ -42,15 +42,20 @@ class ProtAutodockDockingViewer(ProtocolViewer):
 
     def _defineParams(self, form):
         form.addSection(label='Docking visualization')
-        form.addParam('singleLigand', BooleanParam,
-                      default=False,
-                      label='Display single ligand: ',
-                      help='Display the target with a single ligand docked')
-        form.addParam('displayPymol', EnumParam, condition='not singleLigand',
+        group = form.addGroup('Pocket ligands')
+        group.addParam('displayPymol', EnumParam,
                       choices=self.getChoices(pymol=True), default=0,
                       label='Display docking on pocket result: ',
                       help='Docking results are grouped by their pocket, choose the one to visualize')
-        form.addParam('displayPymolSingle', EnumParam, condition='singleLigand',
+
+        group = form.addGroup('Each ligand')
+        group.addParam('displayPymolEach', EnumParam,
+                       choices=self.getChoicesEach(), default=0,
+                       label='Display one ligand type: ',
+                       help='Display each ligand position with the target')
+
+        group = form.addGroup('Single Ligand')
+        group.addParam('displayPymolSingle', EnumParam,
                       choices=self.getChoicesSingle(), default=0,
                       label='Display single ligand: ',
                       help='Display this single ligand with the target')
@@ -80,16 +85,50 @@ class ProtAutodockDockingViewer(ProtocolViewer):
             outputLabels = ['All'] + outputLabels
         return outputLabels
 
+    def getChoicesEach(self):
+        self.outputLigandsC = {}
+        for oAttr in self.protocol.iterOutputAttributes():
+            if 'outputSmallMolecules' in oAttr[0]:
+                molSet = getattr(self.protocol, oAttr[0])
+                for mol in molSet:
+                    curMol = mol.clone()
+                    pName = curMol.getMolBase()
+                    if not pName in self.outputLigandsC:
+                        self.outputLigandsC[pName] = [curMol]
+                    else:
+                        self.outputLigandsC[pName] += [curMol]
+
+        outputLabels = list(self.outputLigandsC.keys())
+        outputLabels.sort()
+        return outputLabels
+
 
     def _getVisualizeDict(self):
         return {'displayPymol': self._viewPymol,
-                'displayPymolSingle': self._viewSinglePymol}
+                'displayPymolSingle': self._viewSinglePymol,
+                'displayPymolEach': self._viewEachPymol,
+                }
 
     def _viewSinglePymol(self, e=None):
         ligandLabel = self.getEnumText('displayPymolSingle')
         mol = self.outputLigands[ligandLabel].clone()
         pmlFile = self.protocol._getExtraPath(mol.getMolName())+'/{}.pml'.format(ligandLabel)
         self.writePmlFile(pmlFile, self.buildPMLDockingSingleStr(mol, ligandLabel, addTarget=True))
+
+        pymolV = PyMolViewer(project=self.getProject())
+        pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+
+    def _viewEachPymol(self, e=None):
+        pmlStr = ''
+        ligandLabel = self.getEnumText('displayPymolEach')
+        pmlFile = self.protocol._getExtraPath('{}.pml'.format(ligandLabel))
+
+        mols = self.outputLigandsC[ligandLabel]
+        mols = self.sortMolsByUnique(mols)
+        for mol in mols:
+            pmlStr += self.buildPMLDockingSingleStr(mol.clone(), mol.getUniqueName(), addTarget=True)
+
+        self.writePmlFile(pmlFile, pmlStr)
 
         pymolV = PyMolViewer(project=self.getProject())
         pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
@@ -117,7 +156,8 @@ class ProtAutodockDockingViewer(ProtocolViewer):
             pmlStr = 'load {}\n'.format(os.path.abspath(self.protocol.getOriginalReceptorFile()))
 
         pdbFile = os.path.abspath(mol.getPoseFile())
-        pmlStr += 'load {}, {}\nhide spheres, {}\nshow sticks, {}\n'.format(pdbFile, molName, molName, molName)
+        pmlStr += 'load {}, {}\ndisable {}\nhide spheres, {}\nshow sticks, {}\n'.\
+            format(pdbFile, molName, molName, molName, molName)
         return pmlStr
 
     def buildPMLDockingsStr(self, outName, addTarget=True):
@@ -156,4 +196,13 @@ class ProtAutodockDockingViewer(ProtocolViewer):
 
     def getPDBsDir(self, outName):
         return self.protocol._getExtraPath(outName)
+
+    def sortMolsByUnique(self, mols):
+        uniques = []
+        for mol in mols:
+            uniques.append(mol.getUniqueName())
+
+        zipped_lists = sorted(zip(uniques, mols))
+        uniques, mols = zip(*zipped_lists)
+        return mols
 

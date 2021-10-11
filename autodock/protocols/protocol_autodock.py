@@ -30,9 +30,8 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam, STEPS_PARALLEL, BooleanParam
 import pyworkflow.object as pwobj
 from autodock import Plugin as autodock_plugin
-from pyworkflow.utils.path import makePath, createLink, cleanPattern
+from pyworkflow.utils.path import makePath, createLink
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import writePDBLine, splitPDBLine
 from autodock.utils import generate_gpf, calculate_centerMass
 
 class ProtChemAutodock(EMProtocol):
@@ -120,7 +119,7 @@ class ProtChemAutodock(EMProtocol):
         for mol in self.inputLibrary.get():
             fnSmall = mol.getFileName()
             if not '.pdbqt' in fnSmall:
-                fnSmall, smallDir = self.convert2PDBQT(mol.clone(), self._getExtraPath())
+                fnSmall, smallDir = self.convert2PDBQT(mol.clone(), self._getExtraPath('conformers'))
             self.ligandFileNames.append(fnSmall)
 
         self.receptorFile = self.convertReceptor2PDBQT(self.getOriginalReceptorFile())
@@ -229,6 +228,8 @@ class ProtChemAutodock(EMProtocol):
 
     def convert2PDBQT(self, smallMol, oDir):
         '''Convert ligand to pdbqt using obabel'''
+        if not os.path.exists(oDir):
+            os.mkdir(oDir)
         inFile = smallMol.getFileName()
         inName, inExt = os.path.splitext(os.path.basename(inFile))
         oFile = os.path.abspath(os.path.join(oDir, inName+'.pdbqt'))
