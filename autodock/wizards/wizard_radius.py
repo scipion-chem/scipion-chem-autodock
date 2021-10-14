@@ -2,6 +2,7 @@
 # **************************************************************************
 # *
 # * Authors:  Alberto Manuel Parra Pérez (amparraperez@gmail.com)
+# *           Daniel Del Hoyo Gomez (ddelhoyo@cnb.csic.es)
 # *
 # * Biocomputing Unit, CNB-CSIC
 # *
@@ -31,22 +32,14 @@ to select the radius of the sphere that contains the protein or a desired zone.
 """
 
 # Imports
-from pwem.wizards.wizard import EmWizard
-from pwem.wizards.wizards_3d.mask_structure_wizard import MaskStructureWizard
-from ..protocols.protocol_generate_grid import Autodock_GridGeneration
-from ..protocols.protocol_autodock import ProtChemAutodock
+from pwchem.wizards import GetRadiusProtein
+from ..protocols import Autodock_GridGeneration, ProtChemAutodock, ProtChemAutoLigand
 
-
-class GetDistance2Center(EmWizard):
+class GetRadiusProteinADT(GetRadiusProtein):
     _targets = [(Autodock_GridGeneration, ['radius']),
-                (ProtChemAutodock, ['radius'])]
+                (ProtChemAutodock, ['radius']),
+                (ProtChemAutoLigand, ['radius']),
+                ]
 
-    def show(self, form):
-        protocol = form.protocol
-        structure = protocol.inputAtomStruct.get()
-        if not structure:
-            print('You must specify input structure')
-            return
-        plt = MaskStructureWizard(structure.getFileName())
-        plt.initializePlot()
-        form.setVar('radius', plt.radius)
+
+

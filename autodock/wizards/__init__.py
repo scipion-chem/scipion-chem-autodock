@@ -1,1 +1,1 @@
-from .wizard_radius import GetDistance2Center
+from .wizard_radius import GetRadiusProteinADT
