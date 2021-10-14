@@ -30,17 +30,20 @@ protein structure using the AutoLigand software
 
 """
 
-import os
+import os, shutil
 
 from pwem.protocols import EMProtocol
 from pwem.objects.data import AtomStruct
-from pyworkflow.protocol.params import PointerParam, IntParam, EnumParam, FloatParam
+from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, EnumParam, FloatParam, LEVEL_ADVANCED
+from pyworkflow.utils.path import copyTree, makePath
+from pyworkflow.protocol import params
+
+from pwchem.objects import SetOfPockets
+from pwchem.constants import *
+from pwchem.utils import splitPDBLine, runOpenBabel, generate_gpf, calculate_centerMass
 from autodock import Plugin as autodock_plugin
 from autodock.objects import AutoLigandPocket
-from pwchem.objects import SetOfPockets
-from pyworkflow.utils.path import copyTree
-from pyworkflow.protocol import params
-from pwchem.constants import *
+
 
 NUMBER, RANGE = 0, 1
 
@@ -57,30 +60,50 @@ class ProtChemAutoLigand(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputGrid', PointerParam, pointerClass="GridADT",
-                       label='Input grid:', allowsNull=False,
-                       help="The grid must be prepared for autodock")
+        group = form.addGroup('Grids generation')
+        group.addParam('prevGrid', BooleanParam, label='Use a previously generated grid: ', default=False,
+                       help='Use a previous ADT grid to run autoligand')
 
-        form.addParam('fillType', EnumParam, default=NUMBER,
+        group.addParam('inputGrid', PointerParam, pointerClass="GridADT", allowsNull=False,
+                       label='Input ADT grid:', condition='prevGrid',
+                       help="ADT grid previously generated with the ADT generate grid protocol on the protein"
+                            " of interest")
+
+        group.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
+                      label='Input atomic structure:', condition='not prevGrid', allowsNull=False,
+                      help="The atom structure to search pockets in")
+        group.addParam('radius', FloatParam, label='Grid radius for whole protein: ',
+                       allowsNull=False, condition='not prevGrid',
+                       help='Radius of the Autodock grid for the whole protein.'
+                            'The wizard will provide for an approximation')
+        group.addParam('spacing', FloatParam, default=1, label='Step size (A)',
+                      condition='not prevGrid',
+                      help="Distance between each point in the electrostatic grid."
+                           " This value is used to adjust the radius as number of "
+                           "(x,y,z) points : radius/spacing = number of points along"
+                           " 3 dimensions ")
+
+        group = form.addGroup('Autoligand')
+        group.addParam('fillType', EnumParam, default=NUMBER,
                        label='Mode of use',
                        choices=self.fillChoices,
                        help='List of parameters which will be written from the selected protocol')
 
-        form.addParam('nFillPoints', IntParam, default=100, label='Number of fill points',
+        group.addParam('nFillPoints', IntParam, default=100, label='Number of fill points',
                        condition="fillType==0",
                        help="Number of fill points to use. The resulting grids will have this size")
 
-        form.addParam('iniFillPoints', IntParam, default=50, label='Initial fill points',
+        group.addParam('iniFillPoints', IntParam, default=50, label='Initial fill points',
                        condition="fillType==1",
                        help="Number of fill points to use. The resulting grids will have this size")
-        form.addParam('endFillPoints', IntParam, default=100, label='Final fill points',
+        group.addParam('endFillPoints', IntParam, default=100, label='Final fill points',
                        condition="fillType==1",
                        help="Number of fill points to use. The resulting grids will have this size")
-        form.addParam('stepFillPoints', IntParam, default=10, label='Step of fill points',
+        group.addParam('stepFillPoints', IntParam, default=10, label='Step of fill points',
                        condition="fillType==1",
                        help="Number of fill points to use. The resulting grids will have this size")
 
-        form.addParam('propShared', FloatParam, default=0.5, label='Proportion of points for overlapping',
+        group.addParam('propShared', FloatParam, default=0.5, label='Proportion of points for overlapping',
                       condition="fillType==1",
                       help="Min proportion of points (from the smaller) of two pockets to be considered overlapping")
 
@@ -89,12 +112,14 @@ class ProtChemAutoLigand(EMProtocol):
     # --------------------------- Steps functions --------------------
     def _insertAllSteps(self):
         iniDep = [self._insertFunctionStep('convertInputStep')]
+        gridDep = [self._insertFunctionStep('generateGridStep', prerequisites=iniDep)]
+
         predDeps, clustDeps = [], iniDep.copy()
         if self.fillType.get() == NUMBER:
-            clustDeps += [self._insertFunctionStep('predictPocketStep', self.nFillPoints.get(), prerequisites=iniDep)]
+            clustDeps += [self._insertFunctionStep('predictPocketStep', self.nFillPoints.get(), prerequisites=gridDep)]
         else:
             for pocketSize in range(self.iniFillPoints.get(), self.endFillPoints.get()+1, self.stepFillPoints.get()):
-                predDeps += [self._insertFunctionStep('predictPocketStep', pocketSize, prerequisites=iniDep)]
+                predDeps += [self._insertFunctionStep('predictPocketStep', pocketSize, prerequisites=gridDep)]
                 #Cluster pockets when each is predicted and when the previous clustering is done (iniDep for the first)
                 clustDeps += [self._insertFunctionStep('clusterPocketsStep', pocketSize,
                                                        prerequisites=[predDeps[-1], clustDeps[-1]])]
@@ -103,12 +128,37 @@ class ProtChemAutoLigand(EMProtocol):
 
     def convertInputStep(self):
         '''Moves necessary files to current extra path'''
-        gridPath = self.inputGrid.get().getFileName()
-        prevExtraPath = '/'.join(gridPath.split('/')[:-1])
-        copyTree(prevExtraPath, self._getExtraPath())
+        self.receptorFile = self.getStructFileName()
+        if os.path.splitext(self.receptorFile)[1] != '.pdbqt':
+            self.receptorFile = self.convertReceptor2PDBQT(self.receptorFile)
+
+    def generateGridStep(self):
+        outDir = self._getExtraPath()
+        if self.prevGrid:
+            shutil.copytree(self.getStructDir(), outDir, dirs_exist_ok=True)
+        else:
+            radius = self.radius.get()
+            strFile = self.getStructFileName()
+            if os.path.splitext(strFile)[1] == '.pdbqt':
+                pdbFile = os.path.abspath(self._getTmpPath('pdbInput.pdb'))
+                args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(strFile), pdbFile)
+                runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
+            else:
+                pdbFile = strFile
+
+            structure, x_center, y_center, z_center = calculate_centerMass(pdbFile)
+            npts = (radius * 2) / self.spacing.get()
+
+            makePath(outDir)
+            gpf_file = generate_gpf(self.receptorFile, spacing=self.spacing.get(),
+                                    xc=x_center, yc=y_center, zc=z_center,
+                                    npts=npts, outDir=outDir)
+
+            args = "-p {} -l {}.glg".format(gpf_file, self.getStructName())
+            self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=outDir)
 
     def predictPocketStep(self, pocketSize):
-        pdbName = self.getPDBName()
+        pdbName = self.getStructName()
         program = "AutoLigand"
         args = ' -r {} -p {}'.format(pdbName, pocketSize)
 
@@ -143,12 +193,11 @@ class ProtChemAutoLigand(EMProtocol):
 
 
     def createOutputStep(self):
-        inAtomStruct = os.path.abspath(self.inputGrid.get()._proteinFile.get())
         outFiles, resultsFile = self.organizeOutput()
 
         outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
         for oFile in outFiles:
-            pock = AutoLigandPocket(os.path.abspath(oFile), inAtomStruct, os.path.abspath(resultsFile))
+            pock = AutoLigandPocket(os.path.abspath(oFile), self.receptorFile, os.path.abspath(resultsFile))
             outPockets.append(pock)
 
         outHETMFile = outPockets.buildPocketsFiles()
@@ -228,7 +277,7 @@ class ProtChemAutoLigand(EMProtocol):
         return outFiles, resultsFile
 
     def manageIds(self, finalPockets, resultsFiles):
-        newResFile = self._getPath('{}_Results.txt'.format(self.getPDBName()))
+        newResFile = self._getPath('{}_Results.txt'.format(self.getStructName()))
         newOutFiles, i = [], 1
         with open(newResFile, 'w') as fOut:
           for pocket in finalPockets:
@@ -247,6 +296,14 @@ class ProtChemAutoLigand(EMProtocol):
             i+=1
         return newOutFiles, newResFile
 
+    def convertReceptor2PDBQT(self, proteinFile):
+      inName, inExt = os.path.splitext(os.path.basename(proteinFile))
+      oFile = os.path.abspath(os.path.join(self._getExtraPath(inName + '.pdbqt')))
+
+      args = ' -v -r %s -o %s' % (proteinFile, oFile)
+      self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+                  autodock_plugin.getADTPath('Utilities24/prepare_receptor4.py') + args)
+      return oFile
 
     def getResultsLine(self, resFile, lineId):
       i=1
@@ -274,15 +331,21 @@ class ProtChemAutoLigand(EMProtocol):
     def getTmpSizePath(self, pocketSize, file=''):
         return self._getTmpPath('Size_{}/{}'.format(pocketSize, file))
 
-    def getPDBName(self):
-        return self.inputGrid.get().getFileName().split('/')[-1].split('.')[0]
+    def getStructName(self):
+        return self.getStructFileName().split('/')[-1].split('.')[0]
 
-    def getPDBFileName(self):
-        inDir = '/'.join(self.inputGrid.get().getFileName().split('/')[:-1])
-        return os.path.join(inDir, self.getPDBName()+'.pdbqt')
+    def getStructFileName(self):
+        if self.prevGrid:
+            return self.inputGrid.get().getProteinFile()
+        else:
+            return self.inputAtomStruct.get().getFileName()
+
+    def getStructDir(self):
+        atomStructFn = self.getStructFileName()
+        return '/'.join(atomStructFn.split('/')[:-1])
 
     def getOutFileName(self):
-      pdbName = self.getPDBName()
+      pdbName = self.getStructName()
       return self._getExtraPath('{}_out.pdbqt'.format(pdbName))
 
     # --------------------------- INFO functions -----------------------------------
@@ -294,7 +357,7 @@ class ProtChemAutoLigand(EMProtocol):
       """ Try to find warnings on define params. """
       import re
       warnings = []
-      inpFile = os.path.abspath(self.getPDBFileName())
+      inpFile = os.path.abspath(self.getStructFileName())
       with open(inpFile) as f:
         fileStr = f.read()
       if re.search('\nHETATM', fileStr):

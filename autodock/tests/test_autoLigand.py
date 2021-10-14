@@ -42,7 +42,7 @@ class TestAutoLigand(BaseTest):
         protImportPDB = cls.newProtocol(
             ProtImportPdb,
             inputPdbData=1,
-            pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.pdb'))
+            pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1_noHETATM.pdb'))
         cls.launchProtocol(protImportPDB)
         cls.protImportPDB = protImportPDB
 
@@ -58,20 +58,31 @@ class TestAutoLigand(BaseTest):
         self.assertIsNotNone(gridOut)
         return protGrid
 
-    def _runAutoLigandFind(self, protGrid):
-        protAutoLigand = self.newProtocol(
-            ProtChemAutoLigand,
-            inputGrid=protGrid.outputGrid,
-            nFillPoints=10)
+    def _runAutoLigandFind(self, protGrid=None):
+        if protGrid == None:
+            protAutoLigand = self.newProtocol(
+                ProtChemAutoLigand,
+                prevGrid=False,
+                inputAtomStruct=self.protImportPDB.outputPdb,
+                radius=35, spacing=1.0,
+                nFillPoints=10)
+        else:
+            protAutoLigand = self.newProtocol(
+                ProtChemAutoLigand,
+                prevGrid=True,
+                inputGrid=protGrid.outputGrid,
+                nFillPoints=10)
 
         self.launchProtocol(protAutoLigand)
-        pdbOut = getattr(protAutoLigand, 'outputAtomStruct', None)
+        pdbOut = getattr(protAutoLigand, 'outputPockets', None)
         self.assertIsNotNone(pdbOut)
 
     def testAutoLigand(self):
+        self._runAutoLigandFind()
+
+    def testAutoLigandGrid(self):
         protGrid = self._runCreateGrid()
         self._runAutoLigandFind(protGrid)
-
 
 
 

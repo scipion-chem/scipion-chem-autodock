@@ -33,18 +33,15 @@ generate the electrostatic potential grid.
 """
 
 import os
-import pandas as pd
 
 from pyworkflow.protocol.params import  FloatParam, PointerParam
-from pyworkflow.protocol.constants import LEVEL_ADVANCED
-
 
 from pwem.protocols import EMProtocol
 from pwem.convert import AtomicStructHandler
 
 from autodock import Plugin as autodock_plugin
 from autodock.objects import GridADT
-from autodock.utils import generate_gpf, calculate_centerMass
+from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass
 
 
 class Autodock_GridGeneration(EMProtocol):
@@ -66,7 +63,6 @@ class Autodock_GridGeneration(EMProtocol):
         form.addParam('radius', FloatParam, label='Radius')
 
         form.addParam('spacing', FloatParam, default=0.375, label='Step size (A)',
-                      expertLevel=LEVEL_ADVANCED,
                       help="Distance between each point in the electrostatic grid."
                            " This value is used to adjust the radius as number of "
                            "(x,y,z) points : radius/spacing = number of points along"
@@ -90,6 +86,11 @@ class Autodock_GridGeneration(EMProtocol):
             name_protein = (os.path.basename(filename)).split(".")[0]
             aStruct1 = AtomicStructHandler(filename)
             aStruct1.write(self.pdbFile)
+        elif filename.endswith('.pdbqt'):
+            self.pdbFile = self._getTmpPath("atomStruct.pdb")
+            name_protein = (os.path.basename(filename)).split(".")[0]
+            args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(filename), os.path.abspath(self.pdbFile))
+            runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getTmpPath()))
         else:
             self.pdbFile = filename
             name_protein = (os.path.basename(self.pdbFile)).split(".")[0]
@@ -101,7 +102,6 @@ class Autodock_GridGeneration(EMProtocol):
         program = "prepare_receptor4"
         self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
                     autodock_plugin.getADTPath('Utilities24/%s.py' % program) + args)
-
 
 
     def prepareGrid(self):
@@ -122,7 +122,7 @@ class Autodock_GridGeneration(EMProtocol):
                                      npts=npts, outDir=self._getExtraPath())
 
         # Create GLG file
-        glg_file = os.path.abspath(self._getExtraPath("library.glg"))
+        glg_file = os.path.abspath(self._getExtraPath("atomStruct.glg"))
         open(glg_file, mode='a').close()
 
         args = "-p %s -l %s" % (gpf_file, glg_file)

@@ -97,10 +97,10 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
 
             if self.method_conf.get() == 0:  # Genetic algorithm
               args = " %s --conformer --nconf %s --score rmsd --writeconformers -O %s_conformers.pdbqt" % \
-                     (os.path.abspath(file), str(self.number_conf.get()), fnRoot)
+                     (os.path.abspath(file), str(self.number_conf.get() - 1), fnRoot)
             else:  # confab
               args = " %s --confab --original --verbose --conf %s --rcutoff %s -O %s_conformers.pdbqt" % \
-                     (os.path.abspath(file), str(self.number_conf.get()), str(self.rmsd_cutoff.get()), fnRoot)
+                     (os.path.abspath(file), str(self.number_conf.get() - 1), str(self.rmsd_cutoff.get()), fnRoot)
 
             runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
 
@@ -120,7 +120,7 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
                     newSmallMol._ConformersFile = pwobj.String(confFile)
                     outputSmallMolecules.append(newSmallMol)
 
-            self._defineOutputs(outputSmallMols=outputSmallMolecules)
+            self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
             self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
 
 
