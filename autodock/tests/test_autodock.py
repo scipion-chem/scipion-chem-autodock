@@ -121,7 +121,7 @@ class TestAutoDock(BaseTest):
                 inputAtomStruct=self.protPrepareReceptor.outputStructure,
                 inputLibrary=self.protOBabel.outputSmallMolecules,
                 radius=37, gaRun=2,
-                numberOfThreads=8)
+                numberOfThreads=4)
             self.launchProtocol(protAutoDock)
             smOut = getattr(protAutoDock, 'outputSmallMolecules', None)
             self.assertIsNotNone(smOut)
@@ -133,7 +133,7 @@ class TestAutoDock(BaseTest):
                 inputPockets=pocketsProt.outputPockets,
                 inputLibrary=self.protPrepareLigand.outputSmallMolecules,
                 pocketRadiusN=2, gaRun=2,
-                numberOfThreads=8)
+                numberOfThreads=4)
             self.launchProtocol(protAutoDock)
             smOut = getattr(protAutoDock, 'outputSmallMolecules_1', None)
             self.assertIsNotNone(smOut)

@@ -26,7 +26,7 @@
 import re, shutil
 import os
 
-from pwchem.utils import runOpenBabel, splitConformerFile
+from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile
 from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, LEVEL_ADVANCED
 import pyworkflow.object as pwobj
 from .protocol_preparation_receptor import ProtChemADTPrepare
@@ -110,10 +110,12 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
                 fnRoot = re.split("-", os.path.split(file)[1])[0]
                 outDir = self._getExtraPath(fnRoot)
                 os.mkdir(outDir)
-                shutil.copy(file, os.path.join(outDir, '{}-{}.pdbqt'.format(fnRoot, 1)))
-
+                firstConfFile = self._getTmpPath('{}-{}.pdbqt'.format(fnRoot, 1))
+                shutil.copy(file, firstConfFile)
                 confFile = self._getExtraPath("{}_conformers.pdbqt".format(fnRoot))
-                confDir = splitConformerFile(confFile, outDir=self._getExtraPath(fnRoot))
+                confFile = appendToConformersFile(confFile, firstConfFile,
+                                                  beginning=True)
+                confDir = splitConformerFile(confFile, outDir=outDir)
                 for molFile in os.listdir(confDir):
                     molFile = os.path.abspath(os.path.join(confDir, molFile))
                     newSmallMol = SmallMolecule(smallMolFilename=molFile, type='AutoDock')
