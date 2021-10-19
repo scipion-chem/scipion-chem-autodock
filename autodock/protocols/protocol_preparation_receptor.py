@@ -23,14 +23,14 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os
+import os, json
 
 from pyworkflow.protocol.params import PointerParam, EnumParam, StringParam, BooleanParam
 
 from pwem.protocols import EMProtocol
-from pwem.convert.atom_struct import AtomicStructHandler
 from autodock import Plugin as autodock_plugin
 from pwem.objects.data import AtomStruct
+from pwchem.utils import clean_PDB
 
 class ProtChemADTPrepare(EMProtocol):
     def _defineParamsBasic(self, form):
@@ -117,7 +117,7 @@ class ProtChemADTPrepare(EMProtocol):
         if os.path.exists(fnOut):
             target = AtomStruct(filename=fnOut)
             self._defineOutputs(outputStructure=target)
-            self._defineSourceRelation(self.inputStructure, target)
+            self._defineSourceRelation(self.inputAtomStruct, target)
 
 class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
     """Prepare receptor using Autodocking Tools from MGL"""
@@ -127,38 +127,67 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
     def _defineParams(self, form):
         self.typeRL="target"
         form.addSection(label='Input')
-        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
+        form.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
                       label='Atomic Structure:', allowsNull=False,
                       help='It must be in pdb,mol2,pdbq,pdbqs,pdbqt format, you may use Schrodinger convert to change it')
+
+        clean = form.addGroup('Clean Structure File')
+        clean.addParam("HETATM", BooleanParam,
+                       label='Remove ligands HETATM',
+                       default=True, important=True,
+                       help='Remove all ligands and HETATM contained in the protein')
+
+        clean.addParam("rchains", BooleanParam,
+                       label='Remove redundant chains',
+                       default=False, important=True,
+                       help='Remove redundant chains in the proteins')
+
+        clean.addParam("chain_name", StringParam,
+                       label="Conserved chain",
+                       important=True,
+                       condition="rchains==True",
+                       help="Select the chain on which you want to carry out the "
+                            "molecular docking. You must know the protein and structure "
+                            "file that you loaded. \n\nFor example, the protein mdm2 "
+                            "(4ERF) has a C1 symmetry, which indicates that its chains "
+                            "are at least 95% equal, so you would write A, C or E "
+                            "(names of the chains).")
         ProtChemADTPrepare._defineParamsBasic(self, form)
 
     def preparationStep(self):
-        if self.inputStructure.get().getFileName().endswith('.cif'):
-            fnIn = self._getTmpPath("atomStructIn.pdb")
-            aStruct1 = AtomicStructHandler(self.inputStructure.get().getFileName())
-            aStruct1.write(fnIn)
+        #Clean PDB
+        pdb_ini = self.inputAtomStruct.get().getFileName()
+        filename = os.path.splitext(os.path.basename(pdb_ini))[0]
+        fnPdb = self._getExtraPath('%s_clean.pdb' % filename)
+
+        if self.rchains.get():
+            chain = json.loads(self.chain_name.get())  # From wizard dictionary
+            chain_id = chain["Chain"].upper().strip()
         else:
-            fnIn = self.inputStructure.get().getFileName()
+            chain_id = None
+        cleanedPDB = clean_PDB(self.inputAtomStruct.get(), fnPdb,
+                               False, self.HETATM.get(), chain_id)
+
         fnOut = self._getExtraPath('atomStruct.pdbqt')
 
-        args = ' -v -r %s -o %s'%(fnIn,fnOut)
-        ProtChemADTPrepare.callPrepare(self,"prepare_receptor4",args)
+        args = ' -v -r %s -o %s' % (cleanedPDB,fnOut)
+        ProtChemADTPrepare.callPrepare(self, "prepare_receptor4", args)
 
     def createOutput(self):
         fnOut = self._getExtraPath('atomStruct.pdbqt')
         if os.path.exists(fnOut):
             target = AtomStruct(filename=fnOut)
             self._defineOutputs(outputStructure=target)
-            self._defineSourceRelation(self.inputStructure, target)
+            self._defineSourceRelation(self.inputAtomStruct, target)
 
     def _validate(self):
         errors = []
-        if not self.inputStructure.get().getFileName().endswith('.mol2') and \
-           not self.inputStructure.get().getFileName().endswith('.pdb') and \
-           not self.inputStructure.get().getFileName().endswith('.pdbq') and \
-           not self.inputStructure.get().getFileName().endswith('.pdbqt') and \
-           not self.inputStructure.get().getFileName().endswith('.pdbqs') and \
-           not self.inputStructure.get().getFileName().endswith('.cif'):
+        if not self.inputAtomStruct.get().getFileName().endswith('.mol2') and \
+           not self.inputAtomStruct.get().getFileName().endswith('.pdb') and \
+           not self.inputAtomStruct.get().getFileName().endswith('.pdbq') and \
+           not self.inputAtomStruct.get().getFileName().endswith('.pdbqt') and \
+           not self.inputAtomStruct.get().getFileName().endswith('.pdbqs') and \
+           not self.inputAtomStruct.get().getFileName().endswith('.cif'):
             errors.append('The input structure must be either .mol2, .pdb, .pdbq, .pdbqt, .pdbqs or .cif')
-            errors.append("Current name: %s"%self.inputStructure.get().getFileName())
+            errors.append("Current name: %s"%self.inputAtomStruct.get().getFileName())
         return errors
