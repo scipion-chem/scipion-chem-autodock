@@ -40,10 +40,15 @@ class TestAutoDock(BaseTest):
         setupTestProject(cls)
         cls._runImportPDB()
         cls._runImportSmallMols()
+        cls._waitOutput(cls.protImportPDB, 'outputPdb', sleepTime=5)
+        cls._waitOutput(cls.protImportSmallMols, 'outputSmallMolecules', sleepTime=5)
 
         cls._runPrepareLigandsOBabel()
         cls._runPrepareLigandsADT()
         cls._runPrepareReceptorADT()
+        cls._waitOutput(cls.protOBabel, 'outputSmallMolecules', sleepTime=5)
+        cls._waitOutput(cls.protPrepareLigandADT, 'outputSmallMolecules', sleepTime=5)
+        cls._waitOutput(cls.protPrepareReceptor, 'outputStructure', sleepTime=5)
 
     @classmethod
     def _runImportSmallMols(cls):
@@ -56,9 +61,9 @@ class TestAutoDock(BaseTest):
     def _runImportPDB(cls):
         cls.protImportPDB = cls.newProtocol(
             ProtImportPdb,
-            inputPdbData=1,
-            pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1_noHETATM.pdb'))
-        cls.launchProtocol(cls.protImportPDB)
+            inputPdbData=0,
+            pdbId='4erf')
+        cls.proj.launchProtocol(cls.protImportPDB, wait=False)
 
     @classmethod
     def _runPrepareLigandsOBabel(cls):
@@ -69,49 +74,53 @@ class TestAutoDock(BaseTest):
             doConformers=True, method_conf=0, number_conf=2,
             rmsd_cutoff=0.375)
 
-        cls.launchProtocol(cls.protOBabel)
+        cls.proj.launchProtocol(cls.protOBabel, wait=False)
 
     @classmethod
     def _runPrepareLigandsADT(cls):
-        cls.protPrepareLigand = cls.newProtocol(
+        cls.protPrepareLigandADT = cls.newProtocol(
             ProtChemADTPrepareLigands,
-            inputSmallMols=cls.protImportSmallMols.outputSmallMolecules,
             doConformers=True, method_conf=0, number_conf=2,
             rmsd_cutoff=0.375)
+        cls.protPrepareLigandADT.inputSmallMols.set(cls.protImportSmallMols)
+        cls.protPrepareLigandADT.inputSmallMols.setExtended('outputSmallMolecules')
 
-        cls.launchProtocol(cls.protPrepareLigand)
+        cls.proj.launchProtocol(cls.protPrepareLigandADT, wait=False)
 
     @classmethod
     def _runPrepareReceptorADT(cls):
         cls.protPrepareReceptor = cls.newProtocol(
             ProtChemADTPrepareReceptor,
-            inputStructure=cls.protImportPDB.outputPdb,
+            inputAtomStruct=cls.protImportPDB.outputPdb,
+            HETATM=True, rchains=True,
+            chain_name='{"Chain": "C", "Number of residues": 93, "Number of chains": 3}',
             repair=3)
 
         cls.launchProtocol(cls.protPrepareReceptor)
-      
-    def _runSetFilter(self, inProt, number, property):
-        protFilter = self.newProtocol(
+
+    @classmethod
+    def _runAutoLigandFind(cls):
+        protPocketFinder = cls.newProtocol(
+            ProtChemAutoLigand,
+            inputAtomStruct=cls.protPrepareReceptor.outputStructure,
+            radius=24,
+            nFillPoints=10)
+
+        cls.proj.launchProtocol(protPocketFinder, wait=False)
+        return protPocketFinder
+
+    @classmethod
+    def _runSetFilter(cls, inProt, number, property):
+        cls.protFilter = cls.newProtocol(
             ProtSetFilter,
             operation=ProtSetFilter.CHOICE_RANKED,
             threshold=number, rankingField=property)
-        protFilter.inputSet.set(inProt)
-        protFilter.inputSet.setExtended('outputPockets')
+        cls.protFilter.inputSet.set(inProt)
+        cls.protFilter.inputSet.setExtended('outputPockets')
 
-        self.launchProtocol(protFilter)
-        return protFilter
+        cls.proj.launchProtocol(cls.protFilter, wait=False)
+        return cls.protFilter
 
-    def _runAutoLigandFind(self):
-        protAutoLigand = self.newProtocol(
-            ProtChemAutoLigand,
-            inputAtomStruct=self.protPrepareReceptor.outputStructure,
-            radius=36.0,
-            nFillPoints=10)
-
-        self.launchProtocol(protAutoLigand)
-        pdbOut = getattr(protAutoLigand, 'outputPockets', None)
-        self.assertIsNotNone(pdbOut)
-        return protAutoLigand
 
     def _runAutoDock(self, pocketsProt=None):
         if pocketsProt == None:
@@ -120,36 +129,33 @@ class TestAutoDock(BaseTest):
                 wholeProt=True,
                 inputAtomStruct=self.protPrepareReceptor.outputStructure,
                 inputLibrary=self.protOBabel.outputSmallMolecules,
-                radius=37, gaRun=2,
-                numberOfThreads=4)
-            self.launchProtocol(protAutoDock)
-            smOut = getattr(protAutoDock, 'outputSmallMolecules', None)
-            self.assertIsNotNone(smOut)
+                radius=24, gaRun=2,
+                numberOfThreads=8)
+            self.proj.launchProtocol(protAutoDock, wait=False)
 
         else:
             protAutoDock = self.newProtocol(
                 ProtChemAutodock,
                 wholeProt=False,
                 inputPockets=pocketsProt.outputPockets,
-                inputLibrary=self.protPrepareLigand.outputSmallMolecules,
+                inputLibrary=self.protPrepareLigandADT.outputSmallMolecules,
                 pocketRadiusN=2, gaRun=2,
-                numberOfThreads=4)
-            self.launchProtocol(protAutoDock)
-            smOut = getattr(protAutoDock, 'outputSmallMolecules_1', None)
-            self.assertIsNotNone(smOut)
+                numberOfThreads=8)
+            self.proj.launchProtocol(protAutoDock, wait=False)
 
         return protAutoDock
 
-    def testAutoDockPockets(self):
-        autoLigProt = self._runAutoLigandFind()
-        filterProt = self._runSetFilter(autoLigProt, 2, '_score')
-        self._runAutoDock(filterProt)
+    def testAutoDock_1(self):
+        print('Docking with autodock in the whole protein')
+        protAutoDock = self._runAutoDock()
 
-    def testAutoDockProtein(self):
-        self._runAutoDock()
+    def testAutoDock_2(self):
+        print('Docking with autodock in predicted pockets')
+        protAutoLig = self._runAutoLigandFind()
+        self._waitOutput(protAutoLig, 'outputPockets', sleepTime=5)
+        self._runSetFilter(inProt=protAutoLig, number=2, property='_score')
+        self._waitOutput(self.protFilter, 'outputPockets', sleepTime=5)
 
-
-
-
+        protAutoDock = self._runAutoDock(self.protFilter)
 
 
