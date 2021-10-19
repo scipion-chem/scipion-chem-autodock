@@ -140,22 +140,27 @@ class TestAutoDock(BaseTest):
                 inputPockets=pocketsProt.outputPockets,
                 inputLibrary=self.protPrepareLigandADT.outputSmallMolecules,
                 pocketRadiusN=2, gaRun=2,
+                mergeOutput=True,
                 numberOfThreads=8)
             self.proj.launchProtocol(protAutoDock, wait=False)
 
         return protAutoDock
 
-    def testAutoDock_1(self):
+    def testAutoDock(self):
         print('Docking with autodock in the whole protein')
-        protAutoDock = self._runAutoDock()
+        protAutoDock1 = self._runAutoDock()
 
-    def testAutoDock_2(self):
         print('Docking with autodock in predicted pockets')
         protAutoLig = self._runAutoLigandFind()
         self._waitOutput(protAutoLig, 'outputPockets', sleepTime=5)
         self._runSetFilter(inProt=protAutoLig, number=2, property='_score')
         self._waitOutput(self.protFilter, 'outputPockets', sleepTime=5)
 
-        protAutoDock = self._runAutoDock(self.protFilter)
+        protAutoDock2 = self._runAutoDock(self.protFilter)
+
+        self._waitOutput(protAutoDock1, 'outputSmallMolecules', sleepTime=10)
+        self.assertIsNotNone(getattr(protAutoDock1, 'outputSmallMolecules', None))
+        self._waitOutput(protAutoDock2, 'outputSmallMolecules', sleepTime=10)
+        self.assertIsNotNone(getattr(protAutoDock2, 'outputSmallMolecules', None))
 
 
