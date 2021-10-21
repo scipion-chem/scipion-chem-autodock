@@ -55,7 +55,7 @@ class TestAutoDock(BaseTest):
         cls.protImportSmallMols = cls.newProtocol(
             ProtChemImportSmallMolecules,
             filesPath=cls.dsLig.getFile('mol2'))
-        cls.launchProtocol(cls.protImportSmallMols)
+        cls.proj.launchProtocol(cls.protImportSmallMols, wait=False)
 
     @classmethod
     def _runImportPDB(cls):
