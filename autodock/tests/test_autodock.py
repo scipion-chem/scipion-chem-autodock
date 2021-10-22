@@ -139,9 +139,9 @@ class TestAutoDock(BaseTest):
                 wholeProt=False,
                 inputPockets=pocketsProt.outputPockets,
                 inputLibrary=self.protPrepareLigandADT.outputSmallMolecules,
-                pocketRadiusN=2, gaRun=2,
+                pocketRadiusN=5, gaRun=2,
                 mergeOutput=True,
-                numberOfThreads=8)
+                numberOfThreads=4)
             self.proj.launchProtocol(protAutoDock, wait=False)
 
         return protAutoDock

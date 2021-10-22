@@ -220,19 +220,21 @@ class ProtChemAutodock(EMProtocol):
                         newSmallMol = SmallMolecule()
                         newSmallMol.copy(smallMol)
                         newSmallMol.cleanObjId()
-                        newSmallMol.dockingScoreLE = pwobj.Float(molDic[posId]['energy'])
+                        newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
                         if 'ki' in molDic[posId]:
-                            newSmallMol.ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
+                            newSmallMol._ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
                         newSmallMol.poseFile.set(pdbFile)
                         newSmallMol.gridId.set(i+1)
 
                         outputSet.append(newSmallMol)
 
             if not self.checkSingleOutput():
+                outputSet.proteinFile.set(self.getOriginalReceptorFile())
                 self._defineOutputs(**{'outputSmallMolecules_{}'.format(i+1): outputSet})
                 self._defineSourceRelation(self.inputLibrary, outputSet)
 
         if self.checkSingleOutput():
+            outputSet.proteinFile.set(self.getOriginalReceptorFile())
             self._defineOutputs(outputSmallMolecules = outputSet)
             self._defineSourceRelation(self.inputLibrary, outputSet)
       
