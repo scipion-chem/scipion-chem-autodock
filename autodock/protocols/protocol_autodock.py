@@ -230,11 +230,13 @@ class ProtChemAutodock(EMProtocol):
 
             if not self.checkSingleOutput():
                 outputSet.proteinFile.set(self.getOriginalReceptorFile())
+                outputSet.setDocked(True)
                 self._defineOutputs(**{'outputSmallMolecules_{}'.format(i+1): outputSet})
                 self._defineSourceRelation(self.inputLibrary, outputSet)
 
         if self.checkSingleOutput():
             outputSet.proteinFile.set(self.getOriginalReceptorFile())
+            outputSet.setDocked(True)
             self._defineOutputs(outputSmallMolecules = outputSet)
             self._defineSourceRelation(self.inputLibrary, outputSet)
       
