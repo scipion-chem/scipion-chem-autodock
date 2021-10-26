@@ -165,7 +165,7 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
             chain_id = chain["Chain"].upper().strip()
         else:
             chain_id = None
-        cleanedPDB = clean_PDB(self.inputAtomStruct.get(), fnPdb,
+        cleanedPDB = clean_PDB(self.inputAtomStruct.get().getFileName(), fnPdb,
                                False, self.HETATM.get(), chain_id)
 
         fnOut = self._getExtraPath('atomStruct.pdbqt')
