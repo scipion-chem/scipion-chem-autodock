@@ -27,27 +27,60 @@
 import os
 
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam
+from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam, STEPS_PARALLEL, BooleanParam, LEVEL_ADVANCED
 import pyworkflow.object as pwobj
 from autodock import Plugin as autodock_plugin
-from pyworkflow.utils.path import makePath, createLink, cleanPattern
+from pyworkflow.utils.path import makePath, createLink
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
+from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass
+
 
 class ProtChemAutodock(EMProtocol):
-    """Perform a docking experiment with autodock. See the help at
+    """Perform a docking experiment with autodock. Grid must be generated in this protocol in order to take into
+       account ligands atom types. See the help at
        http://autodock.scripps.edu/faqs-help/manual/autodock-4-2-user-guide/AutoDock4.2_UserGuide.pdf"""
-    _label = 'autodock'
+    _label = 'Autodock docking'
     _program = ""
+
+    def __init__(self, **kwargs):
+        EMProtocol.__init__(self, **kwargs)
+        self.stepsExecutionMode = STEPS_PARALLEL
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputGrid', PointerParam, pointerClass="AutodockGrid",
-                       label='Input grid:', allowsNull=False,
-                       help="The grid must be prepared for autodock")
-        form.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
+        group = form.addGroup('Grids generation')
+        group.addParam('wholeProt', BooleanParam, label='Dock on whole protein: ', default=True,
+                      help='Whether to dock on a whole protein surface or on specific regions')
+
+        #Docking on whole protein
+        group.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
+                      label='Input atomic structure:', condition='wholeProt',
+                      help="The atom structure to use as receptor in the docking")
+        group.addParam('radius', FloatParam, label='Grid radius for whole protein: ',
+                       condition='wholeProt', allowsNull=False,
+                       help='Radius of the Autodock grid for the whole protein')
+
+        #Docking on pockets
+        group.addParam('inputPockets', PointerParam, pointerClass="SetOfPockets",
+                      label='Input pockets:', condition='not wholeProt',
+                      help="The protein pockets to dock in")
+        group.addParam('mergeOutput', BooleanParam, default=False, expertLevel=LEVEL_ADVANCED,
+                       label='Merge outputs from pockets:', condition='not wholeProt',
+                       help="Merge the outputs from the different pockets")
+        group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs pocket radius: ',
+                       condition='not wholeProt', default=1.1, allowsNull=False,
+                       help='The radius * n of each pocket will be used as grid radius')
+
+        group.addParam('spacing', FloatParam, label='Spacing of the grids: ', default=0.5, allowsNull=False,
+                       condition='not wholeProt',
+                       help='Spacing of the generated Autodock grids')
+
+        group = form.addGroup('Docking')
+        group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
                        label='Ligand library:', allowsNull=False,
                        help="The library must be prepared for autodock")
-        form.addParam('rmsTol', FloatParam, label='Cluster tolerance (A)', default=2.0)
+        group.addParam('rmsTol', FloatParam, label='Cluster tolerance (A)', default=2.0, expertLevel=LEVEL_ADVANCED,)
+        group.addParam('gaRun', IntParam, label='Number of positions per ligand', default=10)
 
         form.addSection(label="Genetic algorithm")
         form.addParam('gaPop', IntParam, label='Population size', default=150)
@@ -58,7 +91,6 @@ class ProtChemAutodock(EMProtocol):
         form.addParam('gaCrossOverRate', FloatParam, label='Crossover rate', default=0.8)
         form.addParam('gaWindowSize', IntParam, label='Window size', default=10)
         form.addParam('lsFreq', FloatParam, label='Local search frequency', default=0.06)
-        form.addParam('gaRun', IntParam, label='Number of runs', default=10)
 
         form.addSection(label="Solis & Wets algorithm")
         form.addParam('swMaxIts', IntParam, label='Max. Number of iterations', default=300)
@@ -69,27 +101,77 @@ class ProtChemAutodock(EMProtocol):
         form.addParam('swRho', FloatParam, label='Initial variance', default=1.0,
                       help='It defines the size of the local search')
         form.addParam('swLbRho', FloatParam, label='Variance lower bound', default=0.01)
-        form.addParallelSection(threads=1, mpi=1)
+        form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        fnGridDir = self.inputGrid.get().getFileName()
-        dockSteps = []
-        for smallMol in self.inputLibrary.get():
-            fnSmall = smallMol.getFileName()
+        cId = self._insertFunctionStep('convertStep', prerequisites=[])
 
-            stepId = self._insertFunctionStep('dockStep', fnGridDir, fnSmall, prerequisites=[])
-            dockSteps.append(stepId)
+        dockSteps = []
+        if self.wholeProt:
+            gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
+            for mol in self.inputLibrary.get():
+                dockId = self._insertFunctionStep('dockStep', mol.clone(), prerequisites=[gridId])
+                dockSteps.append(dockId)
+        else:
+            for pocket in self.inputPockets.get():
+                gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
+                for mol in self.inputLibrary.get():
+                    dockId = self._insertFunctionStep('dockStep', mol.clone(), pocket.clone(), prerequisites=[gridId])
+                    dockSteps.append(dockId)
+
         self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
-    def dockStep(self, fnGridDir, fnSmall):
-        fnReceptor = os.path.join(fnGridDir,"atomStruct.pdbqt")
-        fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
-        fnSmallDir = self._getExtraPath(fnBase)
-        makePath(fnSmallDir)
-        fnDPF = os.path.join(fnSmallDir,fnBase+".dpf")
-        args = " -l %s -r %s -o %s"%(fnSmall, fnReceptor, fnDPF)
+    def convertStep(self):
+        self.ligandFileNames = []
+        for mol in self.inputLibrary.get():
+            fnSmall = mol.getFileName()
+            if not '.pdbqt' in fnSmall:
+                fnSmall, smallDir = self.convert2PDBQT(mol.clone(), self._getExtraPath('conformers'))
+            self.ligandFileNames.append(fnSmall)
 
+        self.receptorFile = self.getOriginalReceptorFile()
+        if not '.pdbqt' in self.receptorFile:
+            self.receptorFile = self.convertReceptor2PDBQT(self.receptorFile)
+
+    def generateGridsStep(self, pocket=None):
+        fnReceptor = self.receptorFile
+        outDir = self.getOutputPocketDir(pocket)
+        if self.wholeProt:
+            radius = self.radius.get()
+            #Use the original pdb for mass center
+            pdbFile = self.getOriginalReceptorFile()
+            if not os.path.splitext(pdbFile)[1] == '.pdb':
+                pdbFile = self.convertReceptor2PDB(pdbFile)
+            structure, x_center, y_center, z_center = calculate_centerMass(pdbFile)
+        else:
+            radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
+            x_center, y_center, z_center = pocket.calculateMassCenter()
+
+        makePath(outDir)
+        npts = (radius * 2) / self.spacing.get()
+        gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(),
+                                xc=x_center, yc=y_center, zc=z_center,
+                                npts=npts, outDir=outDir, ligandFns=self.ligandFileNames)
+
+        args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())
+        self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=outDir)
+
+
+    def dockStep(self, mol, pocket=None):
+        #Prepare grid
+        fnReceptor = self.receptorFile
+        nameReceptor, extReceptor = os.path.splitext(os.path.basename(fnReceptor))
+        outDir = self.getOutputPocketDir(pocket)
+
+        molFn = self.getMolLigandName(mol)
+        molName, _ = os.path.splitext(os.path.basename(molFn))
+        createLink(molFn, os.path.join(outDir, molName+'.pdbqt'))
+        smallDir = os.path.join(outDir, molName)
+        makePath(smallDir)
+
+        fnDPF = os.path.abspath(os.path.join(smallDir, nameReceptor+".dpf"))
+        args = " -l %s -r %s -o %s"%(molFn, fnReceptor, fnDPF)
         args += " -p ga_pop_size=%d"%self.gaPop.get()
         args += " -p ga_num_evals=%d"%self.gaNumEvals.get()
         args += " -p ga_num_generations=%d"%self.gaNumGens.get()
@@ -107,83 +189,166 @@ class ProtChemAutodock(EMProtocol):
         args += " -p rmstol=%f"%self.rmsTol.get()
 
         self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
-                    autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py')+args)
+                    autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py')+args,
+                    cwd=outDir)
 
-        fnSmallLocal = os.path.split(fnSmall)[1]
-        createLink(fnSmall,os.path.join(fnSmallDir,fnSmallLocal))
-        createLink(fnReceptor,os.path.join(fnSmallDir,"atomStruct.pdbqt"))
-
-        args = " -r atomStruct.pdbqt -l %s -o library.gpf"%fnSmallLocal
-        self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
-                    autodock_plugin.getADTPath('Utilities24/prepare_gpf4.py') + args,
-                    cwd=fnSmallDir)
-
-        args = "-p library.gpf -l library.glg"
-        self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=fnSmallDir)
-
-        args = "-p %s.dpf -l %s.dlg"%(fnBase,fnBase)
-        self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=fnSmallDir)
-
-        # Clean a bit
-        cleanPattern(os.path.join(fnSmallDir,"atomStruct.*.map"))
+        fnDLG = fnDPF.replace('.dpf', '.dlg')
+        args = "-p %s -l %s" % (fnDPF, fnDLG)
+        self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
 
     def createOutputStep(self):
-        outputSetBest = SetOfSmallMolecules().create(path=self._getPath(),suffix='Best')
-        outputSet = SetOfSmallMolecules().create(path=self._getPath())
-        for smallMol in self.inputLibrary.get():
-            fnSmall = smallMol.getFileName()
-            fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
-            fnSmallDir = self._getExtraPath(fnBase)
-            fnDlg = os.path.join(fnSmallDir,fnBase+".dlg")
-            if os.path.exists(fnDlg):
-                args = " -d . -b -o bestDock.txt"
-                self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
-                            autodock_plugin.getADTPath('Utilities24/summarize_results4.py') + args,
-                            cwd=fnSmallDir)
-                args = " -d . -o bestCluster.txt"
-                self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
-                            autodock_plugin.getADTPath('Utilities24/summarize_results4.py') + args,
-                            cwd=fnSmallDir)
-                args = " -f %s.dlg -o %s_top.pdbqt"%(fnBase,fnBase)
-                self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
-                            autodock_plugin.getADTPath('Utilities24/write_lowest_energy_ligand.py') + args,
-                            cwd=fnSmallDir)
+        if self.checkSingleOutput():
+            outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
 
-                newSmallMol = SmallMolecule()
-                newSmallMol.copy(smallMol)
-                fh = open(os.path.join(fnSmallDir,"bestDock.txt"))
-                lineNo = 0
-                for line in fh.readlines():
-                    if lineNo == 1:
-                        tokens = line.split(',')
-                        newSmallMol.dockingScoreLE = pwobj.Float(tokens[4].strip())
-                        newSmallMol.ligandEfficiency = pwobj.Float(tokens[-1].strip())
-                        newSmallMol.smallMoleculeFilePose = pwobj.String(os.path.join(fnSmallDir,"%s_top.pdbqt"%fnBase))
-                    lineNo += 1
-                fh.close()
-                outputSetBest.append(newSmallMol)
+        for i, pocketDir in enumerate(self.getPocketDirs()):
+            if not self.checkSingleOutput():
+                outputSet = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix=i+1)
 
-                fh = open(os.path.join(fnSmallDir, "bestCluster.txt"))
-                lineNo = 0
-                for line in fh.readlines():
-                    if lineNo >= 1:
+            for smallMol in self.inputLibrary.get():
+                smallFn = smallMol.getFileName()
+                smallName = os.path.splitext(os.path.basename(smallFn))[0]
+                fnSmallDir = os.path.join(pocketDir, smallName)
+
+                fnDlg = os.path.join(fnSmallDir, self.getReceptorName()+".dlg")
+                if os.path.exists(fnDlg):
+                    molDic = self.parseDockedMolsDLG(fnDlg)
+                    for posId in molDic:
+                        pdbFile = '{}/{}_{}.pdb'.format(fnSmallDir, smallName, posId)
+                        with open(pdbFile, 'w') as f:
+                            f.write(molDic[posId]['pdb'])
+
                         newSmallMol = SmallMolecule()
                         newSmallMol.copy(smallMol)
                         newSmallMol.cleanObjId()
-                        tokens = line.split(',')
-                        newSmallMol.dockingScoreLE = pwobj.Float(tokens[2].strip())
-                        newSmallMol.ligandEfficiency = pwobj.Float(tokens[-1].strip())
+                        newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
+                        if 'ki' in molDic[posId]:
+                            newSmallMol._ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
+                        newSmallMol.poseFile.set(pdbFile)
+                        newSmallMol.gridId.set(i+1)
+
                         outputSet.append(newSmallMol)
-                    lineNo += 1
-                fh.close()
 
-        self._defineOutputs(outputSmallMolecules=outputSet)
-        self._defineSourceRelation(self.inputGrid, outputSet)
-        self._defineSourceRelation(self.inputLibrary, outputSet)
+            if not self.checkSingleOutput():
+                outputSet.proteinFile.set(self.getOriginalReceptorFile())
+                outputSet.setDocked(True)
+                self._defineOutputs(**{'outputSmallMolecules_{}'.format(i+1): outputSet})
+                self._defineSourceRelation(self.inputLibrary, outputSet)
 
-        self._defineOutputs(outputSmallMoleculesBest=outputSetBest)
-        self._defineSourceRelation(self.inputGrid, outputSetBest)
-        self._defineSourceRelation(self.inputLibrary, outputSetBest)
+        if self.checkSingleOutput():
+            outputSet.proteinFile.set(self.getOriginalReceptorFile())
+            outputSet.setDocked(True)
+            self._defineOutputs(outputSmallMolecules = outputSet)
+            self._defineSourceRelation(self.inputLibrary, outputSet)
+      
+########################### Utils functions ############################
+
+    def convert2PDBQT(self, smallMol, oDir):
+        '''Convert ligand to pdbqt using obabel'''
+        if not os.path.exists(oDir):
+            os.mkdir(oDir)
+        inFile = smallMol.getFileName()
+        inName, inExt = os.path.splitext(os.path.basename(inFile))
+        oFile = os.path.abspath(os.path.join(oDir, inName+'.pdbqt'))
+
+        if inExt != '.pdbqt':
+            args = ' -l {} -o {}'.format(inFile, oFile)
+            self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+                        autodock_plugin.getADTPath('Utilities24/prepare_ligand4.py') + args)
+        else:
+            createLink(inFile, oFile)
+        return oFile, oDir
+
+    def convertReceptor2PDB(self, proteinFile):
+        inName, inExt = os.path.splitext(os.path.basename(proteinFile))
+        oFile = os.path.abspath(os.path.join(self._getTmpPath(inName + '.pdb')))
+
+        args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(proteinFile), oFile)
+        runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
+
+        return oFile
+
+    def convertReceptor2PDBQT(self, proteinFile):
+        inName, inExt = os.path.splitext(os.path.basename(proteinFile))
+        oFile = os.path.abspath(os.path.join(self._getExtraPath(inName + '.pdbqt')))
+
+        args = ' -v -r %s -o %s' % (proteinFile, oFile)
+        self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+                    autodock_plugin.getADTPath('Utilities24/prepare_receptor4.py') + args)
+
+        return oFile
+
+    def getReceptorName(self):
+        if self.wholeProt:
+            atomStructFn = self.getOriginalReceptorFile()
+            return atomStructFn.split('/')[-1].split('.')[0]
+        else:
+            return self.inputPockets.get().getProteinName()
+
+    def getOriginalReceptorFile(self):
+        if self.wholeProt:
+            return self.inputAtomStruct.get().getFileName()
+        else:
+            return self.inputPockets.get().getProteinFile()
+
+    def getReceptorDir(self):
+        atomStructFn = self.getOriginalReceptorFile()
+        return '/'.join(atomStructFn.split('/')[:-1])
+
+    def getLigandsFileNames(self):
+        ligFns = []
+        for mol in self.inputLibrary.get():
+            ligFns.append(mol.getFileName())
+        return ligFns
+
+    def getLigandsNames(self):
+        ligNames = []
+        for mol in self.inputLibrary.get():
+            ligNames.append(mol.getMolName())
+        return ligNames
+
+    def getOutputPocketDir(self, pocket=None):
+        if pocket==None:
+            outDir = self._getExtraPath('pocket')
+        else:
+            outDir = self._getExtraPath('pocket_{}'.format(pocket.getObjId()))
+        return outDir
+
+    def getPocketDirs(self):
+        dirs = []
+        for file in os.listdir(self._getExtraPath()):
+            d = self._getExtraPath(file)
+            if os.path.isdir(d) and 'pocket' in file:
+                dirs.append(d)
+        dirs.sort()
+        return dirs
+
+    def getMolLigandName(self, mol):
+        molName = mol.getMolName()
+        for ligName in self.ligandFileNames:
+            if molName in ligName:
+                return ligName
+
+    def parseDockedMolsDLG(self, fnDlg):
+        molDic = {}
+        i=1
+        with open(fnDlg) as fRes:
+            for line in fRes:
+                if line.startswith('DOCKED: MODEL'):
+                    posId = line.split()[-1]
+                    molDic[posId] = {'pdb': ''}
+                elif line.startswith('DOCKED: USER    Estimated Free Energy'):
+                    molDic[posId]['energy'] = line.split()[8]
+                elif line.startswith('DOCKED: USER    Estimated Inhibition'):
+                    molDic[posId]['ki'] = line.split()[7]
+                elif line.startswith('DOCKED: REMARK') or line.startswith('TER'):
+                    molDic[posId]['pdb'] += line[8:]
+                elif line.startswith('DOCKED: ATOM'):
+                    molDic[posId]['pdb'] += line[8:]
+                    i+=1
+        return molDic
+
+    def checkSingleOutput(self):
+        return self.mergeOutput.get() or len(self.getPocketDirs()) == 1
 
     def _citations(self):
         return ['Morris2009']

@@ -4,4 +4,5 @@
 # Find documentation here: https://scipion-em.github.io/docs/docs/developer/creating-a-viewer
 # **************************************************************************
 
-from .viewers_data import AutoLigandViewer
+from .viewer_pockets import viewerAutoLigand
+from .viewer_autodock import ProtAutodockDockingViewer

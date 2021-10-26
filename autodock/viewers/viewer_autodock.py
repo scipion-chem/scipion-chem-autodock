@@ -1,6 +1,8 @@
 # **************************************************************************
 # *
-# * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
+# * Authors:  Carlos Oscar Sorzano (coss@cnb.csic.es)
+# *
+# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -22,16 +24,17 @@
 # *
 # **************************************************************************
 
-import pwem.viewers.views as views
-import pwem.viewers.showj as showj
+from pyworkflow.viewer import DESKTOP_TKINTER
+from pwchem.viewers import DockingViewer
+from autodock.protocols.protocol_autodock import ProtChemAutodock
 
-class SetOfDatabaseIDView(views.ObjectView):
-    """ Customized ObjectView for SetOfDatabaseID. """
-    def __init__(self, project, inputid, path, other='',
-                 viewParams={}, **kwargs):
-        defaultViewParams = {showj.MODE: 'metadata',
-                             showj.RENDER: '_PDBLigandImage'}
-        defaultViewParams.update(viewParams)
-        views.ObjectView.__init__(self, project, inputid, path, other,
-                                  defaultViewParams, **kwargs)
+SINGLE, MOLECULE, POCKET = 'single', 'molecule', 'pocket'
 
+class ProtAutodockDockingViewer(DockingViewer):
+    """ Visualize the output of protocol autodock """
+    _label = 'Viewer autodock docking'
+    _targets = [ProtChemAutodock]
+    _environments = [DESKTOP_TKINTER]
+
+    def __init__(self, **args):
+        DockingViewer.__init__(self, **args)
