@@ -31,7 +31,6 @@ from pyworkflow.object import (Object, Float, Integer, String,
                                Scalar, List)
 
 
-
 class AutodockGrid(data.EMFile):
     """A search grid in the file format of Autodock"""
     def __init__(self, **kwargs):
