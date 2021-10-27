@@ -31,7 +31,6 @@ from pyworkflow.object import (Object, Float, Integer, String,
                                Scalar, List)
 
 
-
 class AutodockGrid(data.EMFile):
     """A search grid in the file format of Autodock"""
     def __init__(self, **kwargs):
@@ -55,10 +54,7 @@ class AutoLigandPocket(ProteinPocket):
 
         #Build contact atoms
         if proteinFile != None:
-            cAtoms = self.buildContactAtoms(calculate=True)
-            self.setContactAtoms(self.encodeIds(self.getAtomsIds(cAtoms)))
-            cResidues = self.getResiduesFromAtoms(cAtoms)
-            self.setContactResidues(self.encodeIds(self.getResiduesIds(cResidues)))
+            self.calculateContacts()
 
     def __str__(self):
         s = 'Autoligand pocket {}\nFile: {}'.format(self.getObjId(), self.getFileName())
