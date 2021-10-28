@@ -41,6 +41,8 @@ from pyworkflow.protocol import params
 from pwchem.objects import SetOfPockets
 from pwchem.constants import *
 from pwchem.utils import splitPDBLine, runOpenBabel, generate_gpf, calculate_centerMass
+from pwchem import Plugin as pwchem_plugin
+
 from autodock import Plugin as autodock_plugin
 from autodock.objects import AutoLigandPocket
 
@@ -163,7 +165,7 @@ class ProtChemAutoLigand(EMProtocol):
         args = ' -r {} -p {}'.format(pdbName, pocketSize)
 
         copyTree(self._getExtraPath(), self.getTmpSizePath(pocketSize))
-        self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
                     autodock_plugin.getADTPath('%s.py' % program) + args,
                     cwd=self.getTmpSizePath(pocketSize))
 
@@ -200,7 +202,7 @@ class ProtChemAutoLigand(EMProtocol):
             pock = AutoLigandPocket(os.path.abspath(oFile), self.receptorFile, os.path.abspath(resultsFile))
             outPockets.append(pock)
 
-        outHETMFile = outPockets.buildPocketsFiles()
+        outHETMFile = outPockets.buildPDBhetatmFile()
         outStruct = AtomStruct(outHETMFile)
 
         self._defineOutputs(outputPockets=outPockets)
@@ -301,7 +303,7 @@ class ProtChemAutoLigand(EMProtocol):
       oFile = os.path.abspath(os.path.join(self._getExtraPath(inName + '.pdbqt')))
 
       args = ' -v -r %s -o %s' % (proteinFile, oFile)
-      self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+      self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
                   autodock_plugin.getADTPath('Utilities24/prepare_receptor4.py') + args)
       return oFile
 

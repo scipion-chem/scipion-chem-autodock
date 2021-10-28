@@ -31,6 +31,7 @@ manipulation of atomic struct objects
 
 import os
 import pyworkflow.utils as pwutils
+from pwchem import Plugin as pwchemPlugin
 import pwem
 from .bibtex import _bibtexStr
 
@@ -62,7 +63,7 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getADTPath(cls, path=''):
-        return cls.getMGLPath(os.path.join('MGLToolsPckgs','AutoDockTools',path))
+        return pwchemPlugin.getMGLPath(os.path.join('MGLToolsPckgs','AutoDockTools',path))
 
     @classmethod
     def getAutodockPath(cls, path=''):

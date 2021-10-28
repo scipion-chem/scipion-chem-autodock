@@ -42,6 +42,7 @@ from pwem.convert import AtomicStructHandler
 from autodock import Plugin as autodock_plugin
 from autodock.objects import GridADT
 from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass
+from pwchem import Plugin as pwchem_plugin
 
 
 class Autodock_GridGeneration(EMProtocol):
@@ -100,7 +101,7 @@ class Autodock_GridGeneration(EMProtocol):
         args = ' -v -r %s -o %s' % (self.pdbFile, fnOut)
 
         program = "prepare_receptor4"
-        self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
                     autodock_plugin.getADTPath('Utilities24/%s.py' % program) + args)
 
 
