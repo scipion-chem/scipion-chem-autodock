@@ -203,10 +203,8 @@ class ProtChemAutoLigand(EMProtocol):
             outPockets.append(pock)
 
         outHETMFile = outPockets.buildPDBhetatmFile()
-        outStruct = AtomStruct(outHETMFile)
 
         self._defineOutputs(outputPockets=outPockets)
-        self._defineOutputs(outputAtomStruct=outStruct)
 
 
     # --------------------------- Utils functions --------------------
