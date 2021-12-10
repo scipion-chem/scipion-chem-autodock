@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
+# *              Daniel Del Hoyo Gomez (ddelhoyo@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -36,14 +37,15 @@ import pwem
 from .bibtex import _bibtexStr
 
 _logo = 'autodock.png'
+AUTODOCK, AUTODOCK_DEFAULT_VERSION = 'autodock', '4.2.6'
 VINA, VINA_DEFAULT_VERSION = 'vina', '1.1.2'
 
 class Plugin(pwem.Plugin):
     @classmethod
     def defineBinaries(cls, env):
-        env.addPackage('autodock', version='4.2.6',
+        env.addPackage(AUTODOCK, version=AUTODOCK_DEFAULT_VERSION,
                        url='http://autodock.scripps.edu/downloads/autodock-registration/tars/dist426/autodocksuite-4.2.6-x86_64Linux2.tar',
-                       tar='autodock-4.2.6.tar',
+                       tar=AUTODOCK + '-' + AUTODOCK_DEFAULT_VERSION + '.tar',
                        buildDir='x86_64Linux2',
                        default=True)
 
@@ -61,7 +63,7 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar('AUTODOCK_HOME', 'autodock-4.2.6')
+        cls._defineEmVar('AUTODOCK_HOME', AUTODOCK + '-' + AUTODOCK_DEFAULT_VERSION)
         cls._defineEmVar('VINA_HOME', VINA + '-' + VINA_DEFAULT_VERSION)
 
     @classmethod
