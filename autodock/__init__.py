@@ -43,10 +43,15 @@ VINA, VINA_DEFAULT_VERSION = 'vina', '1.1.2'
 class Plugin(pwem.Plugin):
     @classmethod
     def defineBinaries(cls, env):
+        ADT_INSTALLED = 'adt_installed'
+        adtCommands = 'wget {} -O {} --no-check-certificate && '.format(cls.getADTSuiteUrl(), cls.getADTTar())
+        adtCommands += 'tar -xf {} --strip-components 1 && '.format(cls.getADTTar())
+        adtCommands += 'rm {} && touch {}'.format(cls.getADTTar(), ADT_INSTALLED)
+        adtCommands = [(adtCommands, ADT_INSTALLED)]
+
         env.addPackage(AUTODOCK, version=AUTODOCK_DEFAULT_VERSION,
-                       url='http://autodock.scripps.edu/downloads/autodock-registration/tars/dist426/autodocksuite-4.2.6-x86_64Linux2.tar',
-                       tar=AUTODOCK + '-' + AUTODOCK_DEFAULT_VERSION + '.tar',
-                       buildDir='x86_64Linux2',
+                       tar='void.tgz',
+                       commands=adtCommands,
                        default=True)
 
         VINA_INSTALLED = 'vina_installed'
@@ -86,8 +91,16 @@ class Plugin(pwem.Plugin):
       return os.path.join(cls.getVar('VINA_HOME'), path)
 
     @classmethod
+    def getADTSuiteUrl(cls):
+      return 'https://autodock.scripps.edu/wp-content/uploads/sites/56/2021/10/autodocksuite-4.2.6-x86_64Linux2.tar'
+
+    @classmethod
     def getVinaURL(cls):
       return 'https://vina.scripps.edu/wp-content/uploads/sites/55/2020/12/autodock_vina_1_1_2_linux_x86.tgz'
+
+    @classmethod
+    def getADTTar(cls):
+      return AUTODOCK + '-' + AUTODOCK_DEFAULT_VERSION + '.tar'
 
     @classmethod
     def getVinaTgz(cls):
