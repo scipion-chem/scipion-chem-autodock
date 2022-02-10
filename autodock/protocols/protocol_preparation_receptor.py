@@ -26,11 +26,13 @@
 import os, json
 
 from pyworkflow.protocol.params import PointerParam, EnumParam, StringParam, BooleanParam
-
-from pwem.protocols import EMProtocol
-from autodock import Plugin as autodock_plugin
 from pwem.objects.data import AtomStruct
+from pwem.protocols import EMProtocol
+
+from pwchem import Plugin as pwchem_plugin
 from pwchem.utils import clean_PDB
+
+from autodock import Plugin as autodock_plugin
 
 class ProtChemADTPrepare(EMProtocol):
     def _defineParamsBasic(self, form):
@@ -109,7 +111,7 @@ class ProtChemADTPrepare(EMProtocol):
             if self.nonstd.get():
                 args+=" -e"
 
-        self.runJob(autodock_plugin.getMGLPath('bin/pythonsh'),
+        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
                     autodock_plugin.getADTPath('Utilities24/%s.py'%prog)+args)
 
     def createOutput(self):

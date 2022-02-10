@@ -24,17 +24,15 @@
 # *
 # **************************************************************************
 
-from pyworkflow.viewer import DESKTOP_TKINTER
-from pwchem.viewers import DockingViewer
+from pwchem.viewers import SmallMoleculesViewer
 from autodock.protocols.protocol_autodock import ProtChemAutodock
 
 SINGLE, MOLECULE, POCKET = 'single', 'molecule', 'pocket'
 
-class ProtAutodockDockingViewer(DockingViewer):
+class ProtAutodockDockingViewer(SmallMoleculesViewer):
     """ Visualize the output of protocol autodock """
     _label = 'Viewer autodock docking'
     _targets = [ProtChemAutodock]
-    _environments = [DESKTOP_TKINTER]
 
     def __init__(self, **args):
-        DockingViewer.__init__(self, **args)
+        super().__init__(**args)
