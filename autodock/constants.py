@@ -25,7 +25,3 @@
 # *
 # **************************************************************************
 
-ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',
-                      'Total Volume': 'volume', 'Total Energy per Vol': 'energy', 'class': 'class',
-                      'contactAtoms': 'contactAtoms', 'contactResidues': 'contactResidues',
-                      'nClusters': 'nClusters'}
