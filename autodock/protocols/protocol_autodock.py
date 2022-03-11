@@ -65,7 +65,7 @@ class ProtChemAutodock(EMProtocol):
         group.addParam('inputPockets', PointerParam, pointerClass="SetOfPockets",
                       label='Input pockets:', condition='not wholeProt',
                       help="The protein pockets to dock in")
-        group.addParam('mergeOutput', BooleanParam, default=False, expertLevel=LEVEL_ADVANCED,
+        group.addParam('mergeOutput', BooleanParam, default=True, expertLevel=LEVEL_ADVANCED,
                        label='Merge outputs from pockets:', condition='not wholeProt',
                        help="Merge the outputs from the different pockets")
         group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs pocket radius: ',
