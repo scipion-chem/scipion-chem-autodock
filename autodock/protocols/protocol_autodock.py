@@ -224,6 +224,8 @@ class ProtChemAutodock(EMProtocol):
                         newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
                         if 'ki' in molDic[posId]:
                             newSmallMol._ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
+                        else:
+                            newSmallMol._ligandEfficiency = pwobj.Float(None)
                         newSmallMol.poseFile.set(pdbFile)
                         newSmallMol.gridId.set(i+1)
                         newSmallMol.setMolClass('Autodock4')
