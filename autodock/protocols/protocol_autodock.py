@@ -201,9 +201,10 @@ class ProtChemAutodock(EMProtocol):
         if self.checkSingleOutput():
             outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
 
-        for i, pocketDir in enumerate(self.getPocketDirs()):
+        for pocketDir in self.getPocketDirs():
+            gridId = self.getGridId(pocketDir)
             if not self.checkSingleOutput():
-                outputSet = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix=i+1)
+                outputSet = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix=gridId)
 
             for smallMol in self.inputLibrary.get():
                 smallFn = smallMol.getFileName()
@@ -227,7 +228,7 @@ class ProtChemAutodock(EMProtocol):
                         else:
                             newSmallMol._ligandEfficiency = pwobj.Float(None)
                         newSmallMol.poseFile.set(pdbFile)
-                        newSmallMol.gridId.set(i+1)
+                        newSmallMol.gridId.set(gridId)
                         newSmallMol.setMolClass('Autodock4')
                         newSmallMol.setDockId(self.getObjId())
 
@@ -236,16 +237,18 @@ class ProtChemAutodock(EMProtocol):
             if not self.checkSingleOutput():
                 outputSet.proteinFile.set(self.getOriginalReceptorFile())
                 outputSet.setDocked(True)
-                self._defineOutputs(**{'outputSmallMolecules_{}'.format(i+1): outputSet})
+                self._defineOutputs(**{'outputSmallMolecules_{}'.format(gridId): outputSet})
                 self._defineSourceRelation(self.inputLibrary, outputSet)
 
         if self.checkSingleOutput():
             outputSet.proteinFile.set(self.getOriginalReceptorFile())
             outputSet.setDocked(True)
-            self._defineOutputs(outputSmallMolecules = outputSet)
+            self._defineOutputs(outputSmallMolecules=outputSet)
             self._defineSourceRelation(self.inputLibrary, outputSet)
       
 ########################### Utils functions ############################
+    def getGridId(self, outDir):
+        return outDir.split('_')[-1]
 
     def convert2PDBQT(self, smallMol, oDir):
         '''Convert ligand to pdbqt using obabel'''
