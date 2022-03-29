@@ -97,7 +97,6 @@ class ProtChemVina(EMProtocol):
                 dockSteps.append(dockId)
         else:
             for pocket in self.inputPockets.get():
-                print('Docking in pocket: ', pocket.getObjId(), pocket)
                 for mol in self.inputLibrary.get():
                     dockId = self._insertFunctionStep('dockStep', mol.clone(), pocket.clone(), prerequisites=[cId])
                     dockSteps.append(dockId)
