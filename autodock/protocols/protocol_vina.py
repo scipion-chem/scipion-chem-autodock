@@ -277,7 +277,7 @@ class ProtChemVina(EMProtocol):
     def getMolLigandName(self, mol):
         molName = mol.getMolName()
         for ligName in self.ligandFileNames:
-            if molName in ligName:
+            if molName + '.pdbqt' in ligName:
                 return ligName
 
     def parseDockedPDBQT(self, pdbqtFile):
