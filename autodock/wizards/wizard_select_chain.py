@@ -33,18 +33,10 @@ information such as name and number of residues.
 """
 
 # Imports
-from pwchem.wizards import GetChainsWizard
+from pwchem.wizards import SelectChainWizard
 from autodock.protocols.protocol_preparation_receptor import ProtChemADTPrepareReceptor
 
-
-
-class GetChainsWizardADT(GetChainsWizard):
-    """
-    This wizard will extract the chains from a atomic structure (pdb) file in
-    order to select it in the protocol.
-    Then, it will load the structure and will take all chain related
-    information such as name and number of residues.
-    """
-
-    # list with tuples to target protocol parameters
-    _targets = [(ProtChemADTPrepareReceptor, ['chain_name'])]
+SelectChainWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
+                              targets=['chain_name'],
+                              inputs=['inputAtomStruct'],
+                              outputs=['chain_name'])
