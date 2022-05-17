@@ -140,8 +140,8 @@ class ProtChemVina(EMProtocol):
         args = '--receptor {} --ligand {} '.format(fnReceptor, molFn)
         args += '--center_x {} --center_y {} --center_z {} '.format(x_center, y_center, z_center)
         args += '--size_x {} --size_y {} --size_z {} '.format(radius*2, radius*2, radius*2)
-        args += '--exhaustiveness {} --energy_range {} --num_modes {} '.\
-            format(self.exhaust.get(), self.maxEDiff.get(), self.nPos.get())
+        args += '--exhaustiveness {} --energy_range {} --num_modes {} --cpu {} '.\
+            format(self.exhaust.get(), self.maxEDiff.get(), self.nPos.get(), self.numberOfThreads.get())
 
         outName = os.path.abspath(os.path.join(smallDir, molName))
         args += '--out {}.pdbqt --log {}.log '.format(outName, outName)
