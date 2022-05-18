@@ -316,7 +316,7 @@ class ProtChemAutodock(EMProtocol):
 
     def getOutputPocketDir(self, pocket=None):
         if pocket==None:
-            outDir = self._getExtraPath('pocket')
+            outDir = self._getExtraPath('pocket_1')
         else:
             outDir = self._getExtraPath('pocket_{}'.format(pocket.getObjId()))
         return outDir
