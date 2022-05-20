@@ -296,6 +296,10 @@ class ProtChemVina(EMProtocol):
                     energy = line.split()[3]
                 else:
                     towrite += line
+        newFile = pdbqtFile.replace('.pdbqt', '_{}.pdbqt'.format(modelId))
+        dockedDic[modelId] = {'file': newFile, 'energy': energy}
+        with open(newFile, 'w') as f:
+            f.write(towrite)
         return dockedDic
 
 
