@@ -39,8 +39,8 @@ from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC
 
 _logo = 'autodock.png'
-AUTODOCK, AUTODOCK_DEFAULT_VERSION = 'autodock', '4.2.6'
-VINA, VINA_DEFAULT_VERSION = 'vina', '1.1.2'
+AUTODOCK_DIC = {'name': 'autodock', 'version': '4.2.6', 'home': 'AUTODOCK_HOME'}
+VINA_DIC = {'name': 'vina', 'version': '1.1.2', 'home': 'VINA_HOME'}
 
 class Plugin(pwem.Plugin):
     @classmethod
@@ -51,7 +51,7 @@ class Plugin(pwem.Plugin):
         adtCommands += 'rm {} && touch {}'.format(cls.getADTTar(), ADT_INSTALLED)
         adtCommands = [(adtCommands, ADT_INSTALLED)]
 
-        env.addPackage(AUTODOCK, version=AUTODOCK_DEFAULT_VERSION,
+        env.addPackage(AUTODOCK_DIC['name'], version=AUTODOCK_DIC['version'],
                        tar='void.tgz',
                        commands=adtCommands,
                        default=True)
@@ -62,7 +62,7 @@ class Plugin(pwem.Plugin):
         vinaCommands += 'rm {} && touch {}'.format(cls.getVinaTgz(), VINA_INSTALLED)
         vinaCommands = [(vinaCommands, VINA_INSTALLED)]
 
-        env.addPackage(VINA, version=VINA_DEFAULT_VERSION,
+        env.addPackage(VINA_DIC['name'], version=VINA_DIC['version'],
                        tar='void.tgz',
                        commands=vinaCommands,
                        default=True)
@@ -70,8 +70,8 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar('AUTODOCK_HOME', AUTODOCK + '-' + AUTODOCK_DEFAULT_VERSION)
-        cls._defineEmVar('VINA_HOME', VINA + '-' + VINA_DEFAULT_VERSION)
+        cls._defineEmVar(AUTODOCK_DIC['home'], AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version'])
+        cls._defineEmVar(VINA_DIC['home'], VINA_DIC['name'] + '-' + VINA_DIC['version'])
 
     @classmethod
     def getPluginHome(cls, path=""):
@@ -86,7 +86,7 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getAutodockPath(cls, path=''):
-        return os.path.join(cls.getVar('AUTODOCK_HOME'),path)
+        return os.path.join(cls.getVar('AUTODOCK_HOME'), path)
 
     @classmethod
     def getVinaPath(cls, path=''):
@@ -94,19 +94,21 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getADTSuiteUrl(cls):
-      return 'https://autodock.scripps.edu/wp-content/uploads/sites/56/2021/10/autodocksuite-4.2.6-x86_64Linux2.tar'
+      return 'https://autodock.scripps.edu/wp-content/uploads/sites/56/2021/10/autodocksuite-{}-x86_64Linux2.tar'.\
+        format(AUTODOCK_DIC['version'])
 
     @classmethod
     def getVinaURL(cls):
-      return 'https://vina.scripps.edu/wp-content/uploads/sites/55/2020/12/autodock_vina_1_1_2_linux_x86.tgz'
+      return 'https://vina.scripps.edu/wp-content/uploads/sites/55/2020/12/autodock_vina_{}_linux_x86.tgz'.\
+        format(VINA_DIC['version'].replace('.', '_'))
 
     @classmethod
     def getADTTar(cls):
-      return AUTODOCK + '-' + AUTODOCK_DEFAULT_VERSION + '.tar'
+      return AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version'] + '.tar'
 
     @classmethod
     def getVinaTgz(cls):
-      return VINA + '-' + VINA_DEFAULT_VERSION + '.tgz'
+      return VINA_DIC['name'] + '-' + VINA_DIC['version'] + '.tgz'
 
     @classmethod
     def runVina(cls, protocol, program="vina", args=None, cwd=None):
