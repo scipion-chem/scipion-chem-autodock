@@ -33,7 +33,6 @@ protein structure using the AutoLigand software
 import os, shutil
 
 from pwem.protocols import EMProtocol
-from pwem.objects.data import AtomStruct
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, EnumParam, FloatParam, LEVEL_ADVANCED
 from pyworkflow.utils.path import copyTree, makePath
 from pyworkflow.protocol import params
@@ -164,7 +163,7 @@ class ProtChemAutoLigand(EMProtocol):
         args = ' -r {} -p {}'.format(pdbName, pocketSize)
 
         copyTree(self._getExtraPath(), self.getTmpSizePath(pocketSize))
-        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
+        self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                     autodock_plugin.getADTPath('%s.py' % program) + args,
                     cwd=self.getTmpSizePath(pocketSize))
 
@@ -301,7 +300,7 @@ class ProtChemAutoLigand(EMProtocol):
       oFile = os.path.abspath(os.path.join(self._getExtraPath(inName + '.pdbqt')))
 
       args = ' -v -r %s -o %s' % (proteinFile, oFile)
-      self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
+      self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                   autodock_plugin.getADTPath('Utilities24/prepare_receptor4.py') + args)
       return oFile
 

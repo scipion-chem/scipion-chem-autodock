@@ -31,6 +31,7 @@ from pwem.protocols import EMProtocol
 
 from pwchem import Plugin as pwchem_plugin
 from pwchem.utils import clean_PDB
+from pwchem.constants import MGL_DIC
 
 from autodock import Plugin as autodock_plugin
 
@@ -111,7 +112,7 @@ class ProtChemADTPrepare(EMProtocol):
             if self.nonstd.get():
                 args+=" -e"
 
-        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
+        self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                     autodock_plugin.getADTPath('Utilities24/%s.py'%prog)+args)
 
     def createOutput(self):

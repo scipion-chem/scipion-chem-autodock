@@ -29,11 +29,13 @@ import os
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam, STEPS_PARALLEL, BooleanParam, LEVEL_ADVANCED
 import pyworkflow.object as pwobj
-from autodock import Plugin as autodock_plugin
 from pyworkflow.utils.path import makePath, createLink
+
+from autodock import Plugin as autodock_plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass
 from pwchem import Plugin as pwchem_plugin
+from pwchem.constants import MGL_DIC
 
 
 class ProtChemVina(EMProtocol):
@@ -203,7 +205,7 @@ class ProtChemVina(EMProtocol):
 
         if inExt != '.pdbqt':
             args = ' -l {} -o {}'.format(inFile, oFile)
-            self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
+            self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                         autodock_plugin.getADTPath('Utilities24/prepare_ligand4.py') + args)
         else:
             createLink(inFile, oFile)
@@ -223,7 +225,7 @@ class ProtChemVina(EMProtocol):
         oFile = os.path.abspath(os.path.join(self._getExtraPath(inName + '.pdbqt')))
 
         args = ' -v -r %s -o %s' % (proteinFile, oFile)
-        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
+        self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                     autodock_plugin.getADTPath('Utilities24/prepare_receptor4.py') + args)
 
         return oFile
