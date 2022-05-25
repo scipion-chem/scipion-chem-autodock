@@ -193,4 +193,8 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
            not self.inputAtomStruct.get().getFileName().endswith('.cif'):
             errors.append('The input structure must be either .mol2, .pdb, .pdbq, .pdbqt, .pdbqs or .cif')
             errors.append("Current name: %s"%self.inputAtomStruct.get().getFileName())
+
+        elif self.rchains.get():
+            if not self.chain_name.get():
+                errors.append('You must specify the chains to be maintained')
         return errors
