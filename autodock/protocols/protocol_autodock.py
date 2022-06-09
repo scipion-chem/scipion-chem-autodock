@@ -231,6 +231,7 @@ class ProtChemAutodock(EMProtocol):
                         else:
                             newSmallMol._ligandEfficiency = pwobj.Float(None)
                         newSmallMol.poseFile.set(pdbFile)
+                        newSmallMol.setPoseId(posId)
                         newSmallMol.gridId.set(gridId)
                         newSmallMol.setMolClass('Autodock4')
                         newSmallMol.setDockId(self.getObjId())

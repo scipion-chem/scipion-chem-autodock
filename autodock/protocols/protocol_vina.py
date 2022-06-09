@@ -172,6 +172,7 @@ class ProtChemVina(EMProtocol):
                     newSmallMol.cleanObjId()
                     newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
                     newSmallMol.poseFile.set(molDic[posId]['file'])
+                    newSmallMol.setPoseId(posId)
                     newSmallMol.gridId.set(gridId)
                     newSmallMol.setMolClass('AutodockVina')
                     newSmallMol.setDockId(self.getObjId())
