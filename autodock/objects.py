@@ -24,7 +24,6 @@
 # **************************************************************************
 
 import pwem.objects.data as data
-from pwchem.objects import ProteinPocket
 from pyworkflow.object import (Object, Float, Integer, String,
                                OrderedDict, CsvList, Boolean, Set, Pointer,
                                Scalar, List)

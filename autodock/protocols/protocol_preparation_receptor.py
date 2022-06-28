@@ -37,18 +37,18 @@ from autodock import Plugin as autodock_plugin
 
 class ProtChemADTPrepare(EMProtocol):
     def _defineParamsBasic(self, form):
-        choicesRepair = ['None', 'Bonds hydrogens', 'Bonds', 'Hydrogens']
+        choicesRepair = ['None', 'Bonds', 'Hydrogens', 'Bonds hydrogens']
         if self.typeRL=="target":
             choicesRepair.append('Check hydrogens')
         preparation = form.addGroup('Preparation')
         preparation.addParam('repair', EnumParam, choices=choicesRepair,
                       default=0, label='Repair action:',
-                      help='Bonds hydrogens: build bonds and add hydrogens\n'
-                           'Bonds: build a single bond from each atom with no bonds to its closest neighbor\n'
+                      help='Bonds: build a single bond from each atom with no bonds to its closest neighbor\n'
                            'Hydrogens: add hydrogens\n'
+                           'Bonds hydrogens: build bonds and add hydrogens\n'
                            'Check hydrogens: add hydrogens only if there are none already')
-        preparation.addParam('preserveCharges', EnumParam, choices=['Add gasteiger charges','Preserve input charges',
-                                                             'Preserve charges of specific atoms'],
+        preparation.addParam('preserveCharges', EnumParam, choices=['Add gasteiger charges', 'Preserve input charges',
+                                                                    'Preserve charges of specific atoms'],
                       default=0, label='Charge handling')
         preparation.addParam('chargeAtoms', StringParam, default="", condition='preserveCharges==2',
                       label='Atoms to preserve charge', help='Separated by commas: Zn, Fe, ...')
@@ -70,11 +70,11 @@ class ProtChemADTPrepare(EMProtocol):
         self._insertFunctionStep('createOutput')
 
     def callPrepare(self, prog, args):
-        if self.repair.get()==1:
+        if self.repair.get()==3:
             args+=' -A bonds_hydrogens'
-        elif self.repair.get()==2:
+        elif self.repair.get()==1:
             args += ' -A bonds'
-        elif self.repair.get()==3:
+        elif self.repair.get()==2:
             args += ' -A hydrogens'
         elif self.repair.get()==4:
             args += ' -A checkhydrogens'
@@ -83,7 +83,7 @@ class ProtChemADTPrepare(EMProtocol):
             args+=" -C"
         elif self.preserveCharges.get()==2:
             for atom in self.chargeAtoms.get().split(','):
-                args+=" -p %s"%atom.strip()
+                args+=" -p %s" % atom.strip()
 
         cleanup=" -U "
         first=True
@@ -171,9 +171,9 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
         cleanedPDB = clean_PDB(self.inputAtomStruct.get().getFileName(), fnPdb,
                                False, self.HETATM.get(), chain_id)
 
-        fnOut = self._getExtraPath('atomStruct.pdbqt')
+        fnOut = os.path.abspath(self._getExtraPath('atomStruct.pdbqt'))
 
-        args = ' -v -r %s -o %s' % (cleanedPDB,fnOut)
+        args = ' -v -r %s -o %s' % (os.path.abspath(cleanedPDB), fnOut)
         ProtChemADTPrepare.callPrepare(self, "prepare_receptor4", args)
 
     def createOutput(self):
