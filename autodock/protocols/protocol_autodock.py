@@ -65,15 +65,15 @@ class ProtChemAutodock(EMProtocol):
                        help='Radius of the Autodock grid for the whole protein')
 
         #Docking on pockets
-        group.addParam('inputPockets', PointerParam, pointerClass="SetOfPockets",
+        group.addParam('inputPockets', PointerParam, pointerClass="SetOfStructROIs",
                       label='Input pockets:', condition='not wholeProt',
-                      help="The protein pockets to dock in")
+                      help="The protein structural ROIs to dock in")
         group.addParam('mergeOutput', BooleanParam, default=True, expertLevel=LEVEL_ADVANCED,
-                       label='Merge outputs from pockets:', condition='not wholeProt',
-                       help="Merge the outputs from the different pockets")
-        group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs pocket radius: ',
+                       label='Merge outputs from structural ROIs:', condition='not wholeProt',
+                       help="Merge the outputs from the different structural ROIs")
+        group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs StructROI radius: ',
                        condition='not wholeProt', default=1.1, allowsNull=False,
-                       help='The radius * n of each pocket will be used as grid radius')
+                       help='The radius * n of each StructROI will be used as grid radius')
 
         group.addParam('spacing', FloatParam, label='Spacing of the grids: ', default=0.5, allowsNull=False,
                        condition='not wholeProt',
