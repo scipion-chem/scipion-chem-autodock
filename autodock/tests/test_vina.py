@@ -116,7 +116,7 @@ class TestVina(BaseTest):
             operation=ProtSetFilter.CHOICE_RANKED,
             threshold=number, rankingField=property)
         cls.protFilter.inputSet.set(inProt)
-        cls.protFilter.inputSet.setExtended('outputPockets')
+        cls.protFilter.inputSet.setExtended('outputStructROIs')
 
         cls.proj.launchProtocol(cls.protFilter, wait=False)
         return cls.protFilter
@@ -137,7 +137,7 @@ class TestVina(BaseTest):
             protAutoDock = self.newProtocol(
                 ProtChemVina,
                 wholeProt=False,
-                inputPockets=pocketsProt.outputPockets,
+                inputPockets=pocketsProt.outputStructROIs,
                 inputLibrary=self.protPrepareLigandADT.outputSmallMolecules,
                 pocketRadiusN=5, nPos=2,
                 mergeOutput=True,
@@ -152,9 +152,9 @@ class TestVina(BaseTest):
 
         print('Docking with autodock vina in predicted pockets')
         protAutoLig = self._runAutoLigandFind()
-        self._waitOutput(protAutoLig, 'outputPockets', sleepTime=5)
+        self._waitOutput(protAutoLig, 'outputStructROIs', sleepTime=5)
         self._runSetFilter(inProt=protAutoLig, number=2, property='_score')
-        self._waitOutput(self.protFilter, 'outputPockets', sleepTime=5)
+        self._waitOutput(self.protFilter, 'outputStructROIs', sleepTime=5)
 
         protVina2 = self._runVina(self.protFilter)
 

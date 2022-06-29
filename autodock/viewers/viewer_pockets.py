@@ -24,10 +24,10 @@
 # *
 # **************************************************************************
 from ..protocols import ProtChemAutoLigand
-from pwchem.viewers import ViewerGeneralPockets
+from pwchem.viewers import ViewerGeneralStructROIs
 
 
-class viewerAutoLigand(ViewerGeneralPockets):
+class viewerAutoLigand(ViewerGeneralStructROIs):
   _label = 'Viewer pockets AutoLigand'
   _targets = [ProtChemAutoLigand]
 

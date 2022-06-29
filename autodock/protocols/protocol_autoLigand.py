@@ -37,7 +37,7 @@ from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, Enu
 from pyworkflow.utils.path import copyTree, makePath
 from pyworkflow.protocol import params
 
-from pwchem.objects import SetOfPockets, ProteinPocket
+from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.constants import *
 from pwchem.utils import splitPDBLine, runOpenBabel, generate_gpf, calculate_centerMass
 from pwchem import Plugin as pwchem_plugin
@@ -172,7 +172,7 @@ class ProtChemAutoLigand(EMProtocol):
         for oFile in outFiles:
             overlaps = []
             curPockets = self.finalPockets.copy()
-            newPock = ProteinPocket(oFile, None, resFile, pClass='AutoLigand')
+            newPock = StructROI(oFile, None, resFile, pClass='AutoLigand')
             for curPock in curPockets:
               propOverlap = self.calculateOverlap(newPock, curPock)
               if propOverlap > self.propShared.get():
@@ -195,15 +195,15 @@ class ProtChemAutoLigand(EMProtocol):
     def createOutputStep(self):
         outFiles, resultsFile = self.organizeOutput()
 
-        outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
+        outPockets = SetOfStructROIs(filename=self._getPath('pockets.sqlite'))
         for oFile in outFiles:
-            pock = ProteinPocket(os.path.abspath(oFile), self.receptorFile, os.path.abspath(resultsFile),
+            pock = StructROI(os.path.abspath(oFile), self.receptorFile, os.path.abspath(resultsFile),
                                  pClass='AutoLigand')
             outPockets.append(pock)
 
         outHETMFile = outPockets.buildPDBhetatmFile()
 
-        self._defineOutputs(outputPockets=outPockets)
+        self._defineOutputs(outputStructROIs=outPockets)
 
 
     # --------------------------- Utils functions --------------------
