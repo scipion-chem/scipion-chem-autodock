@@ -137,7 +137,7 @@ class TestVina(BaseTest):
             protAutoDock = self.newProtocol(
                 ProtChemVina,
                 wholeProt=False,
-                inputPockets=pocketsProt.outputStructROIs,
+                inputStructROIs=pocketsProt.outputStructROIs,
                 inputLibrary=self.protPrepareLigandADT.outputSmallMolecules,
                 pocketRadiusN=5, nPos=2,
                 mergeOutput=True,

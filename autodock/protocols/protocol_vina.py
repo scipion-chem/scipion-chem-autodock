@@ -62,7 +62,7 @@ class ProtChemVina(EMProtocol):
                        help='Radius of the Autodock grid for the whole protein')
 
         #Docking on pockets
-        group.addParam('inputPockets', PointerParam, pointerClass="SetOfStructROIs",
+        group.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
                       label='Input StructROIs:', condition='not wholeProt',
                       help="The protein StructROIs to dock in")
         group.addParam('mergeOutput', BooleanParam, default=True, expertLevel=LEVEL_ADVANCED,
@@ -98,7 +98,7 @@ class ProtChemVina(EMProtocol):
                 dockId = self._insertFunctionStep('dockStep', mol.clone(), prerequisites=[cId])
                 dockSteps.append(dockId)
         else:
-            for pocket in self.inputPockets.get():
+            for pocket in self.inputStructROIs.get():
                 for mol in self.inputLibrary.get():
                     dockId = self._insertFunctionStep('dockStep', mol.clone(), pocket.clone(), prerequisites=[cId])
                     dockSteps.append(dockId)
@@ -236,13 +236,13 @@ class ProtChemVina(EMProtocol):
             atomStructFn = self.getOriginalReceptorFile()
             return atomStructFn.split('/')[-1].split('.')[0]
         else:
-            return self.inputPockets.get().getProteinName()
+            return self.inputStructROIs.get().getProteinName()
 
     def getOriginalReceptorFile(self):
         if self.wholeProt:
             return self.inputAtomStruct.get().getFileName()
         else:
-            return self.inputPockets.get().getProteinFile()
+            return self.inputStructROIs.get().getProteinFile()
 
     def getReceptorDir(self):
         atomStructFn = self.getOriginalReceptorFile()

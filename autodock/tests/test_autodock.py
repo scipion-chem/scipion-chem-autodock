@@ -137,7 +137,7 @@ class TestAutoDock(BaseTest):
             protAutoDock = self.newProtocol(
                 ProtChemAutodock,
                 wholeProt=False,
-                inputPockets=pocketsProt.outputStructROIs,
+                inputStructROIs=pocketsProt.outputStructROIs,
                 inputLibrary=self.protPrepareLigandADT.outputSmallMolecules,
                 pocketRadiusN=5, gaRun=2,
                 mergeOutput=True,
