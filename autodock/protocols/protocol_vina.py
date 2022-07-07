@@ -171,13 +171,14 @@ class ProtChemVina(EMProtocol):
                     newSmallMol.copy(smallMol)
                     newSmallMol.cleanObjId()
                     newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
-                    newSmallMol.poseFile.set(molDic[posId]['file'])
-                    newSmallMol.setPoseId(posId)
-                    newSmallMol.gridId.set(gridId)
-                    newSmallMol.setMolClass('AutodockVina')
-                    newSmallMol.setDockId(self.getObjId())
+                    if os.path.getsize(molDic[posId]['file']) > 0:
+                        newSmallMol.poseFile.set(molDic[posId]['file'])
+                        newSmallMol.setPoseId(posId)
+                        newSmallMol.gridId.set(gridId)
+                        newSmallMol.setMolClass('AutodockVina')
+                        newSmallMol.setDockId(self.getObjId())
 
-                    outputSet.append(newSmallMol)
+                        outputSet.append(newSmallMol)
 
             if not self.checkSingleOutput():
                 outputSet.proteinFile.set(self.getOriginalReceptorFile())

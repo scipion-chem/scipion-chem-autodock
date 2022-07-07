@@ -218,7 +218,7 @@ class ProtChemAutodock(EMProtocol):
                 if os.path.exists(fnDlg):
                     molDic = self.parseDockedMolsDLG(fnDlg)
                     for posId in molDic:
-                        pdbFile = '{}/{}_{}.pdb'.format(fnSmallDir, smallName, posId)
+                        pdbFile = '{}/{}_{}.pdbqt'.format(fnSmallDir, smallName, posId)
                         with open(pdbFile, 'w') as f:
                             f.write(molDic[posId]['pdb'])
 
@@ -230,13 +230,14 @@ class ProtChemAutodock(EMProtocol):
                             newSmallMol._ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
                         else:
                             newSmallMol._ligandEfficiency = pwobj.Float(None)
-                        newSmallMol.poseFile.set(pdbFile)
-                        newSmallMol.setPoseId(posId)
-                        newSmallMol.gridId.set(gridId)
-                        newSmallMol.setMolClass('Autodock4')
-                        newSmallMol.setDockId(self.getObjId())
+                        if os.path.getsize(pdbFile) > 0:
+                            newSmallMol.poseFile.set(pdbFile)
+                            newSmallMol.setPoseId(posId)
+                            newSmallMol.gridId.set(gridId)
+                            newSmallMol.setMolClass('Autodock4')
+                            newSmallMol.setDockId(self.getObjId())
 
-                        outputSet.append(newSmallMol)
+                            outputSet.append(newSmallMol)
 
             if not self.checkSingleOutput():
                 outputSet.proteinFile.set(self.getOriginalReceptorFile())
