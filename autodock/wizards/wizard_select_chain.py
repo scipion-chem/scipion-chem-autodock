@@ -33,10 +33,15 @@ information such as name and number of residues.
 """
 
 # Imports
-from pwchem.wizards import SelectChainWizard
+from pwchem.wizards import *
 from autodock.protocols.protocol_preparation_receptor import ProtChemADTPrepareReceptor
 
 SelectChainWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
                               targets=['chain_name'],
                               inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
+
+SelectMultiChainWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
+                                   targets=['chain_name'],
+                                   inputs=['inputAtomStruct'],
+                                   outputs=['chain_name'])

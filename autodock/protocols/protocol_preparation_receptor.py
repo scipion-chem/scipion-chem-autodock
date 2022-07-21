@@ -141,20 +141,15 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
                        help='Remove all ligands and HETATM contained in the protein')
 
         clean.addParam("rchains", BooleanParam,
-                       label='Remove redundant chains',
+                       label='Select specific chains: ',
                        default=False, important=True,
-                       help='Remove redundant chains in the proteins')
+                       help='Keep only the chains selected')
 
         clean.addParam("chain_name", StringParam,
-                       label="Conserved chain",
-                       important=True,
+                       label="Keep chains: ", important=True,
                        condition="rchains==True",
-                       help="Select the chain on which you want to carry out the "
-                            "molecular docking. You must know the protein and structure "
-                            "file that you loaded. \n\nFor example, the protein mdm2 "
-                            "(4ERF) has a C1 symmetry, which indicates that its chains "
-                            "are at least 95% equal, so you would write A, C or E "
-                            "(names of the chains).")
+                       help="Select the chain(s) you want to keep in the structure")
+
         ProtChemADTPrepare._defineParamsBasic(self, form)
 
     def preparationStep(self):
@@ -163,13 +158,17 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
         filename = os.path.splitext(os.path.basename(pdb_ini))[0]
         fnPdb = self._getExtraPath('%s_clean.pdb' % filename)
 
+        chain_ids = None
         if self.rchains.get():
-            chain = json.loads(self.chain_name.get())  # From wizard dictionary
-            chain_id = chain["chain"].upper().strip()
-        else:
-            chain_id = None
+            chainJson = json.loads(self.chain_name.get())  # From wizard dictionary
+            if 'chain' in chainJson:
+                chain_ids = [chainJson["chain"].upper().strip()]
+            elif 'model-chain' in chainJson:
+                modelChains = chainJson["model-chain"].upper().strip()
+                chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
+
         cleanedPDB = clean_PDB(self.inputAtomStruct.get().getFileName(), fnPdb,
-                               False, self.HETATM.get(), chain_id)
+                               False, self.HETATM.get(), chain_ids)
 
         fnOut = os.path.abspath(self._getExtraPath('atomStruct.pdbqt'))
 
