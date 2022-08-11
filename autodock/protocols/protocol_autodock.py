@@ -129,9 +129,7 @@ class ProtChemAutodock(EMProtocol):
     def convertStep(self):
         self.ligandFileNames = []
         for mol in self.inputLibrary.get():
-            fnSmall = mol.getFileName()
-            if not '.pdbqt' in fnSmall:
-                fnSmall, smallDir = self.convert2PDBQT(mol.clone(), self._getExtraPath('conformers'))
+            fnSmall, smallDir = self.convert2PDBQT(mol.clone(), self._getExtraPath('conformers'))
             self.ligandFileNames.append(fnSmall)
 
         self.receptorFile = self.getOriginalReceptorFile()
@@ -223,8 +221,7 @@ class ProtChemAutodock(EMProtocol):
                             f.write(molDic[posId]['pdb'])
 
                         newSmallMol = SmallMolecule()
-                        newSmallMol.copy(smallMol)
-                        newSmallMol.cleanObjId()
+                        newSmallMol.copy(smallMol, copyId=False)
                         newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
                         if 'ki' in molDic[posId]:
                             newSmallMol._ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
@@ -256,12 +253,21 @@ class ProtChemAutodock(EMProtocol):
         return outDir.split('_')[-1]
 
     def convert2PDBQT(self, smallMol, oDir):
-        '''Convert ligand to pdbqt using obabel'''
+        '''Convert ligand to pdbqt using prepare_ligand4 of ADT'''
+        inFile = smallMol.getFileName()
+        if os.path.splitext(inFile)[1] not in ['.pdb', '.mol2', '.pdbq']:
+            # Convert to formats recognized by ADT
+            outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
+            args = ' -i "{}" -of mol2 --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
+                                                                               os.path.abspath(outDir), outName)
+            pwchem_plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+            inFile = self._getTmpPath(outName + '.mol2')
+
         if not os.path.exists(oDir):
             os.mkdir(oDir)
-        inFile = smallMol.getFileName()
+
         inName, inExt = os.path.splitext(os.path.basename(inFile))
-        oFile = os.path.abspath(os.path.join(oDir, inName+'.pdbqt'))
+        oFile = os.path.abspath(os.path.join(oDir, smallMol.getUniqueName() + '.pdbqt'))
 
         if inExt != '.pdbqt':
             args = ' -l {} -o {}'.format(inFile, oFile)
@@ -313,12 +319,6 @@ class ProtChemAutodock(EMProtocol):
             ligFns.append(mol.getFileName())
         return ligFns
 
-    def getLigandsNames(self):
-        ligNames = []
-        for mol in self.inputLibrary.get():
-            ligNames.append(mol.getMolName())
-        return ligNames
-
     def getOutputPocketDir(self, pocket=None):
         if pocket==None:
             outDir = self._getExtraPath('pocket_1')
@@ -336,7 +336,7 @@ class ProtChemAutodock(EMProtocol):
         return dirs
 
     def getMolLigandName(self, mol):
-        molName = mol.getMolName()
+        molName = mol.getUniqueName()
         for ligName in self.ligandFileNames:
             if molName + '.pdbqt' in ligName:
                 return ligName
