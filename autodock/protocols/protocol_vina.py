@@ -29,11 +29,13 @@ import os
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam, STEPS_PARALLEL, BooleanParam, LEVEL_ADVANCED
 import pyworkflow.object as pwobj
-from autodock import Plugin as autodock_plugin
 from pyworkflow.utils.path import makePath, createLink
+
+from autodock import Plugin as autodock_plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass
 from pwchem import Plugin as pwchem_plugin
+from pwchem.constants import MGL_DIC
 
 
 class ProtChemVina(EMProtocol):
@@ -60,15 +62,15 @@ class ProtChemVina(EMProtocol):
                        help='Radius of the Autodock grid for the whole protein')
 
         #Docking on pockets
-        group.addParam('inputPockets', PointerParam, pointerClass="SetOfPockets",
-                      label='Input pockets:', condition='not wholeProt',
-                      help="The protein pockets to dock in")
+        group.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
+                      label='Input StructROIs:', condition='not wholeProt',
+                      help="The protein StructROIs to dock in")
         group.addParam('mergeOutput', BooleanParam, default=True, expertLevel=LEVEL_ADVANCED,
-                       label='Merge outputs from pockets:', condition='not wholeProt',
-                       help="Merge the outputs from the different pockets")
-        group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs pocket radius: ',
+                       label='Merge outputs from StructROIs:', condition='not wholeProt',
+                       help="Merge the outputs from the different StructROIs")
+        group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs StructROI radius: ',
                        condition='not wholeProt', default=1.1, allowsNull=False,
-                       help='The radius * n of each pocket will be used as grid radius')
+                       help='The radius * n of each StructROI will be used as grid radius')
 
         group = form.addGroup('Docking')
         group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
@@ -96,7 +98,7 @@ class ProtChemVina(EMProtocol):
                 dockId = self._insertFunctionStep('dockStep', mol.clone(), prerequisites=[cId])
                 dockSteps.append(dockId)
         else:
-            for pocket in self.inputPockets.get():
+            for pocket in self.inputStructROIs.get():
                 for mol in self.inputLibrary.get():
                     dockId = self._insertFunctionStep('dockStep', mol.clone(), pocket.clone(), prerequisites=[cId])
                     dockSteps.append(dockId)
@@ -140,8 +142,8 @@ class ProtChemVina(EMProtocol):
         args = '--receptor {} --ligand {} '.format(fnReceptor, molFn)
         args += '--center_x {} --center_y {} --center_z {} '.format(x_center, y_center, z_center)
         args += '--size_x {} --size_y {} --size_z {} '.format(radius*2, radius*2, radius*2)
-        args += '--exhaustiveness {} --energy_range {} --num_modes {} '.\
-            format(self.exhaust.get(), self.maxEDiff.get(), self.nPos.get())
+        args += '--exhaustiveness {} --energy_range {} --num_modes {} --cpu {} '.\
+            format(self.exhaust.get(), self.maxEDiff.get(), self.nPos.get(), self.numberOfThreads.get())
 
         outName = os.path.abspath(os.path.join(smallDir, molName))
         args += '--out {}.pdbqt --log {}.log '.format(outName, outName)
@@ -152,9 +154,10 @@ class ProtChemVina(EMProtocol):
         if self.checkSingleOutput():
             outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
 
-        for i, pocketDir in enumerate(self.getPocketDirs()):
+        for pocketDir in self.getPocketDirs():
+            gridId = self.getGridId(pocketDir)
             if not self.checkSingleOutput():
-                outputSet = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix=i+1)
+                outputSet = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix=gridId)
 
             for smallMol in self.inputLibrary.get():
                 smallFn = smallMol.getFileName()
@@ -168,17 +171,19 @@ class ProtChemVina(EMProtocol):
                     newSmallMol.copy(smallMol)
                     newSmallMol.cleanObjId()
                     newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
-                    newSmallMol.poseFile.set(molDic[posId]['file'])
-                    newSmallMol.gridId.set(i+1)
-                    newSmallMol.setMolClass('AutodockVina')
-                    newSmallMol.setDockId(self.getObjId())
+                    if os.path.getsize(molDic[posId]['file']) > 0:
+                        newSmallMol.poseFile.set(molDic[posId]['file'])
+                        newSmallMol.setPoseId(posId)
+                        newSmallMol.gridId.set(gridId)
+                        newSmallMol.setMolClass('AutodockVina')
+                        newSmallMol.setDockId(self.getObjId())
 
-                    outputSet.append(newSmallMol)
+                        outputSet.append(newSmallMol)
 
             if not self.checkSingleOutput():
                 outputSet.proteinFile.set(self.getOriginalReceptorFile())
                 outputSet.setDocked(True)
-                self._defineOutputs(**{'outputSmallMolecules_{}'.format(i+1): outputSet})
+                self._defineOutputs(**{'outputSmallMolecules_{}'.format(gridId): outputSet})
                 self._defineSourceRelation(self.inputLibrary, outputSet)
 
         if self.checkSingleOutput():
@@ -188,7 +193,10 @@ class ProtChemVina(EMProtocol):
             self._defineSourceRelation(self.inputLibrary, outputSet)
       
 ########################### Utils functions ############################
-    
+
+    def getGridId(self, outDir):
+        return outDir.split('_')[-1]
+
     def convert2PDBQT(self, smallMol, oDir):
         '''Convert ligand to pdbqt using obabel'''
         if not os.path.exists(oDir):
@@ -199,7 +207,7 @@ class ProtChemVina(EMProtocol):
 
         if inExt != '.pdbqt':
             args = ' -l {} -o {}'.format(inFile, oFile)
-            self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
+            self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                         autodock_plugin.getADTPath('Utilities24/prepare_ligand4.py') + args)
         else:
             createLink(inFile, oFile)
@@ -219,7 +227,7 @@ class ProtChemVina(EMProtocol):
         oFile = os.path.abspath(os.path.join(self._getExtraPath(inName + '.pdbqt')))
 
         args = ' -v -r %s -o %s' % (proteinFile, oFile)
-        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
+        self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                     autodock_plugin.getADTPath('Utilities24/prepare_receptor4.py') + args)
 
         return oFile
@@ -229,13 +237,13 @@ class ProtChemVina(EMProtocol):
             atomStructFn = self.getOriginalReceptorFile()
             return atomStructFn.split('/')[-1].split('.')[0]
         else:
-            return self.inputPockets.get().getProteinName()
+            return self.inputStructROIs.get().getProteinName()
 
     def getOriginalReceptorFile(self):
         if self.wholeProt:
             return self.inputAtomStruct.get().getFileName()
         else:
-            return self.inputPockets.get().getProteinFile()
+            return self.inputStructROIs.get().getProteinFile()
 
     def getReceptorDir(self):
         atomStructFn = self.getOriginalReceptorFile()
@@ -255,7 +263,7 @@ class ProtChemVina(EMProtocol):
 
     def getOutputPocketDir(self, pocket=None):
         if pocket==None:
-            outDir = self._getExtraPath('pocket')
+            outDir = self._getExtraPath('pocket_1')
         else:
             outDir = self._getExtraPath('pocket_{}'.format(pocket.getObjId()))
         return outDir
@@ -272,7 +280,7 @@ class ProtChemVina(EMProtocol):
     def getMolLigandName(self, mol):
         molName = mol.getMolName()
         for ligName in self.ligandFileNames:
-            if molName in ligName:
+            if molName + '.pdbqt' in ligName:
                 return ligName
 
     def parseDockedPDBQT(self, pdbqtFile):
@@ -292,6 +300,11 @@ class ProtChemVina(EMProtocol):
                     energy = line.split()[3]
                 else:
                     towrite += line
+        if towrite:
+            newFile = pdbqtFile.replace('.pdbqt', '_{}.pdbqt'.format(modelId))
+            dockedDic[modelId] = {'file': newFile, 'energy': energy}
+            with open(newFile, 'w') as f:
+                f.write(towrite)
         return dockedDic
 
 

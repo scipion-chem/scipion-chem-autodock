@@ -74,7 +74,7 @@ class TestAutoLigand(BaseTest):
                 nFillPoints=10)
 
         self.launchProtocol(protAutoLigand)
-        pdbOut = getattr(protAutoLigand, 'outputPockets', None)
+        pdbOut = getattr(protAutoLigand, 'outputStructROIs', None)
         self.assertIsNotNone(pdbOut)
 
     def testAutoLigand(self):

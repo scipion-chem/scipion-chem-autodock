@@ -33,18 +33,16 @@ protein structure using the AutoLigand software
 import os, shutil
 
 from pwem.protocols import EMProtocol
-from pwem.objects.data import AtomStruct
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, EnumParam, FloatParam, LEVEL_ADVANCED
 from pyworkflow.utils.path import copyTree, makePath
 from pyworkflow.protocol import params
 
-from pwchem.objects import SetOfPockets
+from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.constants import *
 from pwchem.utils import splitPDBLine, runOpenBabel, generate_gpf, calculate_centerMass
 from pwchem import Plugin as pwchem_plugin
 
 from autodock import Plugin as autodock_plugin
-from autodock.objects import AutoLigandPocket
 
 
 NUMBER, RANGE = 0, 1
@@ -165,7 +163,7 @@ class ProtChemAutoLigand(EMProtocol):
         args = ' -r {} -p {}'.format(pdbName, pocketSize)
 
         copyTree(self._getExtraPath(), self.getTmpSizePath(pocketSize))
-        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
+        self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                     autodock_plugin.getADTPath('%s.py' % program) + args,
                     cwd=self.getTmpSizePath(pocketSize))
 
@@ -174,7 +172,7 @@ class ProtChemAutoLigand(EMProtocol):
         for oFile in outFiles:
             overlaps = []
             curPockets = self.finalPockets.copy()
-            newPock = AutoLigandPocket(oFile, None, resFile)
+            newPock = StructROI(oFile, None, resFile, pClass='AutoLigand')
             for curPock in curPockets:
               propOverlap = self.calculateOverlap(newPock, curPock)
               if propOverlap > self.propShared.get():
@@ -197,14 +195,15 @@ class ProtChemAutoLigand(EMProtocol):
     def createOutputStep(self):
         outFiles, resultsFile = self.organizeOutput()
 
-        outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
+        outPockets = SetOfStructROIs(filename=self._getPath('pockets.sqlite'))
         for oFile in outFiles:
-            pock = AutoLigandPocket(os.path.abspath(oFile), self.receptorFile, os.path.abspath(resultsFile))
+            pock = StructROI(os.path.abspath(oFile), self.receptorFile, os.path.abspath(resultsFile),
+                                 pClass='AutoLigand')
             outPockets.append(pock)
 
         outHETMFile = outPockets.buildPDBhetatmFile()
 
-        self._defineOutputs(outputPockets=outPockets)
+        self._defineOutputs(outputStructROIs=outPockets)
 
 
     # --------------------------- Utils functions --------------------
@@ -242,7 +241,7 @@ class ProtChemAutoLigand(EMProtocol):
         return sizes
 
     def calculateOverlap(self, pock1, pock2):
-        p1, p2 = pock1.getPoints(), pock2.getPoints()
+        p1, p2 = pock1.getAutoLigandPoints(), pock2.getAutoLigandPoints()
         minSize = min(pock1.getNumberOfPoints(), pock2.getNumberOfPoints())
         numSharedPoints = len(set(p1).intersection(set(p2)))
         return numSharedPoints / int(minSize)
@@ -301,7 +300,7 @@ class ProtChemAutoLigand(EMProtocol):
       oFile = os.path.abspath(os.path.join(self._getExtraPath(inName + '.pdbqt')))
 
       args = ' -v -r %s -o %s' % (proteinFile, oFile)
-      self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
+      self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                   autodock_plugin.getADTPath('Utilities24/prepare_receptor4.py') + args)
       return oFile
 

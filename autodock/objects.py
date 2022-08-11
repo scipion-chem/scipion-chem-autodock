@@ -24,8 +24,6 @@
 # **************************************************************************
 
 import pwem.objects.data as data
-from .constants import ATTRIBUTES_MAPPING as AM
-from pwchem.objects import ProteinPocket
 from pyworkflow.object import (Object, Float, Integer, String,
                                OrderedDict, CsvList, Boolean, Set, Pointer,
                                Scalar, List)
@@ -35,75 +33,6 @@ class AutodockGrid(data.EMFile):
     """A search grid in the file format of Autodock"""
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
-
-
-class AutoLigandPocket(ProteinPocket):
-    """ Represent a pocket file from autoLigand"""
-
-    def __init__(self, filename=None, proteinFile=None, resultsFile=None, **kwargs):
-        if filename != None:
-            self.pocketId = int(filename.split('out')[1].split('.')[0])
-            if resultsFile != None:
-                self.properties = self.parseFile(resultsFile, filename)
-                kwargs.update(self.getKwargs(self.properties, AM))
-
-        super().__init__(filename, proteinFile, resultsFile, **kwargs)
-        self._nClusters = Integer(kwargs.get('nClusters', 1))
-        if hasattr(self, 'pocketId'):
-            self.setObjId(self.pocketId)
-
-        #Build contact atoms
-        if proteinFile != None:
-            self.calculateContacts()
-
-    def __str__(self):
-        s = 'Autoligand pocket {}\nFile: {}'.format(self.getObjId(), self.getFileName())
-        return s
-
-    def incrNClusters(self):
-        '''Increase in 1 the number of clusters which support a autoligand pocket'''
-        self._nClusters.set(self.getNClusters()+1)
-
-    def getNClusters(self):
-        return int(self._nClusters)
-
-    def setNClusters(self, value):
-        self._nClusters.set(value)
-
-    def getVolume(self):
-        return self.properties['Total Volume']
-
-    def getEnergyPerVol(self):
-        return self.properties['Total Energy per Vol']
-
-    def parseFile(self, resultsFile, filename):
-        props, i = {}, 1
-        with open(resultsFile) as f:
-            for line in f:
-                if i==self.pocketId:
-                    sline = line.split(',')
-                    #Volume
-                    props[sline[1].split('=')[0].strip()] = float(sline[1].split('=')[1].strip())
-                    #Energy/vol
-                    props[sline[2].strip()] = float(sline[3].split('=')[1].strip())
-                    if 'NumberOfClusters' in line:
-                        print(int(sline[4].split('=')[1].strip()))
-                        props['nClusters'] = int(sline[4].split('=')[1].strip())
-                i+=1
-
-        with open(filename) as f:
-            npts, points = 0, []
-            for line in f:
-                line = line.split()
-                points += [tuple(map(float, line[5:8]))]
-                npts += 1
-            props['nPoints'] = npts
-            self._points = points
-        props['class'] = 'AutoLigand'
-        return props
-
-    def getPoints(self):
-        return self._points
 
 
 class GridADT(data.EMFile):

@@ -31,23 +31,24 @@ from pwem.protocols import EMProtocol
 
 from pwchem import Plugin as pwchem_plugin
 from pwchem.utils import clean_PDB
+from pwchem.constants import MGL_DIC
 
 from autodock import Plugin as autodock_plugin
 
 class ProtChemADTPrepare(EMProtocol):
     def _defineParamsBasic(self, form):
-        choicesRepair = ['None', 'Bonds hydrogens', 'Bonds', 'Hydrogens']
+        choicesRepair = ['None', 'Bonds', 'Hydrogens', 'Bonds hydrogens']
         if self.typeRL=="target":
             choicesRepair.append('Check hydrogens')
         preparation = form.addGroup('Preparation')
         preparation.addParam('repair', EnumParam, choices=choicesRepair,
                       default=0, label='Repair action:',
-                      help='Bonds hydrogens: build bonds and add hydrogens\n'
-                           'Bonds: build a single bond from each atom with no bonds to its closest neighbor\n'
+                      help='Bonds: build a single bond from each atom with no bonds to its closest neighbor\n'
                            'Hydrogens: add hydrogens\n'
+                           'Bonds hydrogens: build bonds and add hydrogens\n'
                            'Check hydrogens: add hydrogens only if there are none already')
-        preparation.addParam('preserveCharges', EnumParam, choices=['Add gasteiger charges','Preserve input charges',
-                                                             'Preserve charges of specific atoms'],
+        preparation.addParam('preserveCharges', EnumParam, choices=['Add gasteiger charges', 'Preserve input charges',
+                                                                    'Preserve charges of specific atoms'],
                       default=0, label='Charge handling')
         preparation.addParam('chargeAtoms', StringParam, default="", condition='preserveCharges==2',
                       label='Atoms to preserve charge', help='Separated by commas: Zn, Fe, ...')
@@ -69,11 +70,11 @@ class ProtChemADTPrepare(EMProtocol):
         self._insertFunctionStep('createOutput')
 
     def callPrepare(self, prog, args):
-        if self.repair.get()==1:
+        if self.repair.get()==3:
             args+=' -A bonds_hydrogens'
-        elif self.repair.get()==2:
+        elif self.repair.get()==1:
             args += ' -A bonds'
-        elif self.repair.get()==3:
+        elif self.repair.get()==2:
             args += ' -A hydrogens'
         elif self.repair.get()==4:
             args += ' -A checkhydrogens'
@@ -82,7 +83,7 @@ class ProtChemADTPrepare(EMProtocol):
             args+=" -C"
         elif self.preserveCharges.get()==2:
             for atom in self.chargeAtoms.get().split(','):
-                args+=" -p %s"%atom.strip()
+                args+=" -p %s" % atom.strip()
 
         cleanup=" -U "
         first=True
@@ -111,7 +112,7 @@ class ProtChemADTPrepare(EMProtocol):
             if self.nonstd.get():
                 args+=" -e"
 
-        self.runJob(pwchem_plugin.getMGLPath('bin/pythonsh'),
+        self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                     autodock_plugin.getADTPath('Utilities24/%s.py'%prog)+args)
 
     def createOutput(self):
@@ -140,20 +141,15 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
                        help='Remove all ligands and HETATM contained in the protein')
 
         clean.addParam("rchains", BooleanParam,
-                       label='Remove redundant chains',
+                       label='Select specific chains: ',
                        default=False, important=True,
-                       help='Remove redundant chains in the proteins')
+                       help='Keep only the chains selected')
 
         clean.addParam("chain_name", StringParam,
-                       label="Conserved chain",
-                       important=True,
+                       label="Keep chains: ", important=True,
                        condition="rchains==True",
-                       help="Select the chain on which you want to carry out the "
-                            "molecular docking. You must know the protein and structure "
-                            "file that you loaded. \n\nFor example, the protein mdm2 "
-                            "(4ERF) has a C1 symmetry, which indicates that its chains "
-                            "are at least 95% equal, so you would write A, C or E "
-                            "(names of the chains).")
+                       help="Select the chain(s) you want to keep in the structure")
+
         ProtChemADTPrepare._defineParamsBasic(self, form)
 
     def preparationStep(self):
@@ -162,17 +158,21 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
         filename = os.path.splitext(os.path.basename(pdb_ini))[0]
         fnPdb = self._getExtraPath('%s_clean.pdb' % filename)
 
+        chain_ids = None
         if self.rchains.get():
-            chain = json.loads(self.chain_name.get())  # From wizard dictionary
-            chain_id = chain["Chain"].upper().strip()
-        else:
-            chain_id = None
+            chainJson = json.loads(self.chain_name.get())  # From wizard dictionary
+            if 'chain' in chainJson:
+                chain_ids = [chainJson["chain"].upper().strip()]
+            elif 'model-chain' in chainJson:
+                modelChains = chainJson["model-chain"].upper().strip()
+                chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
+
         cleanedPDB = clean_PDB(self.inputAtomStruct.get().getFileName(), fnPdb,
-                               False, self.HETATM.get(), chain_id)
+                               False, self.HETATM.get(), chain_ids)
 
-        fnOut = self._getExtraPath('atomStruct.pdbqt')
+        fnOut = os.path.abspath(self._getExtraPath('atomStruct.pdbqt'))
 
-        args = ' -v -r %s -o %s' % (cleanedPDB,fnOut)
+        args = ' -v -r %s -o %s' % (os.path.abspath(cleanedPDB), fnOut)
         ProtChemADTPrepare.callPrepare(self, "prepare_receptor4", args)
 
     def createOutput(self):
@@ -192,4 +192,8 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
            not self.inputAtomStruct.get().getFileName().endswith('.cif'):
             errors.append('The input structure must be either .mol2, .pdb, .pdbq, .pdbqt, .pdbqs or .cif')
             errors.append("Current name: %s"%self.inputAtomStruct.get().getFileName())
+
+        elif self.rchains.get():
+            if not self.chain_name.get():
+                errors.append('You must specify the chains to be maintained')
         return errors
