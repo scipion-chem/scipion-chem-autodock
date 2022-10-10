@@ -158,11 +158,10 @@ class ProtChemVina(EMProtocol):
                 outputSet = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix=gridId)
 
             for smallMol in self.inputLibrary.get():
-                smallFn = smallMol.getFileName()
-                smallName = os.path.splitext(os.path.basename(smallFn))[0]
-                fnSmallDir = os.path.join(pocketDir, smallName)
+                molName = smallMol.getMolName()
+                fnSmallDir = os.path.join(pocketDir, molName)
 
-                molDic = self.parseDockedPDBQT(os.path.join(fnSmallDir, smallName+'.pdbqt'))
+                molDic = self.parseDockedPDBQT(os.path.join(fnSmallDir, molName+'.pdbqt'))
 
                 for posId in molDic:
                     newSmallMol = SmallMolecule()
