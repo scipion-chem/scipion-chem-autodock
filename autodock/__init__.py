@@ -30,7 +30,7 @@ This package contains the protocols for
 manipulation of atomic struct objects
 """
 
-import os
+import os, subprocess
 from .bibtex import _bibtexStr
 
 import pwem
@@ -38,13 +38,29 @@ import pwem
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC
 
+import autodock
+
 _logo = 'autodock.png'
 AUTODOCK_DIC = {'name': 'autodock', 'version': '4.2.6', 'home': 'AUTODOCK_HOME'}
-VINA_DIC = {'name': 'vina', 'version': '1.1.2', 'home': 'VINA_HOME'}
+VINA_DIC = {'name': 'vina', 'version': '1.2', 'home': 'VINA_HOME'}
+MEEKO_DIC = {'name': 'meeko', 'version': '0.3.3', 'home': 'MEEKO_HOME'}
 
 class Plugin(pwem.Plugin):
     @classmethod
     def defineBinaries(cls, env):
+        cls.addADTPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addVinaPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addMeekoPackage(env, default=bool(cls.getCondaActivationCmd()))
+
+
+    @classmethod
+    def _defineVariables(cls):
+        cls._defineVar("VINA_ENV_ACTIVATION", 'conda activate vina-env')
+        cls._defineEmVar(AUTODOCK_DIC['home'], AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version'])
+        cls._defineEmVar(VINA_DIC['home'], VINA_DIC['name'] + '-' + VINA_DIC['version'])
+
+    @classmethod
+    def addADTPackage(cls, env, default=False):
         ADT_INSTALLED = 'adt_installed'
         adtCommands = 'wget {} -O {} --no-check-certificate && '.format(cls.getADTSuiteUrl(), cls.getADTTar())
         adtCommands += 'tar -xf {} --strip-components 1 && '.format(cls.getADTTar())
@@ -56,10 +72,13 @@ class Plugin(pwem.Plugin):
                        commands=adtCommands,
                        default=True)
 
+    @classmethod
+    def addVinaPackage(cls, env, default=False):
         VINA_INSTALLED = 'vina_installed'
-        vinaCommands = 'wget {} -O {} --no-check-certificate && '.format(cls.getVinaURL(), cls.getVinaTgz())
-        vinaCommands += 'tar -zxf {} --strip-components 1 && '.format(cls.getVinaTgz())
-        vinaCommands += 'rm {} && touch {}'.format(cls.getVinaTgz(), VINA_INSTALLED)
+        vinaCommands = 'conda create -y -n vina-env python=3 && '
+        vinaCommands += '%s conda activate vina-env && ' % (cls.getCondaActivationCmd())
+        vinaCommands += 'conda install -y -c conda-forge numpy swig boost-cpp sphinx sphinx_rtd_theme && '
+        vinaCommands += 'pip install vina && touch {}'.format(VINA_INSTALLED)
         vinaCommands = [(vinaCommands, VINA_INSTALLED)]
 
         env.addPackage(VINA_DIC['name'], version=VINA_DIC['version'],
@@ -67,16 +86,22 @@ class Plugin(pwem.Plugin):
                        commands=vinaCommands,
                        default=True)
 
-
     @classmethod
-    def _defineVariables(cls):
-        cls._defineEmVar(AUTODOCK_DIC['home'], AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version'])
-        cls._defineEmVar(VINA_DIC['home'], VINA_DIC['name'] + '-' + VINA_DIC['version'])
+    def addMeekoPackage(cls, env, default=False):
+      MEEKO_INSTALLED = 'meeko_installed'
+      meekoCommands = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getVar("RDKIT_ENV_ACTIVATION"))
+      meekoCommands += 'pip install meeko && touch {}'.format(MEEKO_INSTALLED)
+      meekoCommands = [(meekoCommands, MEEKO_INSTALLED)]
+
+      env.addPackage(MEEKO_DIC['name'], version=MEEKO_DIC['version'],
+                     tar='void.tgz',
+                     commands=meekoCommands,
+                     default=True)
+
 
     @classmethod
     def getPluginHome(cls, path=""):
-        import pwchem
-        fnDir = os.path.split(pwchem.__file__)[0]
+        fnDir = os.path.split(autodock.__file__)[0]
         return os.path.join(fnDir,path)
 
 
@@ -115,5 +140,24 @@ class Plugin(pwem.Plugin):
         if program == 'vina':
             program = cls.getVinaPath('bin/vina')
         protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
+
+    @classmethod
+    def getEnvActivation(cls, env):
+      activation = cls.getVar("{}_ENV_ACTIVATION".format(env.upper()))
+      return activation
+
+    @classmethod
+    def getScriptsDir(cls, scriptName):
+      return cls.getPluginHome('scripts/%s' % scriptName)
+
+    @classmethod
+    def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False):
+      """ Run rdkit command from a given protocol. """
+      scriptName = cls.getScriptsDir(scriptName)
+      fullProgram = '%s %s && %s %s' % (cls.getCondaActivationCmd(), cls.getEnvActivation(env), 'python', scriptName)
+      if not popen:
+        protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+      else:
+        subprocess.check_call(fullProgram + args, cwd=cwd, shell=True)
 
 
