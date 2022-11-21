@@ -46,8 +46,8 @@ if __name__ == "__main__":
     pDic = parseParams(sys.argv[1])
     ligandFiles = pDic['ligandFiles']
     receptorFile = pDic['receptorFile']
+    mapsName = pDic['mapsName']
     outDir = pDic['outDir']
-
 
 #####################################################################
 
@@ -57,7 +57,11 @@ if __name__ == "__main__":
     outFiles = []
     for molFile in ligandFiles:
         v.set_ligand_from_file(molFile)
-        v.compute_vina_maps(center=eval(pDic['boxCenter']), box_size=eval(pDic['boxSize']))
+        if pDic['scoreName'] == 'Vina':
+            v.compute_vina_maps(center=eval(pDic['boxCenter']), box_size=eval(pDic['boxSize']))
+        else:
+            v.write_maps(mapsName, pDic['gpfFile'])
+            v.load_maps(mapsName)
         v.dock(exhaustiveness=int(pDic['exhaust']), n_poses=int(pDic['nPoses']),
                min_rmsd=float(pDic['minRMSD']), max_evals=int(pDic['maxEvals']))
 

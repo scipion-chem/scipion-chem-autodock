@@ -27,14 +27,14 @@
 import os, shutil
 
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, \
+  LEVEL_ADVANCED
 import pyworkflow.object as pwobj
-
 from pyworkflow.utils.path import makePath, createLink
 
 from autodock import Plugin as autodock_plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel, calculate_centerMass
+from pwchem.utils import runOpenBabel, calculate_centerMass, generate_gpf
 from pwchem import Plugin as pwchem_plugin
 from pwchem.constants import MGL_DIC
 
@@ -50,6 +50,7 @@ class ProtChemVinaDocking(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
+        form.addHidden('nCPUs', IntParam, label='Number of CPUs to use', default=1)
         group = form.addGroup('Receptor specification')
         group.addParam('wholeProt', BooleanParam, label='Dock on whole protein: ', default=True,
                        help='Whether to dock on a whole protein surface or on specific regions')
@@ -83,6 +84,8 @@ class ProtChemVinaDocking(EMProtocol):
                             'The higher, the more the search pace is explored, but also it will be slower')
         group.addParam('nPoses', IntParam, label='Number of positions per ligand: ', default=20,
                        help='Number of positions outputed for each of the ligands provided')
+        group.addParam('spacing', FloatParam, label='Spacing of affinity maps: ',
+                       default=0.375, help='Affinity maps spacing')
         group.addParam('minRMSD', FloatParam, label='Minimum RMSD difference between poses: ',
                        default=1.0, help='Minimum RMSD difference between poses')
         group.addParam('maxEvals', IntParam, label='Maximum number of evaluation: ',
@@ -127,7 +130,18 @@ class ProtChemVinaDocking(EMProtocol):
         radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
         x_center, y_center, z_center = pocket.calculateMassCenter()
 
-      paramsFile = self.writeParamsFile(self.inputSmallMols.get(), radius, [x_center, y_center, z_center], outDir)
+      mols = self.inputSmallMols.get()
+      molFiles = []
+      for mol in mols:
+        molFiles.append(os.path.abspath(mol.getFileName()))
+
+      spacing = self.spacing.get()
+      npts = (radius * 2) / spacing
+      gpf_file = generate_gpf(self.getReceptorPDBQT(), spacing=spacing,
+                              xc=x_center, yc=y_center, zc=z_center,
+                              npts=npts, outDir=outDir, ligandFns=molFiles)
+
+      paramsFile = self.writeParamsFile(mols, radius, [x_center, y_center, z_center], gpf_file, outDir)
       autodock_plugin.runScript(self, scriptName, paramsFile, env='vina', cwd=outDir)
 
     def createOutputStep(self):
@@ -180,7 +194,7 @@ class ProtChemVinaDocking(EMProtocol):
 
         return paramsFile
 
-    def writeParamsFile(self, molsScipion, radius, center, outDir):
+    def writeParamsFile(self, molsScipion, radius, center, gpfFile, outDir):
         paramsFile = os.path.join(outDir, 'inputParams.txt')
 
         molFiles = []
@@ -190,6 +204,8 @@ class ProtChemVinaDocking(EMProtocol):
 
         f.write('ligandFiles:: {}\n'.format(' '.join(molFiles)))
         f.write('receptorFile:: {}\n'.format(self.getReceptorPDBQT()))
+        f.write('mapsName:: {}\n'.format(self.getReceptorName()))
+        f.write('gpfFile:: {}\n'.format(gpfFile))
 
         f.write('boxSize:: {}\n'.format(3*[radius*2]))
         f.write('boxCenter:: {}\n'.format(center))
@@ -314,7 +330,7 @@ class ProtChemVinaDocking(EMProtocol):
     
     def getReceptorPDB(self):
         return os.path.abspath(os.path.join(self._getExtraPath('receptor.pdb')))
-    
+
     def getConvertedLigandsFile(self):
         return os.path.abspath(self._getExtraPath('inputLigands.txt'))
 
@@ -322,3 +338,10 @@ class ProtChemVinaDocking(EMProtocol):
         with open(os.path.join(outDir, 'docked_files.txt')) as fIn:
             files = fIn.read().split()
         return files
+
+    def getReceptorName(self):
+        if self.wholeProt:
+            atomStructFn = self.getOriginalReceptorFile()
+            return atomStructFn.split('/')[-1].split('.')[0]
+        else:
+            return self.inputStructROIs.get().getProteinName()
