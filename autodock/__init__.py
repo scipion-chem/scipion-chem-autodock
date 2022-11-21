@@ -41,10 +41,22 @@ from pwchem.constants import MGL_DIC
 _logo = 'autodock.png'
 AUTODOCK_DIC = {'name': 'autodock', 'version': '4.2.6', 'home': 'AUTODOCK_HOME'}
 VINA_DIC = {'name': 'vina', 'version': '1.1.2', 'home': 'VINA_HOME'}
+ASITE_DIC = {'name': 'AutoSite', 'version': '1.0', 'home': 'AUTOSITE_HOME'}
 
 class Plugin(pwem.Plugin):
     @classmethod
     def defineBinaries(cls, env):
+        cls.addADTPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addAutoSitePackage(env, default=bool(cls.getCondaActivationCmd()))
+
+    @classmethod
+    def _defineVariables(cls):
+        cls._defineEmVar(AUTODOCK_DIC['home'], AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version'])
+        cls._defineEmVar(VINA_DIC['home'], VINA_DIC['name'] + '-' + VINA_DIC['version'])
+        cls._defineEmVar(ASITE_DIC['home'], ASITE_DIC['name'] + '-' + ASITE_DIC['version'])
+
+    @classmethod
+    def addADTPackage(cls, env, default=False):
         ADT_INSTALLED = 'adt_installed'
         adtCommands = 'wget {} -O {} --no-check-certificate && '.format(cls.getADTSuiteUrl(), cls.getADTTar())
         adtCommands += 'tar -xf {} --strip-components 1 && '.format(cls.getADTTar())
@@ -67,18 +79,26 @@ class Plugin(pwem.Plugin):
                        commands=vinaCommands,
                        default=True)
 
-
     @classmethod
-    def _defineVariables(cls):
-        cls._defineEmVar(AUTODOCK_DIC['home'], AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version'])
-        cls._defineEmVar(VINA_DIC['home'], VINA_DIC['name'] + '-' + VINA_DIC['version'])
+    def addAutoSitePackage(cls, env, default=False):
+      # todo: check how only adtools or adfr needed
+      ASITE_INSTALLED = 'asite_installed'
+      asiteCommands = 'wget {} -O {} --no-check-certificate && '.format(cls.getADFRSuiteUrl(), cls.getASITETar())
+      asiteCommands += 'tar -zxf {} --strip-components 1 && '.format(cls.getASITETar())
+      asiteCommands += './install.sh -d . -c 0 -l && '.format(cls.getASITETar())
+      asiteCommands += 'rm {} && touch {}'.format(cls.getASITETar(), ASITE_INSTALLED)
+      asiteCommands = [(asiteCommands, ASITE_INSTALLED)]
+
+      env.addPackage(ASITE_DIC['name'], version=ASITE_DIC['version'],
+                     tar='void.tgz',
+                     commands=asiteCommands,
+                     default=True)
 
     @classmethod
     def getPluginHome(cls, path=""):
         import pwchem
         fnDir = os.path.split(pwchem.__file__)[0]
         return os.path.join(fnDir,path)
-
 
     @classmethod
     def getADTPath(cls, path=''):
@@ -93,9 +113,18 @@ class Plugin(pwem.Plugin):
       return os.path.join(cls.getVar('VINA_HOME'), path)
 
     @classmethod
+    def getASitePath(cls, path=''):
+      return os.path.join(cls.getVar('AUTOSITE_HOME'), path)
+
+    @classmethod
     def getADTSuiteUrl(cls):
       return 'https://autodock.scripps.edu/wp-content/uploads/sites/56/2021/10/autodocksuite-{}-x86_64Linux2.tar'.\
         format(AUTODOCK_DIC['version'])
+
+    @classmethod
+    def getADFRSuiteUrl(cls):
+      return 'https://ccsb.scripps.edu/adfr/download/1038/ADFRsuite_x86_64Linux_{}.tar.gz'.\
+        format(ASITE_DIC['version'])
 
     @classmethod
     def getVinaURL(cls):
@@ -105,6 +134,10 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getADTTar(cls):
       return AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version'] + '.tar'
+
+    @classmethod
+    def getASITETar(cls):
+      return ASITE_DIC['name'] + '-' + ASITE_DIC['version'] + '.tgz'
 
     @classmethod
     def getVinaTgz(cls):
