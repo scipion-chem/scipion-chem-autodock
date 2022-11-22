@@ -35,6 +35,7 @@ information such as name and number of residues.
 # Imports
 from pwchem.wizards import *
 from autodock.protocols.protocol_preparation_receptor import ProtChemADTPrepareReceptor
+from autodock.protocols.protocol_autoSite_pharmacophore import ProtChemAutoSiteGenPharmacophore
 
 SelectChainWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
                               targets=['chain_name'],
@@ -45,3 +46,8 @@ SelectMultiChainWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
                                    targets=['chain_name'],
                                    inputs=['inputAtomStruct'],
                                    outputs=['chain_name'])
+
+SelectElementWizard().addTarget(protocol=ProtChemAutoSiteGenPharmacophore,
+                                targets=['inputStructROISelect'],
+                                inputs=['inputStructROIs'],
+                                outputs=['inputStructROISelect'])

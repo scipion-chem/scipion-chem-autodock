@@ -30,3 +30,5 @@ from .protocol_autodock import ProtChemAutodock
 from .protocol_autoLigand import ProtChemAutoLigand
 from .protocol_generate_grid import Autodock_GridGeneration
 from .protocol_vina import ProtChemVina
+from .protocol_autoSite import ProtChemAutoSite
+from .protocol_autoSite_pharmacophore import ProtChemAutoSiteGenPharmacophore
