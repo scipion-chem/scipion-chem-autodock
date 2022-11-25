@@ -139,7 +139,10 @@ class ProtChemAutoSite(EMProtocol):
             for line in f:
                 if not inScores and line.startswith('----'):
                     inScores = True
-                elif inScores and line.startswith('    '):
+                elif line.startswith('AutoSite identified'):
+                    inScores = False
+
+                elif inScores:
                     sline = line.split()
                     scDic[int(sline[0])] = {'energy': sline[1], 'nPoints': sline[2], 'volume': sline[2],
                                             'score': sline[-4]}
