@@ -32,6 +32,7 @@ from pwchem.protocols import ProtChemImportSmallMolecules, ProtChemOBabelPrepare
 from ..protocols import *
 
 
+# Receptor and ligands preparations
 class TestADPrepareReceptor(BaseTest):
     @classmethod
     def setUpClass(cls):
@@ -64,43 +65,6 @@ class TestADPrepareReceptor(BaseTest):
 
         self._waitOutput(self.protPrepareReceptor, 'outputStructure', sleepTime=10)
         self.assertIsNotNone(getattr(self.protPrepareReceptor, 'outputStructure', None))
-
-
-class TestAutoLigand(TestADPrepareReceptor):
-    @classmethod
-    def _runAutoLigandFind(cls):
-        protPocketFinder = cls.newProtocol(
-            ProtChemAutoLigand,
-            inputAtomStruct=cls.protPrepareReceptor.outputStructure,
-            radius=24,
-            nFillPoints=10)
-
-        cls.proj.launchProtocol(protPocketFinder, wait=False)
-        return protPocketFinder
-
-    def test(self):
-        self._runPrepareReceptorADT()
-        protAutoLig = self._runAutoLigandFind()
-        self._waitOutput(protAutoLig, 'outputStructROIs', sleepTime=5)
-        self.assertIsNotNone(getattr(protAutoLig, 'outputStructROIs', None))
-
-
-class TestAutoSite(TestADPrepareReceptor):
-    @classmethod
-    def _runAutoSiteFind(cls):
-        protPocketFinder = cls.newProtocol(
-            ProtChemAutoSite,
-            inputAtomStruct=cls.protPrepareReceptor.outputStructure)
-
-        cls.proj.launchProtocol(protPocketFinder, wait=False)
-        return protPocketFinder
-
-    def test(self):
-        self._runPrepareReceptorADT()
-        protAutoSite = self._runAutoSiteFind()
-        self._waitOutput(protAutoSite, 'outputStructROIs', sleepTime=5)
-        self.assertIsNotNone(getattr(protAutoSite, 'outputStructROIs', None))
-
 
 class TestADPrepareLigands(BaseTest):
     @classmethod
@@ -136,8 +100,62 @@ class TestADPrepareLigands(BaseTest):
         self._waitOutput(self.protPrepareLigandADT, 'outputSmallMolecules', sleepTime=10)
         self.assertIsNotNone(getattr(self.protPrepareLigandADT, 'outputSmallMolecules', None))
 
+class TestADMeekoLigands(TestADPrepareLigands):
+    @classmethod
+    def _runPrepareLigandsMeeko(cls):
+        cls.protMeeko = cls.newProtocol(
+            ProtChemMeekoLigands)
+        cls.protMeeko.inputSmallMols.set(cls.protImportSmallMols)
+        cls.protMeeko.inputSmallMols.setExtended('outputSmallMolecules')
 
-class TestAutoDock(TestAutoSite, TestADPrepareLigands):
+        cls.proj.launchProtocol(cls.protMeeko, wait=False)
+
+
+    def test(self):
+        self._runPrepareLigandsMeeko()
+
+        self._waitOutput(self.protMeeko, 'outputSmallMolecules', sleepTime=10)
+        self.assertIsNotNone(getattr(self.protMeeko, 'outputSmallMolecules', None))
+
+
+# Binding site predictions
+class TestAutoLigand(TestADPrepareReceptor):
+    @classmethod
+    def _runAutoLigandFind(cls):
+        protPocketFinder = cls.newProtocol(
+            ProtChemAutoLigand,
+            inputAtomStruct=cls.protPrepareReceptor.outputStructure,
+            radius=24,
+            nFillPoints=10)
+
+        cls.proj.launchProtocol(protPocketFinder, wait=False)
+        return protPocketFinder
+
+    def test(self):
+        self._runPrepareReceptorADT()
+        protAutoLig = self._runAutoLigandFind()
+        self._waitOutput(protAutoLig, 'outputStructROIs', sleepTime=5)
+        self.assertIsNotNone(getattr(protAutoLig, 'outputStructROIs', None))
+
+class TestAutoSite(TestADPrepareReceptor):
+    @classmethod
+    def _runAutoSiteFind(cls):
+        protPocketFinder = cls.newProtocol(
+            ProtChemAutoSite,
+            inputAtomStruct=cls.protPrepareReceptor.outputStructure)
+
+        cls.proj.launchProtocol(protPocketFinder, wait=False)
+        return protPocketFinder
+
+    def test(self):
+        self._runPrepareReceptorADT()
+        protAutoSite = self._runAutoSiteFind()
+        self._waitOutput(protAutoSite, 'outputStructROIs', sleepTime=5)
+        self.assertIsNotNone(getattr(protAutoSite, 'outputStructROIs', None))
+
+
+# Docking
+class TestAutoDock(TestAutoSite, TestADMeekoLigands):
     @classmethod
     def setUpClass(cls):
         cls.ds = DataSet.getDataSet('model_building_tutorial')
@@ -152,8 +170,10 @@ class TestAutoDock(TestAutoSite, TestADPrepareLigands):
         cls._runPrepareLigandsOBabel()
         cls._runPrepareLigandsADT()
         cls._runPrepareReceptorADT()
+        cls._runPrepareLigandsMeeko()
         cls._waitOutput(cls.protOBabel, 'outputSmallMolecules', sleepTime=5)
         cls._waitOutput(cls.protPrepareLigandADT, 'outputSmallMolecules', sleepTime=5)
+        cls._waitOutput(cls.protMeeko, 'outputSmallMolecules', sleepTime=5)
         cls._waitOutput(cls.protPrepareReceptor, 'outputStructure', sleepTime=5)
 
     @classmethod
@@ -179,26 +199,22 @@ class TestAutoDock(TestAutoSite, TestADPrepareLigands):
         cls.proj.launchProtocol(cls.protFilter, wait=False)
         return cls.protFilter
 
-
     def _runAutoDock(self, pocketsProt=None):
         if pocketsProt == None:
             protAutoDock = self.newProtocol(
                 ProtChemAutodock,
-                wholeProt=True,
                 inputAtomStruct=self.protPrepareReceptor.outputStructure,
-                inputLibrary=self.protOBabel.outputSmallMolecules,
-                radius=24, gaRun=2,
+                inputSmallMolecules=self.protOBabel.outputSmallMolecules,
+                wholeProt=True, radius=24, gaRun=2,
                 numberOfThreads=8)
             self.proj.launchProtocol(protAutoDock, wait=False)
 
         else:
             protAutoDock = self.newProtocol(
                 ProtChemAutodock,
-                wholeProt=False,
                 inputStructROIs=pocketsProt.outputStructROIs,
-                inputLibrary=self.protPrepareLigandADT.outputSmallMolecules,
-                pocketRadiusN=5, gaRun=2,
-                mergeOutput=True,
+                inputSmallMolecules=self.protPrepareLigandADT.outputSmallMolecules,
+                wholeProt=False, pocketRadiusN=5, gaRun=2, mergeOutput=True,
                 numberOfThreads=4)
             self.proj.launchProtocol(protAutoDock, wait=False)
 
@@ -221,6 +237,45 @@ class TestAutoDock(TestAutoSite, TestADPrepareLigands):
         self._waitOutput(protAutoDock2, 'outputSmallMolecules', sleepTime=10)
         self.assertIsNotNone(getattr(protAutoDock2, 'outputSmallMolecules', None))
 
+class TestAutoDockGPU(TestAutoDock):
+
+    def _runAutoDock(self, pocketsProt=None):
+        if pocketsProt == None:
+            protAutoDock = self.newProtocol(
+                ProtChemAutodock,
+                inputAtomStruct=self.protPrepareReceptor.outputStructure,
+                inputSmallMolecules=self.protMeeko.outputSmallMolecules,
+                wholeProt=True, radius=24, gaRun=2,
+                numberOfThreads=8, useGpu=True)
+            self.proj.launchProtocol(protAutoDock, wait=False)
+
+        else:
+            protAutoDock = self.newProtocol(
+                ProtChemAutodock,
+                inputStructROIs=pocketsProt.outputStructROIs,
+                inputSmallMolecules=self.protMeeko.outputSmallMolecules,
+                wholeProt=False, pocketRadiusN=5, gaRun=2,
+                numberOfThreads=4, useGpu=True)
+            self.proj.launchProtocol(protAutoDock, wait=False)
+
+        return protAutoDock
+
+    def test(self):
+        print('Docking with autodock-GPU in the whole protein')
+        protAutoDock1 = self._runAutoDock()
+
+        print('Docking with autodock-GPU in predicted pockets')
+        protAutoLig = self._runAutoSiteFind()
+        self._waitOutput(protAutoLig, 'outputStructROIs', sleepTime=5)
+        self._runSetFilter(inProt=protAutoLig, number=2, property='_score')
+        self._waitOutput(self.protFilter, 'outputStructROIs', sleepTime=5)
+
+        protAutoDock2 = self._runAutoDock(self.protFilter)
+
+        self._waitOutput(protAutoDock1, 'outputSmallMolecules', sleepTime=10)
+        self.assertIsNotNone(getattr(protAutoDock1, 'outputSmallMolecules', None))
+        self._waitOutput(protAutoDock2, 'outputSmallMolecules', sleepTime=10)
+        self.assertIsNotNone(getattr(protAutoDock2, 'outputSmallMolecules', None))
 
 class TestVina(TestAutoDock):
 
@@ -266,6 +321,7 @@ class TestVina(TestAutoDock):
         self.assertIsNotNone(getattr(protVina2, 'outputSmallMolecules', None))
 
 
+# Pharmacophore generation
 class TestAutoSitePharmacophore(TestAutoSite):
     @classmethod
     def _runAutoSitePharm(cls, protAutoSite):
@@ -286,8 +342,7 @@ class TestAutoSitePharmacophore(TestAutoSite):
         self.assertIsNotNone(getattr(protPharm, 'outputPharmacophore', None))
 
 
-
-
+# Grid generation
 class TestGridADT(TestADPrepareReceptor):
 
     def _runCreateGrid(self, spacing, radius):
