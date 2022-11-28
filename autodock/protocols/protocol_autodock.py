@@ -194,7 +194,7 @@ class ProtChemAutodock(EMProtocol):
     makePath(outDir)
 
     fnDPF = os.path.abspath(os.path.join(outDir, molName + ".dpf"))
-    args = " -l %s -r %s -o %s - x no" % (molFn, fnReceptor, fnDPF)
+    args = " -l %s -r %s -o %s" % (molFn, fnReceptor, fnDPF)
     args += " -p ga_pop_size=%d" % self.gaPop.get()
     args += " -p ga_num_evals=%d" % self.gaNumEvals.get()
     args += " -p ga_num_generations=%d" % self.gaNumGens.get()
