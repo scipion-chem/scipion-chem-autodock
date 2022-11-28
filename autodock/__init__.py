@@ -38,7 +38,7 @@ import pwem
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC
 
-_logo = 'autodock.png'
+_logo = 'autodock_logo.png'
 AUTODOCK_DIC = {'name': 'autodock', 'version': '4.2.6', 'home': 'AUTODOCK_HOME'}
 VINA_DIC = {'name': 'vina', 'version': '1.1.2', 'home': 'VINA_HOME'}
 ASITE_DIC = {'name': 'AutoSite', 'version': '1.0', 'home': 'AUTOSITE_HOME'}

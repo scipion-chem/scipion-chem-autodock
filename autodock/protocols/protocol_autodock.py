@@ -62,7 +62,7 @@ class ProtChemAutodock(EMProtocol):
                    help="Add a list of GPU devices that can be used")
 
     form.addSection(label='Input')
-    group = form.addGroup('Grids generation')
+    group = form.addGroup('Receptor specification')
     group.addParam('wholeProt', BooleanParam, label='Dock on whole protein: ', default=True,
                    help='Whether to dock on a whole protein surface or on specific regions')
 
@@ -83,35 +83,51 @@ class ProtChemAutodock(EMProtocol):
                    help='The radius * n of each StructROI will be used as grid radius')
 
     group.addParam('spacing', FloatParam, label='Spacing of the grids: ', default=0.5, allowsNull=False,
-                   condition='not wholeProt',
-                   help='Spacing of the generated Autodock grids')
+                   condition='not wholeProt', help='Spacing of the generated Autodock grids')
 
     group = form.addGroup('Docking')
     group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
                    label='Input small molecules:', allowsNull=False,
                    help="Input small molecules to be docked with AutoDock")
-    group.addParam('rmsTol', FloatParam, label='Cluster tolerance (A)', default=2.0, expertLevel=LEVEL_ADVANCED, )
+    group.addParam('rmsTol', FloatParam, label='Cluster tolerance (A): ', default=2.0, expertLevel=LEVEL_ADVANCED,
+                   help='Maximum RMSD for 2 docked structures to be in the same cluster')
     group.addParam('gaRun', IntParam, label='Number of positions per ligand', default=10)
 
     form.addSection(label="Genetic algorithm")
-    form.addParam('gaPop', IntParam, label='Population size', default=150)
-    form.addParam('gaNumEvals', IntParam, label='Number of evaluations', default=2500000)
-    form.addParam('gaNumGens', IntParam, label='Number of generations', default=27000)
-    form.addParam('gaElitism', IntParam, label='Elitism', default=1)
-    form.addParam('gaMutationRate', FloatParam, label='Mutation rate', default=0.02)
-    form.addParam('gaCrossOverRate', FloatParam, label='Crossover rate', default=0.8)
-    form.addParam('gaWindowSize', IntParam, label='Window size', default=10)
-    form.addParam('lsFreq', FloatParam, label='Local search frequency', default=0.06)
+    form.addParam('gaPop', IntParam, label='Population size', default=150,
+                  help='This is the number of individuals in the population. Each individual is a coupling of a '
+                       'genotype and its associated phenotype')
+    form.addParam('gaNumEvals', IntParam, label='Number of evaluations', default=2500000,
+                  help='Set the maximum number of energy evaluations performed during each GA, LGA, or LS run')
+    form.addParam('gaNumGens', IntParam, label='Number of generations', default=27000,
+                  help='This is the maximum number of generations simulated during each GA or LGA run')
+    form.addParam('gaElitism', IntParam, label='Elitism', default=1,
+                  help='This is the number of top individuals that are guaranteed to survive into the next generation.')
+    form.addParam('gaMutationRate', FloatParam, label='Mutation rate', default=0.02,
+                  help='This is a floating point number from 0 to 1, representing the probability that a particular '
+                       'gene is mutated')
+    form.addParam('gaCrossOverRate', FloatParam, label='Crossover rate', default=0.8,
+                  help='This is a floating point number from 0 to 1 denoting the crossover rate. Crossover rate '
+                       'is the expected number of pairs in the population that will exchange genetic material')
+    form.addParam('gaWindowSize', IntParam, label='Window size', default=10,
+                  help='This is the number of preceding generations to take into consideration when deciding the '
+                       'threshold for the worst individual in the current population')
+    form.addParam('lsFreq', FloatParam, label='Local search frequency', default=0.06,
+                  help='This is the probability of any particular phenotype being subjected to local search')
 
-    form.addSection(label="Solis & Wets algorithm")
-    form.addParam('swMaxIts', IntParam, label='Max. Number of iterations', default=300)
+    form.addSection(label="Local search")
+    form.addParam('swMaxIts', IntParam, label='Max. Number of iterations', default=300,
+                  help='This is the maximum number of iterations that the local search procedure applies to the '
+                       'phenotype of any given individual, per generation')
     form.addParam('swMaxSucc', IntParam, label='Successes in a raw', default=4,
-                  help='Number of successes before changing rho')
+                  help='Number of successes before changing rho in Solis & Wets algorithms')
     form.addParam('swMaxFail', IntParam, label='Failures in a raw', default=4,
-                  help='Number of failures before changing rho')
+                  help='Number of failures before changing rho in Solis & Wets algorithms.')
     form.addParam('swRho', FloatParam, label='Initial variance', default=1.0,
-                  help='It defines the size of the local search')
-    form.addParam('swLbRho', FloatParam, label='Variance lower bound', default=0.01)
+                  help='It defines the size of the local search, and specifies the size of the local space to sample')
+    form.addParam('swLbRho', FloatParam, label='Variance lower bound', default=0.01,
+                  help='This is the lower bound on rho, the variance for making changes to genes (i.e. translations, '
+                       'orientation and torsions)')
     form.addParallelSection(threads=4, mpi=1)
 
   # --------------------------- INSERT steps functions --------------------
