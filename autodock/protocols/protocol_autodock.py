@@ -28,7 +28,7 @@ import os, glob
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam, STEPS_PARALLEL, BooleanParam, \
-  LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam
+  LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
@@ -39,6 +39,10 @@ from pwchem.constants import MGL_DIC
 
 from autodock import Plugin as autodock_plugin
 
+
+LGA, GA, LS, SA = 0, 1, 2, 3
+searchDic = {LGA: 'Lamarckian Genetic Algorithm', GA: 'Genetic Algorithm', LS: 'Local Search',
+             SA: 'Simulated annealing'}
 
 class ProtChemAutodock(EMProtocol):
   """Perform a docking experiment with autodock. Grid must be generated in this protocol in order to take into
@@ -57,8 +61,7 @@ class ProtChemAutodock(EMProtocol):
                    help="This protocol has both CPU and GPU implementation.\
                                          Select the one you want to use.")
 
-    form.addHidden(GPU_LIST, StringParam, default='0',
-                   expertLevel=LEVEL_ADVANCED, label="Choose GPU IDs",
+    form.addHidden(GPU_LIST, StringParam, default='0', label="Choose GPU IDs",
                    help="Add a list of GPU devices that can be used")
 
     form.addSection(label='Input')
@@ -68,7 +71,7 @@ class ProtChemAutodock(EMProtocol):
 
     # Docking on whole protein
     group.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
-                   label='Input atomic structure:', condition='wholeProt',
+                   label='Input atomic structure: ', condition='wholeProt',
                    help="The atom structure to use as receptor in the docking")
     group.addParam('radius', FloatParam, label='Grid radius for whole protein: ',
                    condition='wholeProt', allowsNull=False,
@@ -76,7 +79,7 @@ class ProtChemAutodock(EMProtocol):
 
     # Docking on pockets
     group.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
-                   label='Input pockets:', condition='not wholeProt',
+                   label='Input pockets: ', condition='not wholeProt',
                    help="The protein structural ROIs to dock in")
     group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs StructROI radius: ',
                    condition='not wholeProt', default=1.1, allowsNull=False,
@@ -87,47 +90,115 @@ class ProtChemAutodock(EMProtocol):
 
     group = form.addGroup('Docking')
     group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
-                   label='Input small molecules:', allowsNull=False,
+                   label='Input small molecules: ', allowsNull=False,
                    help="Input small molecules to be docked with AutoDock")
+    group.addParam('nRuns', IntParam, label='Number of docking runs: ', default=50,
+                   help='Number of independent runs using the selected strategy. \nDifferent docking positions will be '
+                        'found for each of them.')
+
+    group = form.addGroup('Analysis')
     group.addParam('rmsTol', FloatParam, label='Cluster tolerance (A): ', default=2.0, expertLevel=LEVEL_ADVANCED,
                    help='Maximum RMSD for 2 docked structures to be in the same cluster')
-    group.addParam('gaRun', IntParam, label='Number of positions per ligand', default=10)
 
-    form.addSection(label="Genetic algorithm")
-    form.addParam('gaPop', IntParam, label='Population size', default=150,
-                  help='This is the number of individuals in the population. Each individual is a coupling of a '
-                       'genotype and its associated phenotype')
-    form.addParam('gaNumEvals', IntParam, label='Number of evaluations', default=2500000,
-                  help='Set the maximum number of energy evaluations performed during each GA, LGA, or LS run')
-    form.addParam('gaNumGens', IntParam, label='Number of generations', default=27000,
+    form.addSection(label="Search")
+    form.addParam('searchType', EnumParam, label='Search type: ', default=LGA,
+                  choices=list(searchDic.values()),
+                  help='Type of search to perform in the docking. It defines how the positions of the molecules will '
+                       'be searched.\n For more details check the page 55 of the AutoDock4 manual '
+                       'https://autodock.scripps.edu/wp-content/uploads/sites/56/2022/04/AutoDock4.2.6_UserGuide.pdf')
+
+    group = form.addGroup('Search parameters', condition='searchType in [{}, {}, {}]'.format(LGA, GA, LS))
+    group.addParam('gaPop', IntParam, label='Population size', default=150,
+                   help='This is the number of individuals in the population. Each individual is a coupling of a '
+                        'genotype and its associated phenotype')
+    group.addParam('gaNumEvals', IntParam, label='Number of evaluations: ', default=2500000,
+                   help='Set the maximum number of energy evaluations performed during each GA, LGA, or LS run')
+
+    group = form.addGroup('Genetic algorithm', condition='searchType in [{}, {}]'.format(LGA, GA))
+    group.addParam('gaNumGens', IntParam, label='Number of generations: ', default=27000,
                   help='This is the maximum number of generations simulated during each GA or LGA run')
-    form.addParam('gaElitism', IntParam, label='Elitism', default=1,
+    group.addParam('gaElitism', IntParam, label='Elitism: ', default=1,
                   help='This is the number of top individuals that are guaranteed to survive into the next generation.')
-    form.addParam('gaMutationRate', FloatParam, label='Mutation rate', default=0.02,
+    group.addParam('gaMutationRate', FloatParam, label='Mutation rate: ', default=0.02, expertLevel=LEVEL_ADVANCED,
                   help='This is a floating point number from 0 to 1, representing the probability that a particular '
                        'gene is mutated')
-    form.addParam('gaCrossOverRate', FloatParam, label='Crossover rate', default=0.8,
+    group.addParam('gaCrossOverRate', FloatParam, label='Crossover rate: ', default=0.8, expertLevel=LEVEL_ADVANCED,
                   help='This is a floating point number from 0 to 1 denoting the crossover rate. Crossover rate '
                        'is the expected number of pairs in the population that will exchange genetic material')
-    form.addParam('gaWindowSize', IntParam, label='Window size', default=10,
+    group.addParam('gaWindowSize', IntParam, label='Window size: ', default=10, expertLevel=LEVEL_ADVANCED,
                   help='This is the number of preceding generations to take into consideration when deciding the '
                        'threshold for the worst individual in the current population')
-    form.addParam('lsFreq', FloatParam, label='Local search frequency', default=0.06,
-                  help='This is the probability of any particular phenotype being subjected to local search')
 
-    form.addSection(label="Local search")
-    form.addParam('swMaxIts', IntParam, label='Max. Number of iterations', default=300,
-                  help='This is the maximum number of iterations that the local search procedure applies to the '
-                       'phenotype of any given individual, per generation')
-    form.addParam('swMaxSucc', IntParam, label='Successes in a raw', default=4,
-                  help='Number of successes before changing rho in Solis & Wets algorithms')
-    form.addParam('swMaxFail', IntParam, label='Failures in a raw', default=4,
-                  help='Number of failures before changing rho in Solis & Wets algorithms.')
-    form.addParam('swRho', FloatParam, label='Initial variance', default=1.0,
-                  help='It defines the size of the local search, and specifies the size of the local space to sample')
-    form.addParam('swLbRho', FloatParam, label='Variance lower bound', default=0.01,
-                  help='This is the lower bound on rho, the variance for making changes to genes (i.e. translations, '
-                       'orientation and torsions)')
+    group = form.addGroup("Local search", condition='searchType in [{}, {}]'.format(LGA, LS))
+    group.addParam('lsFreq', FloatParam, label='Local search frequency: ', default=0.06,
+                   condition='searchType == {}'.format(LGA),
+                   help='This is the probability of any particular phenotype being subjected to local search')
+    group.addParam('localType', EnumParam, label='Local search method: ',
+                   choices=['Classical Solis and Wets', 'pseudo-Solis and Wets'], default=1,
+                   help='Whether to use the classical Solis and Wets local searcher, using the method of uniform '
+                        'variances for changes in translations, orientations, and torsions; or the pseudo-Solis and '
+                        'Wets local searcher. This method maintains the relative proportions of variances for the '
+                        'translations in Å and the rotations in radians')
+    group.addParam('swMaxIts', IntParam, label='Number of iterations: ', default=300,
+                   help='This is the maximum number of iterations that the local search procedure applies to the '
+                        'phenotype of any given individual, per generation')
+    group.addParam('swMaxSucc', IntParam, label='Successes in a raw: ', default=4, expertLevel=LEVEL_ADVANCED,
+                   help='Number of successes before changing rho in Solis & Wets algorithms')
+    group.addParam('swMaxFail', IntParam, label='Failures in a raw: ', default=4, expertLevel=LEVEL_ADVANCED,
+                   help='Number of failures before changing rho in Solis & Wets algorithms.')
+    group.addParam('swRho', FloatParam, label='Initial variance: ', default=1.0, expertLevel=LEVEL_ADVANCED,
+                   help='It defines the size of the local search, and specifies the size of the local space to sample')
+    group.addParam('swLbRho', FloatParam, label='Variance lower bound: ', default=0.01, expertLevel=LEVEL_ADVANCED,
+                   help='This is the lower bound on rho, the variance for making changes to genes (i.e. translations, '
+                        'orientation and torsions)')
+
+    group = form.addGroup("Simulated annealing", condition='searchType == {}'.format(SA))
+    line = group.addLine('Ligand initial state: ', expertLevel=LEVEL_ADVANCED,
+                         help='[e0max] This keyword stipulates that the ligand’s initial state cannot have an energy '
+                              'greater than the first value, nor can there be more than the second value’s number of '
+                              'retries.')
+    line.addParam('e0max1', FloatParam, label='Maximum initial energy: ', default=0.00)
+    line.addParam('e0max2', IntParam, label='Maximum number of retries: ', default=10000)
+
+    line = group.addLine('Ligand step sizes: ', expertLevel=LEVEL_ADVANCED,
+                         help='[(t/q/d)step] Defines the maximum translation (A) / angular (º) / dihedral (º) jump '
+                              'for the first cycle that the ligand may make in one simulated annealing step. When '
+                              '“trnrf” is less than 1, the reduction factor is multiplied with the tstep at the end of '
+                              'each cycle, to give the new value for the next cycle.')
+    line.addParam('tstep', FloatParam, label='Translation: ', default=2.00)
+    line.addParam('qstep', FloatParam, label='Angular: ', default=50.0)
+    line.addParam('dstep', FloatParam, label='Dihedral: ', default=50.0)
+
+    group.addParam('rt0_R', FloatParam, label='Initial annealing temperature: ', default=252,
+                   help='[rt0/R] Initial absolute temperature. It will be multiplied by the gas constant '
+                        'R (1.987 cal mol -1 K -1)for the input docking.')
+    group.addParam('SA_schedule', EnumParam, label='SA schedule: ', default=0, choices=['Linear', 'Geometric'],
+                   help='The default “linear_schedule” uses a linear or arithmetic temperature reduction schedule'
+                        ' during Monte Carlo simulated annealing. The “geometric_schedule” keyword uses instead a '
+                        'geometric reduction schedule, according to the rtrf parameter described next. At the end of '
+                        'each cycle, the temperature is reduced by (rt0/cycles).')
+    group.addParam('rtrf', FloatParam, label='Temperature reduction factor: ', default=0.90,
+                   condition='SA_schedule == 1',
+                   help='Annealing temperature reduction factor, g. At the end of each cycle, the '
+                        'annealing temperature is multiplied by this factor, to give that of the next cycle.')
+    group.addParam('cycles', IntParam, label='Number of temperature reduction cycles.: ', default=50,
+                   help='Number of temperature reduction cycles.')
+
+    group.addParam('accs', IntParam, label='Maximum number of accepted steps per cycle: ', default=30000,
+                   help='Maximum number of accepted steps per cycle.', expertLevel=LEVEL_ADVANCED)
+    group.addParam('rejs', IntParam, label='Maximum number of rejected steps per cycle: ', default=30000,
+                   help='Maximum number of rejected steps per cycle', expertLevel=LEVEL_ADVANCED)
+
+    group.addParam('select', EnumParam, label='Select state to following cycle: ',
+                   choices=['Minimum', 'Last'], default=0, expertLevel=LEVEL_ADVANCED,
+                   help='State selection flag. This character can be either m for the minimum state, or l for the last'
+                        ' state found during each cycle, to begin the following cycle.')
+    line = group.addLine('Per-cycle reduction factors: ', expertLevel=LEVEL_ADVANCED,
+                         help='Per-cycle reduction factor for translation / orientation / torsinal dihedralsteps.')
+    line.addParam('trnrf', FloatParam, label='Translation: ', default=1.0)
+    line.addParam('quarf', FloatParam, label='Orientation: ', default=1.0)
+    line.addParam('dihrf', FloatParam, label='Torsional dihedral: ', default=1.0)
+
     form.addParallelSection(threads=4, mpi=1)
 
   # --------------------------- INSERT steps functions --------------------
@@ -184,43 +255,18 @@ class ProtChemAutodock(EMProtocol):
 
   def dockStep(self, mol, pocket=None):
     # Prepare grid
-    fnReceptor = self.receptorFile
-    nameReceptor, extReceptor = os.path.splitext(os.path.basename(fnReceptor))
+    receptorFn = self.receptorFile
     outDir = self.getOutputPocketDir(pocket)
 
     molFn = self.getMolLigandName(mol)
-    molName, _ = os.path.splitext(os.path.basename(molFn))
-    createLink(molFn, os.path.join(outDir, molName + '.pdbqt'))
-    makePath(outDir)
+    dpfFile = self.writeDPF(outDir, molFn, receptorFn)
 
-    fnDPF = os.path.abspath(os.path.join(outDir, molName + ".dpf"))
-    args = " -l %s -r %s -o %s" % (molFn, fnReceptor, fnDPF)
-    args += " -p ga_pop_size=%d" % self.gaPop.get()
-    args += " -p ga_num_evals=%d" % self.gaNumEvals.get()
-    args += " -p ga_num_generations=%d" % self.gaNumGens.get()
-    args += " -p ga_elitism=%d" % self.gaElitism.get()
-    args += " -p ga_mutation_rate=%f" % self.gaMutationRate.get()
-    args += " -p ga_crossover_rate=%f" % self.gaCrossOverRate.get()
-    args += " -p ga_window_size=%d" % self.gaWindowSize.get()
-    args += " -p sw_max_its=%d" % self.swMaxIts.get()
-    args += " -p sw_max_succ=%d" % self.swMaxSucc.get()
-    args += " -p sw_max_fail=%d" % self.swMaxFail.get()
-    args += " -p sw_rho=%f" % self.swRho.get()
-    args += " -p sw_lb_rho=%d" % self.swLbRho.get()
-    args += " -p ls_search_freq=%f" % self.lsFreq.get()
-    args += " -p ga_run=%d" % self.gaRun.get()
-    args += " -p rmstol=%f" % self.rmsTol.get()
-
-    self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
-                autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py') + args,
-                cwd=outDir)
-
-    fnDLG = fnDPF.replace('.dpf', '.dlg')
+    fnDLG = dpfFile.replace('.dpf', '.dlg')
     if not getattr(self, USE_GPU):
-      args = "-p %s -l %s" % (fnDPF, fnDLG)
+      args = "-p %s -l %s" % (dpfFile, fnDLG)
       self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
     else:
-      fnDPF = self.commentFirstLine(fnDPF)
+      fnDPF = self.commentFirstLine(dpfFile)
       args = '-I {}'.format(fnDPF)
       autodock_plugin.runAutodockGPU(self, args, outDir)
 
@@ -233,7 +279,7 @@ class ProtChemAutodock(EMProtocol):
         molName = getBaseFileName(dlgFile)
         pocketDic[molName] = self.parseDockedMolsDLG(dlgFile)
         for modelId in pocketDic[molName]:
-          pdbqtFile = self._getPath('{}_{}.pdbqt'.format(molName, modelId))
+          pdbqtFile = self._getPath('g{}_{}_{}.pdbqt'.format(gridId, molName, modelId))
           with open(pdbqtFile, 'w') as f:
             f.write(pocketDic[molName][modelId]['pdb'])
           pocketDic[molName][modelId]['file'] = pdbqtFile
@@ -241,24 +287,25 @@ class ProtChemAutodock(EMProtocol):
       for smallMol in self.inputSmallMolecules.get():
         molFile = smallMol.getFileName()
         molName = getBaseFileName(molFile)
-        molDic = pocketDic[molName]
+        if molName in pocketDic:
+          molDic = pocketDic[molName]
 
-        for posId in molDic:
-          newSmallMol = SmallMolecule()
-          newSmallMol.copy(smallMol, copyId=False)
-          newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
-          if 'ki' in molDic[posId]:
-            newSmallMol._ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
-          else:
-            newSmallMol._ligandEfficiency = pwobj.Float(None)
-          if os.path.getsize(molDic[posId]['file']) > 0:
-            newSmallMol.poseFile.set(molDic[posId]['file'])
-            newSmallMol.setPoseId(posId)
-            newSmallMol.gridId.set(gridId)
-            newSmallMol.setMolClass('Autodock4')
-            newSmallMol.setDockId(self.getObjId())
+          for posId in molDic:
+            newSmallMol = SmallMolecule()
+            newSmallMol.copy(smallMol, copyId=False)
+            newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
+            if 'ki' in molDic[posId]:
+              newSmallMol._ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
+            else:
+              newSmallMol._ligandEfficiency = pwobj.Float(None)
+            if os.path.getsize(molDic[posId]['file']) > 0:
+              newSmallMol.poseFile.set(molDic[posId]['file'])
+              newSmallMol.setPoseId(posId)
+              newSmallMol.gridId.set(gridId)
+              newSmallMol.setMolClass('Autodock4')
+              newSmallMol.setDockId(self.getObjId())
 
-            outputSet.append(newSmallMol)
+              outputSet.append(newSmallMol)
 
     outputSet.proteinFile.set(self.getOriginalReceptorFile())
     outputSet.setDocked(True)
@@ -330,6 +377,81 @@ class ProtChemAutodock(EMProtocol):
     atomStructFn = self.getOriginalReceptorFile()
     return '/'.join(atomStructFn.split('/')[:-1])
 
+  def writeDPF(self, outDir, molFn, receptorFn):
+      molName, _ = os.path.splitext(os.path.basename(molFn))
+      createLink(molFn, os.path.join(outDir, molName + '.pdbqt'))
+      makePath(outDir)
+
+      fnDPF = os.path.abspath(os.path.join(outDir, molName + ".dpf"))
+      baseDPF = os.path.abspath(os.path.join(outDir, molName + "_base.dpf"))
+      # General parameters
+      args = " -l %s -r %s -o %s" % (molFn, receptorFn, baseDPF)
+
+      self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
+                  autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py') + args, cwd=outDir)
+
+      with open(baseDPF) as f:
+          myDPFstr = '\n'.join(f.read().split('\n')[:19])
+
+      myDPFstr += '\n\n# Search parameters\n'
+      if self.searchType.get() in [LGA, GA, LS]:
+        myDPFstr += "ga_pop_size %d\n" % self.gaPop.get()
+        myDPFstr += "ga_num_evals %d\n" % self.gaNumEvals.get()
+
+      if self.searchType.get() in [LGA, GA]:
+        myDPFstr += '\n# Genetic algorithm parameters\n'
+        myDPFstr += "ga_num_generations %d\n" % self.gaNumGens.get()
+        myDPFstr += "ga_elitism %d\n" % self.gaElitism.get()
+        myDPFstr += "ga_mutation_rate %f\n" % self.gaMutationRate.get()
+        myDPFstr += "ga_crossover_rate %f\n" % self.gaCrossOverRate.get()
+        myDPFstr += "ga_window_size %d\n" % self.gaWindowSize.get()
+        myDPFstr += "set_ga\n"
+
+      if self.searchType.get() in [LGA, LS]:
+        myDPFstr += '\n# Local search parameters\n'
+        myDPFstr += "sw_max_its %d\n" % self.swMaxIts.get()
+        myDPFstr += "sw_max_succ %d\n" % self.swMaxSucc.get()
+        myDPFstr += "sw_max_fail %d\n" % self.swMaxFail.get()
+        myDPFstr += "sw_rho %f\n" % self.swRho.get()
+        myDPFstr += "sw_lb_rho %d\n" % self.swLbRho.get()
+        myDPFstr += "ls_search_freq %f\n" % self.lsFreq.get()
+        myDPFstr += 'set_psw1\n' if self.localType.get() == 1 else 'set_sw1\n'
+
+      if self.searchType.get() == SA:
+        myDPFstr += '\n# Simulated annealing parameters\n'
+        myDPFstr += "e0max %f %d\n" % (self.e0max1.get(), self.e0max2.get())
+        myDPFstr += "tstep %f\n" % self.tstep.get()
+        myDPFstr += "qstep %f\n" % self.qstep.get()
+        myDPFstr += "dstep %f\n" % self.dstep.get()
+        myDPFstr += "rt0 %f\n" % (self.rt0_R.get() * 1.987)
+        myDPFstr += 'linear_schedule\n' if self.SA_schedule.get() == 0 else 'geometric_schedule\n'
+        if self.SA_schedule.get() == 1:
+            myDPFstr += "rtrf %f\n" % self.rtrf.get()
+        myDPFstr += "cycles %d\n" % self.cycles.get()
+        myDPFstr += "accs %f\n" % self.accs.get()
+        myDPFstr += "rejs %f\n" % self.rejs.get()
+        myDPFstr += "select %s\n" % ('m' if self.select.get() == 0 else 'l')
+        myDPFstr += "trnrf %f\n" % self.trnrf.get()
+        myDPFstr += "quarf %f\n" % self.quarf.get()
+        myDPFstr += "dihrf %f\n" % self.dihrf.get()
+
+        myDPFstr += "simanneal %d\n" % self.nRuns.get()
+
+      if self.searchType.get() == LGA:
+        myDPFstr += "ga_run %d\n" % self.nRuns.get()
+      elif self.searchType.get() == GA:
+        myDPFstr += "do_global_only %d\n" % self.nRuns.get()
+      elif self.searchType.get() == LS:
+        myDPFstr += "do_local_only %d\n" % self.nRuns.get()
+
+      myDPFstr += '\n# Analysis parameters\n'
+      myDPFstr += "rmstol %f\nanalysis" % self.rmsTol.get()
+
+      with open(fnDPF, 'w') as f:
+          f.write(myDPFstr)
+      return fnDPF
+
+
   def getLigandsFileNames(self):
     ligFns = []
     for mol in self.inputSmallMolecules.get():
@@ -377,8 +499,13 @@ class ProtChemAutodock(EMProtocol):
           i += 1
     return molDic
 
-  def _citations(self):
-    return ['Morris2009']
+
+  def _validate(self):
+      vals = []
+      if getattr(self, USE_GPU) and self.searchType.get() != LGA:
+          vals.append('The use of a search type other than LGA for the GPU version is not possible. Either use the CPU '
+                      'version or another search type.')
+      return vals
 
   def commentFirstLine(self, fn):
     with open(fn) as f:
