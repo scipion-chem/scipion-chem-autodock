@@ -113,7 +113,8 @@ class ProtChemVinaDocking(EMProtocol):
 
     def convertStep(self):
       mols = self.inputSmallMols.get()
-      self.convert2PDBQT(mols, self._getTmpPath())
+      for mol in mols:
+        self.convert2PDBQT(mol, self._getTmpPath())
 
       receptorFile = self.getOriginalReceptorFile()
       if receptorFile.endswith('.pdb'):
@@ -185,22 +186,6 @@ class ProtChemVinaDocking(EMProtocol):
 
     ########################### Parameters functions ############################
 
-    def writeMeekoParamsFile(self, molsScipion, oDir):
-        paramsFile = os.path.abspath(self._getExtraPath('inputParams.txt'))
-
-        molFiles = []
-        f = open(paramsFile, 'w')
-        for mol in molsScipion:
-            molFiles.append(os.path.abspath(mol.getFileName()))
-
-        f.write('ligandFiles:: {}\n'.format(' '.join(molFiles)))
-        f.write('keepNonPolar:: False\n')
-        f.write('hydrate:: False\n')
-
-        f.write('outDir:: {}\n'.format(os.path.abspath(oDir)))
-
-        return paramsFile
-
     def writeParamsFile(self, molFiles, radius, center, gpfFile, outDir):
         paramsFile = os.path.join(outDir, 'inputParams.txt')
 
@@ -229,35 +214,37 @@ class ProtChemVinaDocking(EMProtocol):
     def getGridId(self, outDir):
         return outDir.split('_')[-1]
 
-    def convert2PDBQT(self, mols, oDir):
-        '''Convert ligand to pdbqt using meeko'''
+    def convert2PDBQT(self, smallMol, oDir):
+        '''Convert ligand to pdbqt using obabel'''
+        inFile = smallMol.getFileName()
+        if os.path.splitext(inFile)[1] not in ['.pdb', '.mol2', '.pdbq']:
+            # Convert to formats recognized by ADT
+            outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
+            args = ' -i "{}" -of mol2 --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
+                                                                               os.path.abspath(outDir), outName)
+            pwchem_plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+            inFile = self._getTmpPath(outName + '.mol2')
+
         if not os.path.exists(oDir):
             os.mkdir(oDir)
 
+        inName, inExt = os.path.splitext(os.path.basename(inFile))
+        oFile = os.path.abspath(os.path.join(oDir, smallMol.getUniqueName() +'.pdbqt'))
+
+        if inExt != '.pdbqt':
+            args = ' -l {} -o {}'.format(inFile, oFile)
+            self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
+                        autodock_plugin.getADTPath('Utilities24/prepare_ligand4.py') + args)
+        else:
+            createLink(inFile, oFile)
+
         write = 'w'
-        noPDBQT_mols, oFiles = [], []
-        for mol in mols:
-            inFile = mol.getFileName()
-            inName, inExt = os.path.splitext(os.path.basename(inFile))
-            oFile = os.path.abspath(os.path.join(oDir, mol.getUniqueName() + '.pdbqt'))
-
-            if inExt != '.pdbqt':
-                noPDBQT_mols.append(mol)
-            else:
-                createLink(inFile, oFile)
-                oFiles.append(oFile)
-
-        if len(noPDBQT_mols) > 0:
-            paramsFile = self.writeMeekoParamsFile(noPDBQT_mols, oDir)
-            autodock_plugin.runScript(self, meekoScript, paramsFile, env='rdkit', cwd=oDir)
-            meekoResults = os.path.join(oDir, 'meeko_files.txt')
-            shutil.copy(meekoResults, self.getConvertedLigandsFile())
+        if os.path.exists(self.getConvertedLigandsFile()):
             write = 'a'
-
         with open(self.getConvertedLigandsFile(), write) as f:
-            for oFile in oFiles:
-                f.write('\n' + oFile)
+            f.write(oFile + '\n')
 
+        return oFile, oDir
 
     def convertReceptor2PDB(self, proteinFile):
         inName, inExt = os.path.splitext(os.path.basename(proteinFile))
