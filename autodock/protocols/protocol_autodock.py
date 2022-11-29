@@ -28,7 +28,7 @@ import os, glob
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam, STEPS_PARALLEL, BooleanParam, \
-  LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam
+  LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam, LabelParam, TextParam
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
@@ -55,6 +55,20 @@ class ProtChemAutodock(EMProtocol):
     EMProtocol.__init__(self, **kwargs)
     self.stepsExecutionMode = STEPS_PARALLEL
 
+  def _defineFlexParams(self, form):
+    group = form.addGroup('Flexible residues')
+    group.addParam('doFlexRes', BooleanParam, label='Add flexible residues: ', default=False,
+                   help='Whether to add residues of the receptor which will be treated as flexible by AutoDock')
+    group.addParam('flexChain', StringParam, label='Residue chain: ', condition='doFlexRes',
+                   help='Specify the protein chain')
+    group.addParam('flexPosition', StringParam, label='Flexible residues: ', condition='doFlexRes',
+                   help='Specify the residues to make flexible')
+    group.addParam('addFlex', LabelParam, label='Add defined residues', condition='doFlexRes',
+                   help='Here you can define flexible residues which will be added to the list below.'
+                        'Be aware that it will be a range from the first to the last you choose')
+    group.addParam('flexList', TextParam, width=70, default='', label='List of flexible residues: ',
+                   condition='doFlexRes', help='List of chain | residues to make flexible. \n')
+
   def _defineParams(self, form):
     form.addHidden(USE_GPU, BooleanParam, default=True,
                    label="Use GPU for execution: ",
@@ -66,27 +80,30 @@ class ProtChemAutodock(EMProtocol):
 
     form.addSection(label='Input')
     group = form.addGroup('Receptor specification')
-    group.addParam('wholeProt', BooleanParam, label='Dock on whole protein: ', default=True,
+    group.addParam('fromReceptor', EnumParam, label='Dock on : ', default=1,
+                   choices=['Whole protein', 'SetOfStructROIs'],
                    help='Whether to dock on a whole protein surface or on specific regions')
 
     # Docking on whole protein
     group.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
-                   label='Input atomic structure: ', condition='wholeProt',
+                   label='Input atomic structure: ', condition='fromReceptor == 0',
                    help="The atom structure to use as receptor in the docking")
     group.addParam('radius', FloatParam, label='Grid radius for whole protein: ',
-                   condition='wholeProt', allowsNull=False,
+                   condition='fromReceptor == 0', allowsNull=False,
                    help='Radius of the Autodock grid for the whole protein')
 
     # Docking on pockets
     group.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
-                   label='Input pockets: ', condition='not wholeProt',
+                   label='Input pockets: ', condition='not fromReceptor == 0',
                    help="The protein structural ROIs to dock in")
     group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs StructROI radius: ',
-                   condition='not wholeProt', default=1.1, allowsNull=False,
+                   condition='not fromReceptor == 0', default=1.1, allowsNull=False,
                    help='The radius * n of each StructROI will be used as grid radius')
 
     group.addParam('spacing', FloatParam, label='Spacing of the grids: ', default=0.5, allowsNull=False,
-                   condition='not wholeProt', help='Spacing of the generated Autodock grids')
+                   condition='not fromReceptor == 0', help='Spacing of the generated Autodock grids')
+
+    self._defineFlexParams(form)
 
     group = form.addGroup('Docking')
     group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
@@ -206,7 +223,7 @@ class ProtChemAutodock(EMProtocol):
     cId = self._insertFunctionStep('convertStep', prerequisites=[])
 
     dockSteps = []
-    if self.wholeProt:
+    if self.fromReceptor.get() == 0:
       gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
       for mol in self.inputSmallMolecules.get():
         dockId = self._insertFunctionStep('dockStep', mol.clone(), prerequisites=[gridId])
@@ -233,7 +250,7 @@ class ProtChemAutodock(EMProtocol):
   def generateGridsStep(self, pocket=None):
     fnReceptor = self.receptorFile
     outDir = self.getOutputPocketDir(pocket)
-    if self.wholeProt:
+    if self.fromReceptor.get() == 0:
       radius = self.radius.get()
       # Use the original pdb for mass center
       pdbFile = self.getOriginalReceptorFile()
@@ -245,6 +262,10 @@ class ProtChemAutodock(EMProtocol):
       x_center, y_center, z_center = pocket.calculateMassCenter()
 
     makePath(outDir)
+
+    if self.doFlexRes:
+      flexFn, fnReceptor = self.buildFlexReceptor(fnReceptor)
+
     npts = (radius * 2) / self.spacing.get()
     gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(),
                             xc=x_center, yc=y_center, zc=z_center,
@@ -255,11 +276,14 @@ class ProtChemAutodock(EMProtocol):
 
   def dockStep(self, mol, pocket=None):
     # Prepare grid
-    receptorFn = self.receptorFile
+    if self.doFlexRes:
+        flexReceptorFn, receptorFn = self.getFlexFiles()
+    else:
+        flexReceptorFn, receptorFn = None, self.receptorFile
     outDir = self.getOutputPocketDir(pocket)
 
     molFn = self.getMolLigandName(mol)
-    dpfFile = self.writeDPF(outDir, molFn, receptorFn)
+    dpfFile = self.writeDPF(outDir, molFn, receptorFn, flexReceptorFn)
 
     fnDLG = dpfFile.replace('.dpf', '.dlg')
     if not getattr(self, USE_GPU):
@@ -308,6 +332,7 @@ class ProtChemAutodock(EMProtocol):
 
               outputSet.append(newSmallMol)
 
+    # todo: manage several receptor conformations when flexible docking
     outputSet.proteinFile.set(self.getOriginalReceptorFile())
     outputSet.setDocked(True)
     self._defineOutputs(outputSmallMolecules=outputSet)
@@ -362,14 +387,14 @@ class ProtChemAutodock(EMProtocol):
     return oFile
 
   def getReceptorName(self):
-    if self.wholeProt:
+    if self.fromReceptor.get() == 0:
       atomStructFn = self.getOriginalReceptorFile()
       return atomStructFn.split('/')[-1].split('.')[0]
     else:
       return self.inputStructROIs.get().getProteinName()
 
   def getOriginalReceptorFile(self):
-    if self.wholeProt:
+    if self.fromReceptor.get() == 0:
       return self.inputAtomStruct.get().getFileName()
     else:
       return self.inputStructROIs.get().getProteinFile()
@@ -378,7 +403,31 @@ class ProtChemAutodock(EMProtocol):
     atomStructFn = self.getOriginalReceptorFile()
     return '/'.join(atomStructFn.split('/')[:-1])
 
-  def writeDPF(self, outDir, molFn, receptorFn):
+  def parseFlexRes(self):
+      allFlexDic = {}
+      for line in self.flexList.get().split('\n'):
+          if line.strip():
+              chain, res = line.strip().split(':')
+              if chain in allFlexDic:
+                  allFlexDic[chain] += res + '_'
+              else:
+                  allFlexDic[chain] = res + '_'
+
+      allFlexStr = ''
+      for chain in allFlexDic:
+          # todo: proper specifiers with several chains (molname?)
+          allFlexStr += '{},'.format(allFlexDic[chain][:-1])
+      return allFlexStr[:-1]
+
+  def buildFlexReceptor(self, receptorFn):
+      allFlexRes = self.parseFlexRes()
+      flexFn, rigFn = self.getFlexFiles()
+      args = ' -r {} -s {} -g {} -x {}'.format(receptorFn, allFlexRes, rigFn, flexFn)
+      self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
+                  autodock_plugin.getADTPath('Utilities24/prepare_flexreceptor4.py') + args, cwd=self._getExtraPath())
+      return flexFn, rigFn
+
+  def writeDPF(self, outDir, molFn, receptorFn, flexFn=None):
       molName, _ = os.path.splitext(os.path.basename(molFn))
       createLink(molFn, os.path.join(outDir, molName + '.pdbqt'))
       makePath(outDir)
@@ -387,6 +436,8 @@ class ProtChemAutodock(EMProtocol):
       baseDPF = os.path.abspath(os.path.join(outDir, molName + "_base.dpf"))
       # General parameters
       args = " -l %s -r %s -o %s" % (molFn, receptorFn, baseDPF)
+      if flexFn:
+          args += ' -x ' + flexFn
 
       self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                   autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py') + args, cwd=outDir)
@@ -453,6 +504,10 @@ class ProtChemAutodock(EMProtocol):
       return fnDPF
 
 
+  def getFlexFiles(self):
+    return os.path.abspath(self._getExtraPath('receptor_flex.pdbqt')), \
+           os.path.abspath(self._getExtraPath('receptor_rig.pdbqt'))
+
   def getLigandsFileNames(self):
     ligFns = []
     for mol in self.inputSmallMolecules.get():
@@ -490,7 +545,7 @@ class ProtChemAutodock(EMProtocol):
           posId = line.split()[-1]
           molDic[posId] = {'pdb': ''}
         elif line.startswith('DOCKED: USER    Estimated Free Energy'):
-          molDic[posId]['energy'] = line.split()[8]
+          molDic[posId]['energy'] = line.split('=')[1].split('kcal/mol')[0]
         elif line.startswith('DOCKED: USER    Estimated Inhibition'):
           molDic[posId]['ki'] = line.split()[7]
         elif line.startswith('DOCKED: REMARK') or line.startswith('TER'):
