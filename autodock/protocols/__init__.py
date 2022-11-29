@@ -29,8 +29,8 @@ from .protocol_preparation_ligands import ProtChemADTPrepareLigands
 from .protocol_autodock import ProtChemAutodock
 from .protocol_autoLigand import ProtChemAutoLigand
 from .protocol_generate_grid import Autodock_GridGeneration
-from .protocol_vina import ProtChemVina
 from .protocol_autoSite import ProtChemAutoSite
 from .protocol_autoSite_pharmacophore import ProtChemAutoSiteGenPharmacophore
 from .protocol_meeko_ligands import ProtChemMeekoLigands
+from .protocol_dock_vina import ProtChemVinaDocking
 
