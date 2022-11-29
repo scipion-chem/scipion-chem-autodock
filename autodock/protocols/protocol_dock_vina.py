@@ -28,7 +28,7 @@ import os, shutil
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, \
-  LEVEL_ADVANCED
+  LEVEL_ADVANCED, STEPS_PARALLEL
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
@@ -47,6 +47,10 @@ class ProtChemVinaDocking(EMProtocol):
     _program = ""
 
     _scoreNames = ['Vina', 'Vinardo', 'AD4']
+
+    def __init__(self, **kwargs):
+        EMProtocol.__init__(self, **kwargs)
+        self.stepsExecutionMode = STEPS_PARALLEL
 
     def _defineParams(self, form):
         form.addSection(label='Input')
@@ -70,6 +74,8 @@ class ProtChemVinaDocking(EMProtocol):
         group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs StructROI radius: ',
                        condition='not wholeProt', default=1.1, allowsNull=False,
                        help='The radius * n of each StructROI will be used as grid radius')
+        group.addParam('spacing', FloatParam, label='Spacing of affinity maps: ',
+                       default=0.375, help='Affinity maps spacing')
 
         group = form.addGroup('Docking')
         group.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules",
@@ -84,12 +90,12 @@ class ProtChemVinaDocking(EMProtocol):
                             'The higher, the more the search pace is explored, but also it will be slower')
         group.addParam('nPoses', IntParam, label='Number of positions per ligand: ', default=20,
                        help='Number of positions outputed for each of the ligands provided')
-        group.addParam('spacing', FloatParam, label='Spacing of affinity maps: ',
-                       default=0.375, help='Affinity maps spacing')
         group.addParam('minRMSD', FloatParam, label='Minimum RMSD difference between poses: ',
                        default=1.0, help='Minimum RMSD difference between poses')
         group.addParam('maxEvals', IntParam, label='Maximum number of evaluation: ',
                        expertLevel=LEVEL_ADVANCED, default=0, help='Maximum number of evaluation')
+
+        form.addParallelSection(threads=4, mpi=1)
 
     def _insertAllSteps(self):
       cId = self._insertFunctionStep('convertStep', prerequisites=[])
@@ -141,7 +147,8 @@ class ProtChemVinaDocking(EMProtocol):
                               xc=x_center, yc=y_center, zc=z_center,
                               npts=npts, outDir=outDir, ligandFns=molFiles)
 
-      paramsFile = self.writeParamsFile(mols, radius, [x_center, y_center, z_center], gpf_file, outDir)
+      pdbqtFiles = self.getConvertedLigandsFiles()
+      paramsFile = self.writeParamsFile(pdbqtFiles, radius, [x_center, y_center, z_center], gpf_file, outDir)
       autodock_plugin.runScript(self, scriptName, paramsFile, env='vina', cwd=outDir)
 
     def createOutputStep(self):
@@ -194,14 +201,10 @@ class ProtChemVinaDocking(EMProtocol):
 
         return paramsFile
 
-    def writeParamsFile(self, molsScipion, radius, center, gpfFile, outDir):
+    def writeParamsFile(self, molFiles, radius, center, gpfFile, outDir):
         paramsFile = os.path.join(outDir, 'inputParams.txt')
 
-        molFiles = []
         f = open(paramsFile, 'w')
-        for mol in molsScipion:
-            molFiles.append(os.path.abspath(mol.getFileName()))
-
         f.write('ligandFiles:: {}\n'.format(' '.join(molFiles)))
         f.write('receptorFile:: {}\n'.format(self.getReceptorPDBQT()))
         f.write('mapsName:: {}\n'.format(self.getReceptorName()))
@@ -246,7 +249,7 @@ class ProtChemVinaDocking(EMProtocol):
 
         if len(noPDBQT_mols) > 0:
             paramsFile = self.writeMeekoParamsFile(noPDBQT_mols, oDir)
-            autodock_plugin.runScript(self, meekoScript, paramsFile, env='rdkit', cwd=self._getExtraPath())
+            autodock_plugin.runScript(self, meekoScript, paramsFile, env='rdkit', cwd=oDir)
             meekoResults = os.path.join(oDir, 'meeko_files.txt')
             shutil.copy(meekoResults, self.getConvertedLigandsFile())
             write = 'a'
@@ -333,6 +336,11 @@ class ProtChemVinaDocking(EMProtocol):
 
     def getConvertedLigandsFile(self):
         return os.path.abspath(self._getExtraPath('inputLigands.txt'))
+
+    def getConvertedLigandsFiles(self):
+        with open(self.getConvertedLigandsFile()) as f:
+            a = f.read()
+        return a.split('\n')
 
     def getDockedLigandsFiles(self, outDir):
         with open(os.path.join(outDir, 'docked_files.txt')) as fIn:

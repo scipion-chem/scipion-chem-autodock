@@ -54,14 +54,15 @@ if __name__ == "__main__":
     v = Vina(sf_name=pDic['scoreName'], cpu=int(pDic['nCPUs']))
     v.set_receptor(rigid_pdbqt_filename=receptorFile)
 
+    if pDic['scoreName'] == 'Vina':
+        v.compute_vina_maps(center=eval(pDic['boxCenter']), box_size=eval(pDic['boxSize']))
+    else:
+        v.write_maps(mapsName, pDic['gpfFile'])
+        v.load_maps(mapsName)
+
     outFiles = []
     for molFile in ligandFiles:
         v.set_ligand_from_file(molFile)
-        if pDic['scoreName'] == 'Vina':
-            v.compute_vina_maps(center=eval(pDic['boxCenter']), box_size=eval(pDic['boxSize']))
-        else:
-            v.write_maps(mapsName, pDic['gpfFile'])
-            v.load_maps(mapsName)
         v.dock(exhaustiveness=int(pDic['exhaust']), n_poses=int(pDic['nPoses']),
                min_rmsd=float(pDic['minRMSD']), max_evals=int(pDic['maxEvals']))
 
