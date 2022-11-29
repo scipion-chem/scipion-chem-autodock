@@ -278,6 +278,7 @@ class ProtChemAutodock(EMProtocol):
       for dlgFile in self.getDockedLigandsFiles(pocketDir):
         molName = getBaseFileName(dlgFile)
         pocketDic[molName] = self.parseDockedMolsDLG(dlgFile)
+
         for modelId in pocketDic[molName]:
           pdbqtFile = self._getPath('g{}_{}_{}.pdbqt'.format(gridId, molName, modelId))
           with open(pdbqtFile, 'w') as f:
