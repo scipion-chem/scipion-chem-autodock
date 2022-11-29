@@ -105,4 +105,3 @@ if __name__ == "__main__":
         print('None of the input molecules could be read by RDKit.\n'
               'Preparing the molecules with the RDKit ligand preparation protocol might solve this issue')
 
-

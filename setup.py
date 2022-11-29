@@ -33,7 +33,7 @@ setup(
     install_requires=[requirements],
     include_package_data=True,
     package_data={
-       'pwchem': ['autodock.png'],
+       'pwchem': ['autodock_logo.png'],
     },
     entry_points={
         'pyworkflow.plugin': 'autodock = autodock'
