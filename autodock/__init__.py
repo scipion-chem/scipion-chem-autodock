@@ -38,9 +38,10 @@ import pwem
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC
 
+
 _logo = 'autodock_logo.png'
 AUTODOCK_DIC = {'name': 'autodock', 'version': '4.2.6', 'home': 'AUTODOCK_HOME'}
-VINA_DIC = {'name': 'vina', 'version': '1.1.2', 'home': 'VINA_HOME'}
+VINA_DIC = {'name': 'vina', 'version': '1.2', 'home': 'VINA_HOME'}
 ASITE_DIC = {'name': 'AutoSite', 'version': '1.0', 'home': 'AUTOSITE_HOME'}
 MEEKO_DIC = {'name': 'meeko', 'version': '0.3.3', 'home': 'MEEKO_HOME'}
 ADGPU_DIC = {'name': 'AutoDock-GPU', 'version': '', 'home': 'ADGPU_HOME'}
@@ -49,12 +50,14 @@ class Plugin(pwem.Plugin):
     @classmethod
     def defineBinaries(cls, env):
         cls.addADTPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addVinaPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addAutoSitePackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addMeekoPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addAutoDockGPUPackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
     def _defineVariables(cls):
+        cls._defineVar("VINA_ENV_ACTIVATION", 'conda activate vina-env')
         cls._defineEmVar(AUTODOCK_DIC['home'], AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version'])
         cls._defineEmVar(VINA_DIC['home'], VINA_DIC['name'] + '-' + VINA_DIC['version'])
         cls._defineEmVar(ASITE_DIC['home'], ASITE_DIC['name'] + '-' + ASITE_DIC['version'])
@@ -73,10 +76,13 @@ class Plugin(pwem.Plugin):
                        commands=adtCommands,
                        default=True)
 
+    @classmethod
+    def addVinaPackage(cls, env, default=False):
         VINA_INSTALLED = 'vina_installed'
-        vinaCommands = 'wget {} -O {} --no-check-certificate && '.format(cls.getVinaURL(), cls.getVinaTgz())
-        vinaCommands += 'tar -zxf {} --strip-components 1 && '.format(cls.getVinaTgz())
-        vinaCommands += 'rm {} && touch {}'.format(cls.getVinaTgz(), VINA_INSTALLED)
+        vinaCommands = 'conda create -y -n vina-env python=3 && '
+        vinaCommands += '%s conda activate vina-env && ' % (cls.getCondaActivationCmd())
+        vinaCommands += 'conda install -y -c conda-forge numpy swig boost-cpp sphinx sphinx_rtd_theme && '
+        vinaCommands += 'pip install vina && touch {}'.format(VINA_INSTALLED)
         vinaCommands = [(vinaCommands, VINA_INSTALLED)]
 
         env.addPackage(VINA_DIC['name'], version=VINA_DIC['version'],
@@ -114,7 +120,6 @@ class Plugin(pwem.Plugin):
       adGPUCommands = [(adGPUCommands, ADGPU_INSTALLED)]
 
       env.addPackage(ADGPU_DIC['name'], tar='void.tgz', commands=adGPUCommands, default=True)
-
 
 
     ################ UTILS ##################
@@ -209,8 +214,4 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getASITETar(cls):
       return ASITE_DIC['name'] + '-' + ASITE_DIC['version'] + '.tgz'
-
-    @classmethod
-    def getVinaTgz(cls):
-      return VINA_DIC['name'] + '-' + VINA_DIC['version'] + '.tgz'
 

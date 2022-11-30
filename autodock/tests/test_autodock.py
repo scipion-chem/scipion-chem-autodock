@@ -282,22 +282,21 @@ class TestVina(TestAutoDock):
     def _runVina(self, pocketsProt=None):
         if pocketsProt == None:
             protAutoDock = self.newProtocol(
-                ProtChemVina,
+                ProtChemVinaDocking,
                 wholeProt=True,
                 inputAtomStruct=self.protPrepareReceptor.outputStructure,
-                inputLibrary=self.protOBabel.outputSmallMolecules,
-                radius=24, nPos=2,
+                inputSmallMols=self.protOBabel.outputSmallMolecules,
+                radius=24, nPoses=2,
                 numberOfThreads=8)
             self.proj.launchProtocol(protAutoDock, wait=False)
 
         else:
             protAutoDock = self.newProtocol(
-                ProtChemVina,
+                ProtChemVinaDocking,
                 wholeProt=False,
                 inputStructROIs=pocketsProt.outputStructROIs,
-                inputLibrary=self.protPrepareLigandADT.outputSmallMolecules,
-                pocketRadiusN=5, nPos=2,
-                mergeOutput=True,
+                inputSmallMols=self.protPrepareLigandADT.outputSmallMolecules,
+                pocketRadiusN=1.2, nPoses=2,
                 numberOfThreads=4)
             self.proj.launchProtocol(protAutoDock, wait=False)
 
