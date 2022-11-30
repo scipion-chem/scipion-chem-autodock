@@ -54,9 +54,8 @@ class TestADPrepareReceptor(BaseTest):
         cls.protPrepareReceptor = cls.newProtocol(
             ProtChemADTPrepareReceptor,
             inputAtomStruct=cls.protImportPDB.outputPdb,
-            HETATM=True, rchains=True,
-            chain_name='{"model": 0, "chain": "C", "residues": 93}',
-            repair=3)
+            HETATM=True, rchains=True, repair=3,
+            chain_name='{"model": 0, "chain": "C", "residues": 93}')
 
         cls.launchProtocol(cls.protPrepareReceptor)
 
@@ -86,8 +85,7 @@ class TestADPrepareLigands(BaseTest):
     def _runPrepareLigandsADT(cls):
         cls.protPrepareLigandADT = cls.newProtocol(
             ProtChemADTPrepareLigands,
-            doConformers=True, method_conf=0, number_conf=2,
-            rmsd_cutoff=0.375)
+            doConformers=True, method_conf=0, number_conf=2, rmsd_cutoff=0.375)
         cls.protPrepareLigandADT.inputSmallMols.set(cls.protImportSmallMols)
         cls.protPrepareLigandADT.inputSmallMols.setExtended('outputSmallMolecules')
 
@@ -125,8 +123,7 @@ class TestAutoLigand(TestADPrepareReceptor):
         protPocketFinder = cls.newProtocol(
             ProtChemAutoLigand,
             inputAtomStruct=cls.protPrepareReceptor.outputStructure,
-            radius=24,
-            nFillPoints=10)
+            radius=24, nFillPoints=10)
 
         cls.proj.launchProtocol(protPocketFinder, wait=False)
         return protPocketFinder
@@ -182,8 +179,7 @@ class TestAutoDock(TestAutoSite, TestADMeekoLigands):
             ProtChemOBabelPrepareLigands,
             inputType=0, method_charges=0,
             inputSmallMols=cls.protImportSmallMols.outputSmallMolecules,
-            doConformers=True, method_conf=0, number_conf=2,
-            rmsd_cutoff=0.375)
+            doConformers=True, method_conf=0, number_conf=2, rmsd_cutoff=0.375)
 
         cls.proj.launchProtocol(cls.protOBabel, wait=False)
 
@@ -205,8 +201,8 @@ class TestAutoDock(TestAutoSite, TestADMeekoLigands):
                 ProtChemAutodock,
                 inputAtomStruct=self.protPrepareReceptor.outputStructure,
                 inputSmallMolecules=self.protOBabel.outputSmallMolecules,
-                wholeProt=True, radius=24, gaRun=2,
-                numberOfThreads=8)
+                fromReceptor=0, radius=24, nRuns=2,
+                numberOfThreads=4)
             self.proj.launchProtocol(protAutoDock, wait=False)
 
         else:
@@ -214,7 +210,7 @@ class TestAutoDock(TestAutoSite, TestADMeekoLigands):
                 ProtChemAutodock,
                 inputStructROIs=pocketsProt.outputStructROIs,
                 inputSmallMolecules=self.protPrepareLigandADT.outputSmallMolecules,
-                wholeProt=False, pocketRadiusN=5, gaRun=2, mergeOutput=True,
+                fromReceptor=1, pocketRadiusN=5, nRuns=2,
                 numberOfThreads=4)
             self.proj.launchProtocol(protAutoDock, wait=False)
 
@@ -245,8 +241,8 @@ class TestAutoDockGPU(TestAutoDock):
                 ProtChemAutodock,
                 inputAtomStruct=self.protPrepareReceptor.outputStructure,
                 inputSmallMolecules=self.protMeeko.outputSmallMolecules,
-                wholeProt=True, radius=24, gaRun=2,
-                numberOfThreads=8, useGpu=True)
+                fromReceptor=0, radius=24, nRuns=2,
+                numberOfThreads=4, useGpu=True)
             self.proj.launchProtocol(protAutoDock, wait=False)
 
         else:
@@ -254,7 +250,7 @@ class TestAutoDockGPU(TestAutoDock):
                 ProtChemAutodock,
                 inputStructROIs=pocketsProt.outputStructROIs,
                 inputSmallMolecules=self.protMeeko.outputSmallMolecules,
-                wholeProt=False, pocketRadiusN=5, gaRun=2,
+                fromReceptor=1, pocketRadiusN=5, nRuns=2,
                 numberOfThreads=4, useGpu=True)
             self.proj.launchProtocol(protAutoDock, wait=False)
 
@@ -283,20 +279,20 @@ class TestVina(TestAutoDock):
         if pocketsProt == None:
             protAutoDock = self.newProtocol(
                 ProtChemVinaDocking,
-                wholeProt=True,
+                fromReceptor=0,
                 inputAtomStruct=self.protPrepareReceptor.outputStructure,
-                inputSmallMols=self.protOBabel.outputSmallMolecules,
-                radius=24, nPoses=2,
-                numberOfThreads=8)
+                inputSmallMolecules=self.protOBabel.outputSmallMolecules,
+                radius=24, nRuns=2, exhaust=3,
+                numberOfThreads=4)
             self.proj.launchProtocol(protAutoDock, wait=False)
 
         else:
             protAutoDock = self.newProtocol(
                 ProtChemVinaDocking,
-                wholeProt=False,
+                fromReceptor=1,
                 inputStructROIs=pocketsProt.outputStructROIs,
-                inputSmallMols=self.protPrepareLigandADT.outputSmallMolecules,
-                pocketRadiusN=1.2, nPoses=2,
+                inputSmallMolecules=self.protPrepareLigandADT.outputSmallMolecules,
+                pocketRadiusN=1.2, nRuns=2, exhaust=3,
                 numberOfThreads=4)
             self.proj.launchProtocol(protAutoDock, wait=False)
 

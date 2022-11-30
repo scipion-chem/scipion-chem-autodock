@@ -87,7 +87,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
     def convertStep(self):
-      mols = self.inputSmallMols.get()
+      mols = self.inputSmallMolecules.get()
       for mol in mols:
         self.convert2PDBQT(mol, self._getTmpPath())
 
@@ -112,7 +112,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
         radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
         x_center, y_center, z_center = pocket.calculateMassCenter()
 
-      mols = self.inputSmallMols.get()
+      mols = self.inputSmallMolecules.get()
       molFiles = []
       for mol in mols:
         molFiles.append(os.path.abspath(mol.getFileName()))
@@ -137,7 +137,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
             molName = os.path.split(dockFile)[1].split('.pdbqt')[0]
             pocketDic[molName] = self.parseDockedPDBQT(dockFile)
 
-        for smallMol in self.inputSmallMols.get():
+        for smallMol in self.inputSmallMolecules.get():
             molName = smallMol.getUniqueName(conf=True)
             molDic = pocketDic[molName]
 
@@ -157,7 +157,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       outputSet.proteinFile.set(self.getOriginalReceptorFile())
       outputSet.setDocked(True)
       self._defineOutputs(outputSmallMolecules=outputSet)
-      self._defineSourceRelation(self.inputSmallMols, outputSet)
+      self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
     ########################### Parameters functions ############################
 
