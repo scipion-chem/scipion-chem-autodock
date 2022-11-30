@@ -48,6 +48,11 @@ SelectChainWizardQT().addTarget(protocol=ProtChemAutodock,
                                 inputs=[{'fromReceptor': ['inputAtomStruct', 'inputStructROIs']}],
                                 outputs=['flexChain'])
 
+SelectChainWizardQT().addTarget(protocol=ProtChemVina,
+                                targets=['flexChain'],
+                                inputs=[{'fromReceptor': ['inputAtomStruct', 'inputStructROIs']}],
+                                outputs=['flexChain'])
+
 SelectMultiChainWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
                                    targets=['chain_name'],
                                    inputs=['inputAtomStruct'],
@@ -63,8 +68,13 @@ SelectResidueWizardQT().addTarget(protocol=ProtChemAutodock,
                                   inputs=[{'fromReceptor': ['inputAtomStruct', 'inputStructROIs']}, 'flexChain'],
                                   outputs=['flexPosition'])
 
+SelectResidueWizardQT().addTarget(protocol=ProtChemVina,
+                                  targets=['flexPosition'],
+                                  inputs=[{'fromReceptor': ['inputAtomStruct', 'inputStructROIs']}, 'flexChain'],
+                                  outputs=['flexPosition'])
+
 class AddFlexibleWizard(EmWizard):
-  _targets = [(ProtChemAutodock, ['addFlex'])]
+  _targets = [(ProtChemAutodock, ['addFlex']), (ProtChemVina, ['addFlex'])]
 
   def show(self, form, *params):
     protocol = form.protocol

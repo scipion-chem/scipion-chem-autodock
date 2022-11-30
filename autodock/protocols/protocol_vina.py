@@ -27,16 +27,17 @@
 import os
 
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam, STEPS_PARALLEL, BooleanParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam, STEPS_PARALLEL, EnumParam, LEVEL_ADVANCED
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
-from autodock import Plugin as autodock_plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass
+from pwchem.utils import runOpenBabel, calculate_centerMass, getBaseFileName
 from pwchem import Plugin as pwchem_plugin
 from pwchem.constants import MGL_DIC
 
+from autodock import Plugin as autodock_plugin
+from autodock.protocols.protocol_autodock import _defineFlexParams
 
 class ProtChemVina(EMProtocol):
     """Perform a docking experiment with autodock vina."""
@@ -50,27 +51,27 @@ class ProtChemVina(EMProtocol):
     def _defineParams(self, form):
         form.addSection(label='Input')
         group = form.addGroup('Receptor specification')
-        group.addParam('wholeProt', BooleanParam, label='Dock on whole protein: ', default=True,
-                      help='Whether to dock on a whole protein surface or on specific regions')
+        group.addParam('fromReceptor', EnumParam, label='Dock on : ', default=1,
+                       choices=['Whole protein', 'SetOfStructROIs'],
+                       help='Whether to dock on a whole protein surface or on specific regions')
 
         #Docking on whole protein
         group.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
-                      label='Input atomic structure:', condition='wholeProt',
+                      label='Input atomic structure:', condition='fromReceptor == 0',
                       help="The atom structure to use as receptor in the docking")
         group.addParam('radius', FloatParam, label='Grid radius for whole protein: ',
-                       condition='wholeProt', allowsNull=False,
+                       condition='fromReceptor == 0', allowsNull=False,
                        help='Radius of the Autodock grid for the whole protein')
 
         #Docking on pockets
         group.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
-                      label='Input StructROIs:', condition='not wholeProt',
+                      label='Input StructROIs:', condition='not fromReceptor == 0',
                       help="The protein StructROIs to dock in")
-        group.addParam('mergeOutput', BooleanParam, default=True, expertLevel=LEVEL_ADVANCED,
-                       label='Merge outputs from StructROIs:', condition='not wholeProt',
-                       help="Merge the outputs from the different StructROIs")
         group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs StructROI radius: ',
-                       condition='not wholeProt', default=1.1, allowsNull=False,
+                       condition='not fromReceptor == 0', default=1.1, allowsNull=False,
                        help='The radius * n of each StructROI will be used as grid radius')
+
+        _defineFlexParams(form)
 
         group = form.addGroup('Docking')
         group.addParam('inputLibrary', PointerParam, pointerClass="SetOfSmallMolecules",
@@ -93,7 +94,7 @@ class ProtChemVina(EMProtocol):
         cId = self._insertFunctionStep('convertStep', prerequisites=[])
 
         dockSteps = []
-        if self.wholeProt:
+        if self.fromReceptor.get() == 0:
             for mol in self.inputLibrary.get():
                 dockId = self._insertFunctionStep('dockStep', mol.clone(), prerequisites=[cId])
                 dockSteps.append(dockId)
@@ -129,7 +130,7 @@ class ProtChemVina(EMProtocol):
         smallDir = os.path.join(outDir, molName)
         makePath(smallDir)
 
-        if self.wholeProt:
+        if self.fromReceptor.get() == 0:
             radius = self.radius.get()
             # Use the original pdb for mass center
             structure, x_center, y_center, z_center = calculate_centerMass(self.pdbFile)
@@ -137,7 +138,12 @@ class ProtChemVina(EMProtocol):
             radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
             x_center, y_center, z_center = pocket.calculateMassCenter()
 
+        if self.doFlexRes:
+            flexFn, fnReceptor = self.buildFlexReceptor(fnReceptor)
+
         args = '--receptor {} --ligand {} '.format(fnReceptor, molFn)
+        if self.doFlexRes:
+            args += '--flexRec {} '.format(flexFn)
         args += '--center_x {} --center_y {} --center_z {} '.format(x_center, y_center, z_center)
         args += '--size_x {} --size_y {} --size_z {} '.format(radius*2, radius*2, radius*2)
         args += '--exhaustiveness {} --energy_range {} --num_modes {} --cpu {} '.\
@@ -149,13 +155,10 @@ class ProtChemVina(EMProtocol):
         autodock_plugin.runVina(self, args=args, cwd=smallDir)
 
     def createOutputStep(self):
-        if self.checkSingleOutput():
-            outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
+        outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
 
         for pocketDir in self.getPocketDirs():
             gridId = self.getGridId(pocketDir)
-            if not self.checkSingleOutput():
-                outputSet = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix=gridId)
 
             for smallMol in self.inputLibrary.get():
                 smallFn = smallMol.getFileName()
@@ -177,17 +180,10 @@ class ProtChemVina(EMProtocol):
 
                         outputSet.append(newSmallMol)
 
-            if not self.checkSingleOutput():
-                outputSet.proteinFile.set(self.getOriginalReceptorFile())
-                outputSet.setDocked(True)
-                self._defineOutputs(**{'outputSmallMolecules_{}'.format(gridId): outputSet})
-                self._defineSourceRelation(self.inputLibrary, outputSet)
-
-        if self.checkSingleOutput():
-            outputSet.proteinFile.set(self.getOriginalReceptorFile())
-            outputSet.setDocked(True)
-            self._defineOutputs(outputSmallMolecules=outputSet)
-            self._defineSourceRelation(self.inputLibrary, outputSet)
+        outputSet.proteinFile.set(self.getOriginalReceptorFile())
+        outputSet.setDocked(True)
+        self._defineOutputs(outputSmallMolecules=outputSet)
+        self._defineSourceRelation(self.inputLibrary, outputSet)
       
 ########################### Utils functions ############################
 
@@ -239,14 +235,14 @@ class ProtChemVina(EMProtocol):
         return oFile
 
     def getReceptorName(self):
-        if self.wholeProt:
+        if self.fromReceptor.get() == 0:
             atomStructFn = self.getOriginalReceptorFile()
             return atomStructFn.split('/')[-1].split('.')[0]
         else:
             return self.inputStructROIs.get().getProteinName()
 
     def getOriginalReceptorFile(self):
-        if self.wholeProt:
+        if self.fromReceptor.get() == 0:
             return self.inputAtomStruct.get().getFileName()
         else:
             return self.inputStructROIs.get().getProteinFile()
@@ -267,6 +263,34 @@ class ProtChemVina(EMProtocol):
         else:
             outDir = self._getExtraPath('pocket_{}'.format(pocket.getObjId()))
         return outDir
+
+    def buildFlexReceptor(self, receptorFn):
+        molName = getBaseFileName(receptorFn)
+        allFlexRes = self.parseFlexRes(molName)
+        flexFn, rigFn = self.getFlexFiles()
+        args = ' -r {} -s {} -g {} -x {}'.format(receptorFn, allFlexRes, rigFn, flexFn)
+        self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
+                    autodock_plugin.getADTPath('Utilities24/prepare_flexreceptor4.py') + args, cwd=self._getExtraPath())
+        return flexFn, rigFn
+
+    def getFlexFiles(self):
+        return os.path.abspath(self._getExtraPath('receptor_flex.pdbqt')), \
+               os.path.abspath(self._getExtraPath('receptor_rig.pdbqt'))
+
+    def parseFlexRes(self, molName):
+        allFlexDic = {}
+        for line in self.flexList.get().split('\n'):
+            if line.strip():
+                chain, res = line.strip().split(':')
+                if chain in allFlexDic:
+                    allFlexDic[chain] += res + '_'
+                else:
+                    allFlexDic[chain] = res + '_'
+
+        allFlexStr = ''
+        for chain in allFlexDic:
+            allFlexStr += '{}:{}:{},'.format(molName, chain, allFlexDic[chain][:-1])
+        return allFlexStr[:-1]
 
     def getPocketDirs(self):
         dirs = []
@@ -307,9 +331,6 @@ class ProtChemVina(EMProtocol):
                 f.write(towrite)
         return dockedDic
 
-
-    def checkSingleOutput(self):
-        return self.mergeOutput.get() or len(self.getPocketDirs()) == 1
 
     def _citations(self):
         return ['Morris2009']

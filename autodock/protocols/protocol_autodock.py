@@ -44,6 +44,21 @@ LGA, GA, LS, SA = 0, 1, 2, 3
 searchDic = {LGA: 'Lamarckian Genetic Algorithm', GA: 'Genetic Algorithm', LS: 'Local Search',
              SA: 'Simulated annealing'}
 
+
+def _defineFlexParams(form):
+  group = form.addGroup('Flexible residues')
+  group.addParam('doFlexRes', BooleanParam, label='Add flexible residues: ', default=False,
+                 help='Whether to add residues of the receptor which will be treated as flexible by AutoDock')
+  group.addParam('flexChain', StringParam, label='Residue chain: ', condition='doFlexRes',
+                 help='Specify the protein chain')
+  group.addParam('flexPosition', StringParam, label='Flexible residues: ', condition='doFlexRes',
+                 help='Specify the residues to make flexible')
+  group.addParam('addFlex', LabelParam, label='Add defined residues', condition='doFlexRes',
+                 help='Here you can define flexible residues which will be added to the list below.'
+                      'Be aware that it will be a range from the first to the last you choose')
+  group.addParam('flexList', TextParam, width=70, default='', label='List of flexible residues: ',
+                 condition='doFlexRes', help='List of chain | residues to make flexible. \n')
+
 class ProtChemAutodock(EMProtocol):
   """Perform a docking experiment with autodock. Grid must be generated in this protocol in order to take into
        account ligands atom types. See the help at
@@ -54,20 +69,6 @@ class ProtChemAutodock(EMProtocol):
   def __init__(self, **kwargs):
     EMProtocol.__init__(self, **kwargs)
     self.stepsExecutionMode = STEPS_PARALLEL
-
-  def _defineFlexParams(self, form):
-    group = form.addGroup('Flexible residues')
-    group.addParam('doFlexRes', BooleanParam, label='Add flexible residues: ', default=False,
-                   help='Whether to add residues of the receptor which will be treated as flexible by AutoDock')
-    group.addParam('flexChain', StringParam, label='Residue chain: ', condition='doFlexRes',
-                   help='Specify the protein chain')
-    group.addParam('flexPosition', StringParam, label='Flexible residues: ', condition='doFlexRes',
-                   help='Specify the residues to make flexible')
-    group.addParam('addFlex', LabelParam, label='Add defined residues', condition='doFlexRes',
-                   help='Here you can define flexible residues which will be added to the list below.'
-                        'Be aware that it will be a range from the first to the last you choose')
-    group.addParam('flexList', TextParam, width=70, default='', label='List of flexible residues: ',
-                   condition='doFlexRes', help='List of chain | residues to make flexible. \n')
 
   def _defineParams(self, form):
     form.addHidden(USE_GPU, BooleanParam, default=True,
@@ -103,7 +104,7 @@ class ProtChemAutodock(EMProtocol):
     group.addParam('spacing', FloatParam, label='Spacing of the grids: ', default=0.5, allowsNull=False,
                    condition='not fromReceptor == 0', help='Spacing of the generated Autodock grids')
 
-    self._defineFlexParams(form)
+    _defineFlexParams(form)
 
     group = form.addGroup('Docking')
     group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
@@ -415,7 +416,6 @@ class ProtChemAutodock(EMProtocol):
 
       allFlexStr = ''
       for chain in allFlexDic:
-          # todo: proper specifiers with several chains (molname?)
           allFlexStr += '{}:{}:{},'.format(molName, chain, allFlexDic[chain][:-1])
       return allFlexStr[:-1]
 
