@@ -134,8 +134,6 @@ class Plugin(pwem.Plugin):
       compCap = None
       compCapDic = cls.getNVIDIACompCapDic()
 
-      print(compCapDic.keys())
-
       nvidiaName = cls.getNVIDIAName()
       if nvidiaName in compCapDic:
           compCap = compCapDic[nvidiaName]
