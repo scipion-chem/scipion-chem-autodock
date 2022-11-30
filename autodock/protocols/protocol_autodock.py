@@ -403,7 +403,7 @@ class ProtChemAutodock(EMProtocol):
     atomStructFn = self.getOriginalReceptorFile()
     return '/'.join(atomStructFn.split('/')[:-1])
 
-  def parseFlexRes(self):
+  def parseFlexRes(self, molName):
       allFlexDic = {}
       for line in self.flexList.get().split('\n'):
           if line.strip():
@@ -416,11 +416,12 @@ class ProtChemAutodock(EMProtocol):
       allFlexStr = ''
       for chain in allFlexDic:
           # todo: proper specifiers with several chains (molname?)
-          allFlexStr += '{},'.format(allFlexDic[chain][:-1])
+          allFlexStr += '{}:{}:{},'.format(molName, chain, allFlexDic[chain][:-1])
       return allFlexStr[:-1]
 
   def buildFlexReceptor(self, receptorFn):
-      allFlexRes = self.parseFlexRes()
+      molName = getBaseFileName(receptorFn)
+      allFlexRes = self.parseFlexRes(molName)
       flexFn, rigFn = self.getFlexFiles()
       args = ' -r {} -s {} -g {} -x {}'.format(receptorFn, allFlexRes, rigFn, flexFn)
       self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
