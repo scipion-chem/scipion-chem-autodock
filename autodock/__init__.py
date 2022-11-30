@@ -30,10 +30,12 @@ This package contains the protocols for
 manipulation of atomic struct objects
 """
 
-import os, subprocess
+import os, subprocess, json
 from .bibtex import _bibtexStr
 
 import pwem
+from pyworkflow import Config
+import pyworkflow.utils as pwutils
 
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC
@@ -45,6 +47,8 @@ VINA_DIC = {'name': 'vina', 'version': '1.2', 'home': 'VINA_HOME'}
 ASITE_DIC = {'name': 'AutoSite', 'version': '1.0', 'home': 'AUTOSITE_HOME'}
 MEEKO_DIC = {'name': 'meeko', 'version': '0.3.3', 'home': 'MEEKO_HOME'}
 ADGPU_DIC = {'name': 'AutoDock-GPU', 'version': '', 'home': 'ADGPU_HOME'}
+
+enVars = {'GPU_INCLUDE_PATH': pwem.Config.CUDA_BIN.replace('bin', 'include'), 'GPU_LIBRARY_PATH': pwem.Config.CUDA_LIB}
 
 class Plugin(pwem.Plugin):
     @classmethod
@@ -62,6 +66,18 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(VINA_DIC['home'], VINA_DIC['name'] + '-' + VINA_DIC['version'])
         cls._defineEmVar(ASITE_DIC['home'], ASITE_DIC['name'] + '-' + ASITE_DIC['version'])
         cls._defineEmVar(ADGPU_DIC['home'], ADGPU_DIC['name'])
+
+    @classmethod
+    def getEnviron(cls):
+      """ Create the needed environment for AutoDock-GPU installation. """
+      environ = pwutils.Environ(os.environ)
+      environ.update({
+        'PATH': pwem.Config.CUDA_BIN,
+        'LD_LIBRARY_PATH': pwem.Config.CUDA_LIB,
+      }, position=pwutils.Environ.END)
+      environ.update(enVars)
+
+      return environ
 
     @classmethod
     def addADTPackage(cls, env, default=False):
@@ -114,15 +130,44 @@ class Plugin(pwem.Plugin):
     @classmethod
     def addAutoDockGPUPackage(cls, env, default=False):
       ADGPU_INSTALLED = 'ADGPU_INSTALLED'
+
+      compCap = None
+      compCapDic = cls.getNVIDIACompCapDic()
+
+      print(compCapDic.keys())
+
+      nvidiaName = cls.getNVIDIAName()
+      if nvidiaName in compCapDic:
+          compCap = compCapDic[nvidiaName]
+      elif ' '.join(nvidiaName.split()[1:]) in compCapDic:
+          nvidiaName = ' '.join(nvidiaName.split()[1:])
+          compCap = compCapDic[nvidiaName]
+
       adGPUCommands = 'cd .. && rm -r %s && git clone %s && cd %s && ' % \
                       (ADGPU_DIC['name'], cls.getAutoDockGPUGithub(), ADGPU_DIC['name'])
-      adGPUCommands += 'make DEVICE=GPU && touch {}'.format(ADGPU_INSTALLED)
+      adGPUCommands += 'make DEVICE=GPU '
+      if compCap:
+          adGPUCommands += ' TARGETS={} '.format(compCap)
+      adGPUCommands += '&& touch {}'.format(ADGPU_INSTALLED)
       adGPUCommands = [(adGPUCommands, ADGPU_INSTALLED)]
 
-      env.addPackage(ADGPU_DIC['name'], tar='void.tgz', commands=adGPUCommands, default=True)
+
+      env.addPackage(ADGPU_DIC['name'], tar='void.tgz', commands=adGPUCommands, default=True,
+                     vars=enVars, updateCuda=True)
 
 
     ################ UTILS ##################
+
+    @classmethod
+    def getNVIDIACompCapDic(cls):
+      with open(cls.getPluginHome('NVIDIA_ComputeCapabilities.json')) as f:
+          jDic = json.load(f)
+      return jDic
+
+    @classmethod
+    def getNVIDIAName(cls):
+      return subprocess.check_output("nvidia-smi -L", shell=True).decode().strip().split(':')[1].split('(')[0]\
+        .strip().lower()
 
     @classmethod
     def getPluginHome(cls, path=""):
