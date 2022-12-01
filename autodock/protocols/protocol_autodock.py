@@ -245,7 +245,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
                    help='Whether to use the classical Solis and Wets local searcher, using the method of uniform '
                         'variances for changes in translations, orientations, and torsions; or the pseudo-Solis and '
                         'Wets local searcher. This method maintains the relative proportions of variances for the '
-                        'translations in Å and the rotations in radians')
+                        'translations in � and the rotations in radians')
     group.addParam('swMaxIts', IntParam, label='Number of iterations: ', default=300,
                    help='This is the maximum number of iterations that the local search procedure applies to the '
                         'phenotype of any given individual, per generation')
@@ -261,16 +261,16 @@ class ProtChemAutodock(ProtChemAutodockBase):
 
     group = form.addGroup("Simulated annealing", condition='searchType == {}'.format(SA))
     line = group.addLine('Ligand initial state: ', expertLevel=LEVEL_ADVANCED,
-                         help='[e0max] This keyword stipulates that the ligand’s initial state cannot have an energy '
-                              'greater than the first value, nor can there be more than the second value’s number of '
+                         help='[e0max] This keyword stipulates that the ligand\u2019s initial state cannot have an energy '
+                              'greater than the first value, nor can there be more than the second value\u2019s number of '
                               'retries.')
     line.addParam('e0max1', FloatParam, label='Maximum initial energy: ', default=0.00)
     line.addParam('e0max2', IntParam, label='Maximum number of retries: ', default=10000)
 
     line = group.addLine('Ligand step sizes: ', expertLevel=LEVEL_ADVANCED,
-                         help='[(t/q/d)step] Defines the maximum translation (A) / angular (º) / dihedral (º) jump '
+                         help='[(t/q/d)step] Defines the maximum translation (A) / angular (�) / dihedral (�) jump '
                               'for the first cycle that the ligand may make in one simulated annealing step. When '
-                              '“trnrf” is less than 1, the reduction factor is multiplied with the tstep at the end of '
+                              '\u201ctrnrf\u201d is less than 1, the reduction factor is multiplied with the tstep at the end of '
                               'each cycle, to give the new value for the next cycle.')
     line.addParam('tstep', FloatParam, label='Translation: ', default=2.00)
     line.addParam('qstep', FloatParam, label='Angular: ', default=50.0)
@@ -280,8 +280,8 @@ class ProtChemAutodock(ProtChemAutodockBase):
                    help='[rt0/R] Initial absolute temperature. It will be multiplied by the gas constant '
                         'R (1.987 cal mol -1 K -1)for the input docking.')
     group.addParam('SA_schedule', EnumParam, label='SA schedule: ', default=0, choices=['Linear', 'Geometric'],
-                   help='The default “linear_schedule” uses a linear or arithmetic temperature reduction schedule'
-                        ' during Monte Carlo simulated annealing. The “geometric_schedule” keyword uses instead a '
+                   help='The default \u201clinear_schedule\u201d uses a linear or arithmetic temperature reduction schedule'
+                        ' during Monte Carlo simulated annealing. The \u201cgeometric_schedule\u201d keyword uses instead a '
                         'geometric reduction schedule, according to the rtrf parameter described next. At the end of '
                         'each cycle, the temperature is reduced by (rt0/cycles).')
     group.addParam('rtrf', FloatParam, label='Temperature reduction factor: ', default=0.90,
@@ -315,14 +315,14 @@ class ProtChemAutodock(ProtChemAutodockBase):
     dockSteps = []
     if self.fromReceptor.get() == 0:
       gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
-      for mol in self.inputSmallMolecules.get():
-        dockId = self._insertFunctionStep('dockStep', mol.clone(), prerequisites=[gridId])
+      for gpuIdx, mol in enumerate(self.inputSmallMolecules.get()):
+        dockId = self._insertFunctionStep('dockStep', mol.clone(), gpuIdx, prerequisites=[gridId])
         dockSteps.append(dockId)
     else:
       for pocket in self.inputStructROIs.get():
         gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
-        for mol in self.inputSmallMolecules.get():
-          dockId = self._insertFunctionStep('dockStep', mol.clone(), pocket.clone(), prerequisites=[gridId])
+        for gpuIdx, mol in enumerate(self.inputSmallMolecules.get()):
+          dockId = self._insertFunctionStep('dockStep', mol.clone(), gpuIdx, pocket.clone(), prerequisites=[gridId])
           dockSteps.append(dockId)
 
     self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
@@ -364,7 +364,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
     args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())
     self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=outDir)
 
-  def dockStep(self, mol, pocket=None):
+  def dockStep(self, mol, gpuIdx, pocket=None):
     # Prepare grid
     if self.doFlexRes:
         flexReceptorFn, receptorFn = self.getFlexFiles()
@@ -380,8 +380,10 @@ class ProtChemAutodock(ProtChemAutodockBase):
       args = "-p %s -l %s" % (dpfFile, fnDLG)
       self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
     else:
+      gpuList = self.getGPU_Ids()
+      gpuID = gpuList[gpuIdx % len(gpuList)]
       fnDPF = self.commentFirstLine(dpfFile)
-      args = '-I {} -D {}'.format(fnDPF, int(getattr(self, GPU_LIST).get()) + 1)
+      args = '-I {} -D {}'.format(fnDPF, gpuID)
       autodock_plugin.runAutodockGPU(self, args, outDir)
 
   def createOutputStep(self):
@@ -529,6 +531,11 @@ class ProtChemAutodock(ProtChemAutodockBase):
           f.write(myDPFstr)
       return fnDPF
 
+  def getGPU_Ids(self):
+    gpus = []
+    for gp in getattr(self, GPU_LIST).get().split(','):
+      gpus.append(str(int(gp) + 1))
+    return gpus
 
   def getLigandsFileNames(self):
     ligFns = []
