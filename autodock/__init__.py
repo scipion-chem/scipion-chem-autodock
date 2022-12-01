@@ -135,8 +135,6 @@ class Plugin(pwem.Plugin):
       compCapDic = cls.getNVIDIACompCapDic()
 
       nvidiaName = cls.getNVIDIAName()
-      print('nvdiai: ', nvidiaName)
-      print(compCapDic.keys())
       if nvidiaName in compCapDic:
           compCap = compCapDic[nvidiaName]
 
@@ -157,7 +155,7 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getNVIDIACompCapDic(cls):
-      with open(cls.getPluginHome('NVIDIA_ComputeCapabilities.json')) as f:
+      with open(cls.getPluginHome('utils/NVIDIA_ComputeCapabilities.json')) as f:
           jDic = json.load(f)
       return jDic
 
