@@ -381,7 +381,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
       self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
     else:
       fnDPF = self.commentFirstLine(dpfFile)
-      args = '-I {}'.format(fnDPF)
+      args = '-I {} -D {}'.format(fnDPF, int(getattr(self, GPU_LIST).get()) + 1)
       autodock_plugin.runAutodockGPU(self, args, outDir)
 
   def createOutputStep(self):
