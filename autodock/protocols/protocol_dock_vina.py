@@ -26,61 +26,40 @@
 
 import os, shutil
 
-from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, \
-  LEVEL_ADVANCED, STEPS_PARALLEL
+from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, FloatParam, \
+  LEVEL_ADVANCED
 import pyworkflow.object as pwobj
-from pyworkflow.utils.path import makePath, createLink
+from pyworkflow.utils.path import makePath
 
-from autodock import Plugin as autodock_plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, calculate_centerMass, generate_gpf
 from pwchem import Plugin as pwchem_plugin
 from pwchem.constants import MGL_DIC
 
+from autodock import Plugin as autodock_plugin
+from autodock.protocols.protocol_autodock import ProtChemAutodockBase
+
 meekoScript = 'meeko_preparation.py'
 scriptName = 'vina_docking.py'
 
-class ProtChemVinaDocking(EMProtocol):
+class ProtChemVinaDocking(ProtChemAutodockBase):
     """Dock ligands using Vina"""
     _label = 'Vina docking'
     _program = ""
 
     _scoreNames = ['Vina', 'Vinardo', 'AD4']
 
-    def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
-        self.stepsExecutionMode = STEPS_PARALLEL
-
     def _defineParams(self, form):
-        form.addSection(label='Input')
-        form.addHidden('nCPUs', IntParam, label='Number of CPUs to use', default=1)
-        group = form.addGroup('Receptor specification')
-        group.addParam('wholeProt', BooleanParam, label='Dock on whole protein: ', default=True,
-                       help='Whether to dock on a whole protein surface or on specific regions')
-
-        # Docking on whole protein
-        group.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
-                       label='Input atomic structure:', condition='wholeProt',
-                       help="The atom structure to use as receptor in the docking")
-        group.addParam('radius', FloatParam, label='Grid radius for whole protein: ',
-                       condition='wholeProt', allowsNull=False,
-                       help='Radius of the Autodock grid for the whole protein')
-
-        # Docking on pockets
-        group.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
-                       label='Input StructROIs:', condition='not wholeProt',
-                       help="The protein StructROIs to dock in")
-        group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs StructROI radius: ',
-                       condition='not wholeProt', default=1.1, allowsNull=False,
-                       help='The radius * n of each StructROI will be used as grid radius')
-        group.addParam('spacing', FloatParam, label='Spacing of affinity maps: ',
-                       default=0.375, help='Affinity maps spacing')
-
+        super()._defineParams(form)
         group = form.addGroup('Docking')
-        group.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules",
-                       label='Set of small molecules:', allowsNull=False,
-                       help='Input small molecules to be docked with Vina')
+        group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
+                       label='Input small molecules: ', allowsNull=False,
+                       help="Input small molecules to be docked with AutoDock")
+        group.addParam('nRuns', IntParam, label='Number of docking runs: ', default=50,
+                       help='Number of independent runs using the selected strategy. \nDifferent docking positions will be '
+                            'found for each of them.')
+        group.addParam('rmsTol', FloatParam, label='Cluster tolerance (A): ', default=2.0, expertLevel=LEVEL_ADVANCED,
+                       help='Maximum RMSD for 2 docked structures to be in the same cluster')
 
         group.addParam('scoreName', EnumParam, label='Score function: ',
                        choices=self._scoreNames, default=0,
@@ -88,10 +67,6 @@ class ProtChemVinaDocking(EMProtocol):
         group.addParam('exhaust', IntParam, label='Exhaustiveness number: ', default=8,
                        help='Number that controls the amount of runs or trials to use in the vina algorithm.\n'
                             'The higher, the more the search pace is explored, but also it will be slower')
-        group.addParam('nPoses', IntParam, label='Number of positions per ligand: ', default=20,
-                       help='Number of positions outputed for each of the ligands provided')
-        group.addParam('minRMSD', FloatParam, label='Minimum RMSD difference between poses: ',
-                       default=1.0, help='Minimum RMSD difference between poses')
         group.addParam('maxEvals', IntParam, label='Maximum number of evaluation: ',
                        expertLevel=LEVEL_ADVANCED, default=0, help='Maximum number of evaluation')
 
@@ -101,7 +76,7 @@ class ProtChemVinaDocking(EMProtocol):
       cId = self._insertFunctionStep('convertStep', prerequisites=[])
 
       dockSteps = []
-      if self.wholeProt:
+      if self.fromReceptor.get() == 0:
           dockId = self._insertFunctionStep('dockStep', prerequisites=[cId])
           dockSteps.append(dockId)
       else:
@@ -112,7 +87,7 @@ class ProtChemVinaDocking(EMProtocol):
       self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
     def convertStep(self):
-      mols = self.inputSmallMols.get()
+      mols = self.inputSmallMolecules.get()
       for mol in mols:
         self.convert2PDBQT(mol, self._getTmpPath())
 
@@ -129,7 +104,7 @@ class ProtChemVinaDocking(EMProtocol):
       if not os.path.exists(outDir):
           makePath(outDir)
 
-      if self.wholeProt:
+      if self.fromReceptor.get() == 0:
         radius = self.radius.get()
         # Use the original pdb for mass center
         structure, x_center, y_center, z_center = calculate_centerMass(self.getReceptorPDB())
@@ -137,7 +112,7 @@ class ProtChemVinaDocking(EMProtocol):
         radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
         x_center, y_center, z_center = pocket.calculateMassCenter()
 
-      mols = self.inputSmallMols.get()
+      mols = self.inputSmallMolecules.get()
       molFiles = []
       for mol in mols:
         molFiles.append(os.path.abspath(mol.getFileName()))
@@ -162,7 +137,7 @@ class ProtChemVinaDocking(EMProtocol):
             molName = os.path.split(dockFile)[1].split('.pdbqt')[0]
             pocketDic[molName] = self.parseDockedPDBQT(dockFile)
 
-        for smallMol in self.inputSmallMols.get():
+        for smallMol in self.inputSmallMolecules.get():
             molName = smallMol.getUniqueName(conf=True)
             molDic = pocketDic[molName]
 
@@ -182,7 +157,7 @@ class ProtChemVinaDocking(EMProtocol):
       outputSet.proteinFile.set(self.getOriginalReceptorFile())
       outputSet.setDocked(True)
       self._defineOutputs(outputSmallMolecules=outputSet)
-      self._defineSourceRelation(self.inputSmallMols, outputSet)
+      self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
     ########################### Parameters functions ############################
 
@@ -191,7 +166,14 @@ class ProtChemVinaDocking(EMProtocol):
 
         f = open(paramsFile, 'w')
         f.write('ligandFiles:: {}\n'.format(' '.join(molFiles)))
-        f.write('receptorFile:: {}\n'.format(self.getReceptorPDBQT()))
+
+        fnReceptor = self.getReceptorPDBQT()
+        if self.doFlexRes:
+            flexFn, fnReceptor = self.buildFlexReceptor(fnReceptor)
+
+        f.write('receptorFile:: {}\n'.format(fnReceptor))
+        if self.doFlexRes:
+            f.write('flexRecFile:: {}\n'.format(flexFn))
         f.write('mapsName:: {}\n'.format(self.getReceptorName()))
         f.write('gpfFile:: {}\n'.format(gpfFile))
 
@@ -200,8 +182,8 @@ class ProtChemVinaDocking(EMProtocol):
 
         f.write('scoreName:: {}\n'.format(self.getEnumText('scoreName')))
         f.write('exhaust:: {}\n'.format(self.exhaust.get()))
-        f.write('nPoses:: {}\n'.format(self.nPoses.get()))
-        f.write('minRMSD:: {}\n'.format(self.minRMSD.get()))
+        f.write('nPoses:: {}\n'.format(self.nRuns.get()))
+        f.write('minRMSD:: {}\n'.format(self.rmsTol.get()))
         f.write('maxEvals:: {}\n'.format(self.maxEvals.get()))
 
         f.write('nCPUs:: {}\n'.format(self.numberOfThreads.get()))
@@ -211,32 +193,8 @@ class ProtChemVinaDocking(EMProtocol):
 
 ########################### Utils functions ############################
 
-    def getGridId(self, outDir):
-        return outDir.split('_')[-1]
-
     def convert2PDBQT(self, smallMol, oDir):
-        '''Convert ligand to pdbqt using obabel'''
-        inFile = smallMol.getFileName()
-        if os.path.splitext(inFile)[1] not in ['.pdb', '.mol2', '.pdbq']:
-            # Convert to formats recognized by ADT
-            outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
-            args = ' -i "{}" -of mol2 --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
-                                                                               os.path.abspath(outDir), outName)
-            pwchem_plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
-            inFile = self._getTmpPath(outName + '.mol2')
-
-        if not os.path.exists(oDir):
-            os.mkdir(oDir)
-
-        inName, inExt = os.path.splitext(os.path.basename(inFile))
-        oFile = os.path.abspath(os.path.join(oDir, smallMol.getUniqueName() +'.pdbqt'))
-
-        if inExt != '.pdbqt':
-            args = ' -l {} -o {}'.format(inFile, oFile)
-            self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
-                        autodock_plugin.getADTPath('Utilities24/prepare_ligand4.py') + args)
-        else:
-            createLink(inFile, oFile)
+        oFile, oDir = super().convert2PDBQT(smallMol, oDir)
 
         write = 'w'
         if os.path.exists(self.getConvertedLigandsFile()):
@@ -263,28 +221,6 @@ class ProtChemVinaDocking(EMProtocol):
                     autodock_plugin.getADTPath('Utilities24/prepare_receptor4.py') + args)
 
         return oFile
-
-    def getOriginalReceptorFile(self):
-        if self.wholeProt:
-            return self.inputAtomStruct.get().getFileName()
-        else:
-            return self.inputStructROIs.get().getProteinFile()
-
-    def getOutputPocketDir(self, pocket=None):
-        if pocket==None:
-            outDir = self._getExtraPath('pocket_1')
-        else:
-            outDir = self._getExtraPath('pocket_{}'.format(pocket.getObjId()))
-        return os.path.abspath(outDir)
-
-    def getPocketDirs(self):
-        dirs = []
-        for file in os.listdir(self._getExtraPath()):
-            d = self._getExtraPath(file)
-            if os.path.isdir(d) and 'pocket' in file:
-                dirs.append(d)
-        dirs.sort()
-        return dirs
 
     def parseDockedPDBQT(self, pdbqtFile):
         dockedDic = {}
@@ -334,9 +270,3 @@ class ProtChemVinaDocking(EMProtocol):
             files = fIn.read().split()
         return files
 
-    def getReceptorName(self):
-        if self.wholeProt:
-            atomStructFn = self.getOriginalReceptorFile()
-            return atomStructFn.split('/')[-1].split('.')[0]
-        else:
-            return self.inputStructROIs.get().getProteinName()

@@ -32,15 +32,26 @@ Then, it will load the structure and will take all chain related
 information such as name and number of residues.
 """
 
-# Imports
 from pwchem.wizards import *
-from autodock.protocols.protocol_preparation_receptor import ProtChemADTPrepareReceptor
-from autodock.protocols.protocol_autoSite_pharmacophore import ProtChemAutoSiteGenPharmacophore
+from pwchem.utils import RESIDUES1TO3
+
+from autodock.protocols import *
 
 SelectChainWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
                               targets=['chain_name'],
                               inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
+
+
+SelectChainWizardQT().addTarget(protocol=ProtChemAutodock,
+                                targets=['flexChain'],
+                                inputs=[{'fromReceptor': ['inputAtomStruct', 'inputStructROIs']}],
+                                outputs=['flexChain'])
+
+SelectChainWizardQT().addTarget(protocol=ProtChemVinaDocking,
+                                targets=['flexChain'],
+                                inputs=[{'fromReceptor': ['inputAtomStruct', 'inputStructROIs']}],
+                                outputs=['flexChain'])
 
 SelectMultiChainWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
                                    targets=['chain_name'],
@@ -51,3 +62,31 @@ SelectElementWizard().addTarget(protocol=ProtChemAutoSiteGenPharmacophore,
                                 targets=['inputStructROISelect'],
                                 inputs=['inputStructROIs'],
                                 outputs=['inputStructROISelect'])
+
+SelectResidueWizardQT().addTarget(protocol=ProtChemAutodock,
+                                  targets=['flexPosition'],
+                                  inputs=[{'fromReceptor': ['inputAtomStruct', 'inputStructROIs']}, 'flexChain'],
+                                  outputs=['flexPosition'])
+
+SelectResidueWizardQT().addTarget(protocol=ProtChemVinaDocking,
+                                  targets=['flexPosition'],
+                                  inputs=[{'fromReceptor': ['inputAtomStruct', 'inputStructROIs']}, 'flexChain'],
+                                  outputs=['flexPosition'])
+
+class AddFlexibleWizard(EmWizard):
+  _targets = [(ProtChemAutodock, ['addFlex']), (ProtChemVinaDocking, ['addFlex'])]
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    chainStr, resStr = protocol.flexChain.get(),  protocol.flexPosition.get()
+    chainId = json.loads(chainStr)['chain']
+    resIds, posIdxs = json.loads(resStr)['residues'], json.loads(resStr)['index'].split('-')
+
+    allResStr = []
+    for i, rId in enumerate(resIds):
+        allResStr.append(RESIDUES1TO3[rId] + str(int(posIdxs[0]) + i))
+
+    form.setVar('flexList', protocol.flexList.get() +
+                '{}:{}\n'.format(chainId, '_'.join(allResStr)))
+
+

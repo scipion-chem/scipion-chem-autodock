@@ -28,7 +28,7 @@ import os, glob
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam, STEPS_PARALLEL, BooleanParam, \
-  LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam
+  LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam, LabelParam, TextParam
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
@@ -44,16 +44,157 @@ LGA, GA, LS, SA = 0, 1, 2, 3
 searchDic = {LGA: 'Lamarckian Genetic Algorithm', GA: 'Genetic Algorithm', LS: 'Local Search',
              SA: 'Simulated annealing'}
 
-class ProtChemAutodock(EMProtocol):
+class ProtChemAutodockBase(EMProtocol):
+    """Base class protocol for AutoDock docking protocols"""
+
+    def __init__(self, **kwargs):
+        EMProtocol.__init__(self, **kwargs)
+        self.stepsExecutionMode = STEPS_PARALLEL
+
+    def _defineFlexParams(self, form):
+        group = form.addGroup('Flexible residues')
+        group.addParam('doFlexRes', BooleanParam, label='Add flexible residues: ', default=False,
+                       help='Whether to add residues of the receptor which will be treated as flexible by AutoDock')
+        group.addParam('flexChain', StringParam, label='Residue chain: ', condition='doFlexRes',
+                       help='Specify the protein chain')
+        group.addParam('flexPosition', StringParam, label='Flexible residues: ', condition='doFlexRes',
+                       help='Specify the residues to make flexible')
+        group.addParam('addFlex', LabelParam, label='Add defined residues', condition='doFlexRes',
+                       help='Here you can define flexible residues which will be added to the list below.'
+                            'Be aware that it will be a range from the first to the last you choose')
+        group.addParam('flexList', TextParam, width=70, default='', label='List of flexible residues: ',
+                       condition='doFlexRes', help='List of chain | residues to make flexible. \n')
+
+    def _defineParams(self, form):
+        form.addSection(label='Input')
+        group = form.addGroup('Receptor specification')
+        group.addParam('fromReceptor', EnumParam, label='Dock on : ', default=1,
+                       choices=['Whole protein', 'SetOfStructROIs'],
+                       help='Whether to dock on a whole protein surface or on specific regions')
+
+        # Docking on whole protein
+        group.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
+                       label='Input atomic structure: ', condition='fromReceptor == 0',
+                       help="The atom structure to use as receptor in the docking")
+        group.addParam('radius', FloatParam, label='Grid radius for whole protein: ',
+                       condition='fromReceptor == 0', allowsNull=False,
+                       help='Radius of the Autodock grid for the whole protein')
+
+        # Docking on pockets
+        group.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
+                       label='Input pockets: ', condition='not fromReceptor == 0',
+                       help="The protein structural ROIs to dock in")
+        group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs StructROI radius: ',
+                       condition='not fromReceptor == 0', default=1.1, allowsNull=False,
+                       help='The radius * n of each StructROI will be used as grid radius')
+
+        group.addParam('spacing', FloatParam, label='Spacing of the grids: ', default=0.5, allowsNull=False,
+                       help='Spacing of the generated Autodock grids')
+
+        self._defineFlexParams(form)
+
+        group = form.addGroup('Docking')
+        group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
+                       label='Input small molecules: ', allowsNull=False,
+                       help="Input small molecules to be docked with AutoDock")
+        group.addParam('nRuns', IntParam, label='Number of docking runs: ', default=50,
+                       help='Number of independent runs using the selected strategy. \nDifferent docking positions will be '
+                            'found for each of them.')
+        group.addParam('rmsTol', FloatParam, label='Cluster tolerance (A): ', default=2.0, expertLevel=LEVEL_ADVANCED,
+                       help='Maximum RMSD for 2 docked structures to be in the same cluster')
+
+    def getGridId(self, outDir):
+        return outDir.split('_')[-1]
+
+    def convert2PDBQT(self, smallMol, oDir):
+        '''Convert ligand to pdbqt using prepare_ligand4 of ADT'''
+        inFile = smallMol.getFileName()
+        if os.path.splitext(inFile)[1] not in ['.pdb', '.mol2', '.pdbq']:
+          # Convert to formats recognized by ADT
+          outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
+          args = ' -i "{}" -of mol2 --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
+                                                                             os.path.abspath(outDir), outName)
+          pwchem_plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+          inFile = self._getTmpPath(outName + '.mol2')
+
+        if not os.path.exists(oDir):
+          os.mkdir(oDir)
+
+        inName, inExt = os.path.splitext(os.path.basename(inFile))
+        oFile = os.path.abspath(os.path.join(oDir, smallMol.getUniqueName() + '.pdbqt'))
+
+        if inExt != '.pdbqt':
+          args = ' -l {} -o {}'.format(inFile, oFile)
+          self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
+                      autodock_plugin.getADTPath('Utilities24/prepare_ligand4.py') + args)
+        else:
+          createLink(inFile, oFile)
+        return oFile, oDir
+
+    def getOriginalReceptorFile(self):
+        if self.fromReceptor.get() == 0:
+            return self.inputAtomStruct.get().getFileName()
+        else:
+            return self.inputStructROIs.get().getProteinFile()
+
+    def buildFlexReceptor(self, receptorFn):
+        molName = getBaseFileName(receptorFn)
+        allFlexRes = self.parseFlexRes(molName)
+        flexFn, rigFn = self.getFlexFiles()
+        args = ' -r {} -s {} -g {} -x {}'.format(receptorFn, allFlexRes, rigFn, flexFn)
+        self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
+                    autodock_plugin.getADTPath('Utilities24/prepare_flexreceptor4.py') + args, cwd=self._getExtraPath())
+        return flexFn, rigFn
+
+    def getFlexFiles(self):
+        return os.path.abspath(self._getExtraPath('receptor_flex.pdbqt')), \
+               os.path.abspath(self._getExtraPath('receptor_rig.pdbqt'))
+
+    def parseFlexRes(self, molName):
+        allFlexDic = {}
+        for line in self.flexList.get().split('\n'):
+            if line.strip():
+                chain, res = line.strip().split(':')
+                if chain in allFlexDic:
+                    allFlexDic[chain] += res + '_'
+                else:
+                    allFlexDic[chain] = res + '_'
+
+        allFlexStr = ''
+        for chain in allFlexDic:
+            allFlexStr += '{}:{}:{},'.format(molName, chain, allFlexDic[chain][:-1])
+        return allFlexStr[:-1]
+
+    def getOutputPocketDir(self, pocket=None):
+        if pocket == None:
+          outDir = os.path.abspath(self._getExtraPath('pocket_1'))
+        else:
+          outDir = os.path.abspath(self._getExtraPath('pocket_{}'.format(pocket.getObjId())))
+        return outDir
+
+    def getPocketDirs(self):
+        dirs = []
+        for file in os.listdir(self._getExtraPath()):
+            d = self._getExtraPath(file)
+            if os.path.isdir(d) and 'pocket' in file:
+                dirs.append(d)
+        dirs.sort()
+        return dirs
+
+    def getReceptorName(self):
+        if self.fromReceptor.get() == 0:
+            atomStructFn = self.getOriginalReceptorFile()
+            return atomStructFn.split('/')[-1].split('.')[0]
+        else:
+            return self.inputStructROIs.get().getProteinName()
+
+class ProtChemAutodock(ProtChemAutodockBase):
   """Perform a docking experiment with autodock. Grid must be generated in this protocol in order to take into
        account ligands atom types. See the help at
        http://autodock.scripps.edu/faqs-help/manual/autodock-4-2-user-guide/AutoDock4.2_UserGuide.pdf"""
   _label = 'Autodock docking'
   _program = ""
 
-  def __init__(self, **kwargs):
-    EMProtocol.__init__(self, **kwargs)
-    self.stepsExecutionMode = STEPS_PARALLEL
 
   def _defineParams(self, form):
     form.addHidden(USE_GPU, BooleanParam, default=True,
@@ -64,41 +205,7 @@ class ProtChemAutodock(EMProtocol):
     form.addHidden(GPU_LIST, StringParam, default='0', label="Choose GPU IDs",
                    help="Add a list of GPU devices that can be used")
 
-    form.addSection(label='Input')
-    group = form.addGroup('Receptor specification')
-    group.addParam('wholeProt', BooleanParam, label='Dock on whole protein: ', default=True,
-                   help='Whether to dock on a whole protein surface or on specific regions')
-
-    # Docking on whole protein
-    group.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
-                   label='Input atomic structure: ', condition='wholeProt',
-                   help="The atom structure to use as receptor in the docking")
-    group.addParam('radius', FloatParam, label='Grid radius for whole protein: ',
-                   condition='wholeProt', allowsNull=False,
-                   help='Radius of the Autodock grid for the whole protein')
-
-    # Docking on pockets
-    group.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
-                   label='Input pockets: ', condition='not wholeProt',
-                   help="The protein structural ROIs to dock in")
-    group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs StructROI radius: ',
-                   condition='not wholeProt', default=1.1, allowsNull=False,
-                   help='The radius * n of each StructROI will be used as grid radius')
-
-    group.addParam('spacing', FloatParam, label='Spacing of the grids: ', default=0.5, allowsNull=False,
-                   condition='not wholeProt', help='Spacing of the generated Autodock grids')
-
-    group = form.addGroup('Docking')
-    group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
-                   label='Input small molecules: ', allowsNull=False,
-                   help="Input small molecules to be docked with AutoDock")
-    group.addParam('nRuns', IntParam, label='Number of docking runs: ', default=50,
-                   help='Number of independent runs using the selected strategy. \nDifferent docking positions will be '
-                        'found for each of them.')
-
-    group = form.addGroup('Analysis')
-    group.addParam('rmsTol', FloatParam, label='Cluster tolerance (A): ', default=2.0, expertLevel=LEVEL_ADVANCED,
-                   help='Maximum RMSD for 2 docked structures to be in the same cluster')
+    super()._defineParams(form)
 
     form.addSection(label="Search")
     form.addParam('searchType', EnumParam, label='Search type: ', default=LGA,
@@ -138,7 +245,7 @@ class ProtChemAutodock(EMProtocol):
                    help='Whether to use the classical Solis and Wets local searcher, using the method of uniform '
                         'variances for changes in translations, orientations, and torsions; or the pseudo-Solis and '
                         'Wets local searcher. This method maintains the relative proportions of variances for the '
-                        'translations in Å and the rotations in radians')
+                        'translations in � and the rotations in radians')
     group.addParam('swMaxIts', IntParam, label='Number of iterations: ', default=300,
                    help='This is the maximum number of iterations that the local search procedure applies to the '
                         'phenotype of any given individual, per generation')
@@ -154,16 +261,16 @@ class ProtChemAutodock(EMProtocol):
 
     group = form.addGroup("Simulated annealing", condition='searchType == {}'.format(SA))
     line = group.addLine('Ligand initial state: ', expertLevel=LEVEL_ADVANCED,
-                         help='[e0max] This keyword stipulates that the ligand’s initial state cannot have an energy '
-                              'greater than the first value, nor can there be more than the second value’s number of '
+                         help='[e0max] This keyword stipulates that the ligand\u2019s initial state cannot have an energy '
+                              'greater than the first value, nor can there be more than the second value\u2019s number of '
                               'retries.')
     line.addParam('e0max1', FloatParam, label='Maximum initial energy: ', default=0.00)
     line.addParam('e0max2', IntParam, label='Maximum number of retries: ', default=10000)
 
     line = group.addLine('Ligand step sizes: ', expertLevel=LEVEL_ADVANCED,
-                         help='[(t/q/d)step] Defines the maximum translation (A) / angular (º) / dihedral (º) jump '
+                         help='[(t/q/d)step] Defines the maximum translation (A) / angular (�) / dihedral (�) jump '
                               'for the first cycle that the ligand may make in one simulated annealing step. When '
-                              '“trnrf” is less than 1, the reduction factor is multiplied with the tstep at the end of '
+                              '\u201ctrnrf\u201d is less than 1, the reduction factor is multiplied with the tstep at the end of '
                               'each cycle, to give the new value for the next cycle.')
     line.addParam('tstep', FloatParam, label='Translation: ', default=2.00)
     line.addParam('qstep', FloatParam, label='Angular: ', default=50.0)
@@ -173,8 +280,8 @@ class ProtChemAutodock(EMProtocol):
                    help='[rt0/R] Initial absolute temperature. It will be multiplied by the gas constant '
                         'R (1.987 cal mol -1 K -1)for the input docking.')
     group.addParam('SA_schedule', EnumParam, label='SA schedule: ', default=0, choices=['Linear', 'Geometric'],
-                   help='The default “linear_schedule” uses a linear or arithmetic temperature reduction schedule'
-                        ' during Monte Carlo simulated annealing. The “geometric_schedule” keyword uses instead a '
+                   help='The default \u201clinear_schedule\u201d uses a linear or arithmetic temperature reduction schedule'
+                        ' during Monte Carlo simulated annealing. The \u201cgeometric_schedule\u201d keyword uses instead a '
                         'geometric reduction schedule, according to the rtrf parameter described next. At the end of '
                         'each cycle, the temperature is reduced by (rt0/cycles).')
     group.addParam('rtrf', FloatParam, label='Temperature reduction factor: ', default=0.90,
@@ -206,16 +313,16 @@ class ProtChemAutodock(EMProtocol):
     cId = self._insertFunctionStep('convertStep', prerequisites=[])
 
     dockSteps = []
-    if self.wholeProt:
+    if self.fromReceptor.get() == 0:
       gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
-      for mol in self.inputSmallMolecules.get():
-        dockId = self._insertFunctionStep('dockStep', mol.clone(), prerequisites=[gridId])
+      for gpuIdx, mol in enumerate(self.inputSmallMolecules.get()):
+        dockId = self._insertFunctionStep('dockStep', mol.clone(), gpuIdx, prerequisites=[gridId])
         dockSteps.append(dockId)
     else:
       for pocket in self.inputStructROIs.get():
         gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
-        for mol in self.inputSmallMolecules.get():
-          dockId = self._insertFunctionStep('dockStep', mol.clone(), pocket.clone(), prerequisites=[gridId])
+        for gpuIdx, mol in enumerate(self.inputSmallMolecules.get()):
+          dockId = self._insertFunctionStep('dockStep', mol.clone(), gpuIdx, pocket.clone(), prerequisites=[gridId])
           dockSteps.append(dockId)
 
     self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
@@ -233,7 +340,7 @@ class ProtChemAutodock(EMProtocol):
   def generateGridsStep(self, pocket=None):
     fnReceptor = self.receptorFile
     outDir = self.getOutputPocketDir(pocket)
-    if self.wholeProt:
+    if self.fromReceptor.get() == 0:
       radius = self.radius.get()
       # Use the original pdb for mass center
       pdbFile = self.getOriginalReceptorFile()
@@ -245,6 +352,10 @@ class ProtChemAutodock(EMProtocol):
       x_center, y_center, z_center = pocket.calculateMassCenter()
 
     makePath(outDir)
+
+    if self.doFlexRes:
+      flexFn, fnReceptor = self.buildFlexReceptor(fnReceptor)
+
     npts = (radius * 2) / self.spacing.get()
     gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(),
                             xc=x_center, yc=y_center, zc=z_center,
@@ -253,21 +364,26 @@ class ProtChemAutodock(EMProtocol):
     args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())
     self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=outDir)
 
-  def dockStep(self, mol, pocket=None):
+  def dockStep(self, mol, gpuIdx, pocket=None):
     # Prepare grid
-    receptorFn = self.receptorFile
+    if self.doFlexRes:
+        flexReceptorFn, receptorFn = self.getFlexFiles()
+    else:
+        flexReceptorFn, receptorFn = None, self.receptorFile
     outDir = self.getOutputPocketDir(pocket)
 
     molFn = self.getMolLigandName(mol)
-    dpfFile = self.writeDPF(outDir, molFn, receptorFn)
+    dpfFile = self.writeDPF(outDir, molFn, receptorFn, flexReceptorFn)
 
     fnDLG = dpfFile.replace('.dpf', '.dlg')
     if not getattr(self, USE_GPU):
       args = "-p %s -l %s" % (dpfFile, fnDLG)
       self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
     else:
+      gpuList = self.getGPU_Ids()
+      gpuID = gpuList[gpuIdx % len(gpuList)]
       fnDPF = self.commentFirstLine(dpfFile)
-      args = '-I {}'.format(fnDPF)
+      args = '-I {} -D {}'.format(fnDPF, gpuID)
       autodock_plugin.runAutodockGPU(self, args, outDir)
 
   def createOutputStep(self):
@@ -308,39 +424,13 @@ class ProtChemAutodock(EMProtocol):
 
               outputSet.append(newSmallMol)
 
+    # todo: manage several receptor conformations when flexible docking
     outputSet.proteinFile.set(self.getOriginalReceptorFile())
     outputSet.setDocked(True)
     self._defineOutputs(outputSmallMolecules=outputSet)
     self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
   ########################### Utils functions ############################
-  def getGridId(self, outDir):
-    return outDir.split('_')[-1]
-
-  def convert2PDBQT(self, smallMol, oDir):
-    '''Convert ligand to pdbqt using prepare_ligand4 of ADT'''
-    inFile = smallMol.getFileName()
-    if os.path.splitext(inFile)[1] not in ['.pdb', '.mol2', '.pdbq']:
-      # Convert to formats recognized by ADT
-      outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
-      args = ' -i "{}" -of mol2 --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
-                                                                         os.path.abspath(outDir), outName)
-      pwchem_plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
-      inFile = self._getTmpPath(outName + '.mol2')
-
-    if not os.path.exists(oDir):
-      os.mkdir(oDir)
-
-    inName, inExt = os.path.splitext(os.path.basename(inFile))
-    oFile = os.path.abspath(os.path.join(oDir, smallMol.getUniqueName() + '.pdbqt'))
-
-    if inExt != '.pdbqt':
-      args = ' -l {} -o {}'.format(inFile, oFile)
-      self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
-                  autodock_plugin.getADTPath('Utilities24/prepare_ligand4.py') + args)
-    else:
-      createLink(inFile, oFile)
-    return oFile, oDir
 
   def convertReceptor2PDB(self, proteinFile):
     inName, inExt = os.path.splitext(os.path.basename(proteinFile))
@@ -361,24 +451,11 @@ class ProtChemAutodock(EMProtocol):
 
     return oFile
 
-  def getReceptorName(self):
-    if self.wholeProt:
-      atomStructFn = self.getOriginalReceptorFile()
-      return atomStructFn.split('/')[-1].split('.')[0]
-    else:
-      return self.inputStructROIs.get().getProteinName()
-
-  def getOriginalReceptorFile(self):
-    if self.wholeProt:
-      return self.inputAtomStruct.get().getFileName()
-    else:
-      return self.inputStructROIs.get().getProteinFile()
-
   def getReceptorDir(self):
     atomStructFn = self.getOriginalReceptorFile()
     return '/'.join(atomStructFn.split('/')[:-1])
 
-  def writeDPF(self, outDir, molFn, receptorFn):
+  def writeDPF(self, outDir, molFn, receptorFn, flexFn=None):
       molName, _ = os.path.splitext(os.path.basename(molFn))
       createLink(molFn, os.path.join(outDir, molName + '.pdbqt'))
       makePath(outDir)
@@ -387,6 +464,8 @@ class ProtChemAutodock(EMProtocol):
       baseDPF = os.path.abspath(os.path.join(outDir, molName + "_base.dpf"))
       # General parameters
       args = " -l %s -r %s -o %s" % (molFn, receptorFn, baseDPF)
+      if flexFn:
+          args += ' -x ' + flexFn
 
       self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                   autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py') + args, cwd=outDir)
@@ -452,6 +531,11 @@ class ProtChemAutodock(EMProtocol):
           f.write(myDPFstr)
       return fnDPF
 
+  def getGPU_Ids(self):
+    gpus = []
+    for gp in getattr(self, GPU_LIST).get().split(','):
+      gpus.append(str(int(gp) + 1))
+    return gpus
 
   def getLigandsFileNames(self):
     ligFns = []
@@ -459,21 +543,6 @@ class ProtChemAutodock(EMProtocol):
       ligFns.append(mol.getFileName())
     return ligFns
 
-  def getOutputPocketDir(self, pocket=None):
-    if pocket == None:
-      outDir = self._getExtraPath('pocket_1')
-    else:
-      outDir = self._getExtraPath('pocket_{}'.format(pocket.getObjId()))
-    return outDir
-
-  def getPocketDirs(self):
-    dirs = []
-    for file in os.listdir(self._getExtraPath()):
-      d = self._getExtraPath(file)
-      if os.path.isdir(d) and 'pocket' in file:
-        dirs.append(d)
-    dirs.sort()
-    return dirs
 
   def getMolLigandName(self, mol):
     molName = mol.getUniqueName()
@@ -490,7 +559,7 @@ class ProtChemAutodock(EMProtocol):
           posId = line.split()[-1]
           molDic[posId] = {'pdb': ''}
         elif line.startswith('DOCKED: USER    Estimated Free Energy'):
-          molDic[posId]['energy'] = line.split()[8]
+          molDic[posId]['energy'] = line.split('=')[1].split('kcal/mol')[0]
         elif line.startswith('DOCKED: USER    Estimated Inhibition'):
           molDic[posId]['ki'] = line.split()[7]
         elif line.startswith('DOCKED: REMARK') or line.startswith('TER'):

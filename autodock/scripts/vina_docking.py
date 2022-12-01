@@ -46,13 +46,15 @@ if __name__ == "__main__":
     pDic = parseParams(sys.argv[1])
     ligandFiles = pDic['ligandFiles']
     receptorFile = pDic['receptorFile']
+    flexRecFile = pDic['flexRecFile'] if 'flexRecFile' in pDic else None
+
     mapsName = pDic['mapsName']
     outDir = pDic['outDir']
 
 #####################################################################
 
     v = Vina(sf_name=pDic['scoreName'], cpu=int(pDic['nCPUs']))
-    v.set_receptor(rigid_pdbqt_filename=receptorFile)
+    v.set_receptor(rigid_pdbqt_filename=receptorFile, flex_pdbqt_filename=flexRecFile)
 
     if pDic['scoreName'] == 'Vina':
         v.compute_vina_maps(center=eval(pDic['boxCenter']), box_size=eval(pDic['boxSize']))
