@@ -135,10 +135,9 @@ class Plugin(pwem.Plugin):
       compCapDic = cls.getNVIDIACompCapDic()
 
       nvidiaName = cls.getNVIDIAName()
+      print('nvdiai: ', nvidiaName)
+      print(compCapDic.keys())
       if nvidiaName in compCapDic:
-          compCap = compCapDic[nvidiaName]
-      elif ' '.join(nvidiaName.split()[1:]) in compCapDic:
-          nvidiaName = ' '.join(nvidiaName.split()[1:])
           compCap = compCapDic[nvidiaName]
 
       adGPUCommands = 'cd .. && rm -r %s && git clone %s && cd %s && ' % \
@@ -165,7 +164,7 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getNVIDIAName(cls):
       return subprocess.check_output("nvidia-smi -L", shell=True).decode().strip().split(':')[1].split('(')[0]\
-        .strip().lower()
+        .lower().replace('nvidia', '').strip()
 
     @classmethod
     def getPluginHome(cls, path=""):

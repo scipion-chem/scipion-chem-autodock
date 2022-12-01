@@ -13,7 +13,7 @@ for table in tables:
 	for row in table.tbody.find_all('tr'):
 		columns = row.find_all('td')
 		if(columns != []):
-			d[columns[0].text.strip().lower()] = columns[1].text.strip().replace('.', '')
+			d[columns[0].text.lower().replace('nvidia', '').strip()] = columns[1].text.strip().replace('.', '')
 			
 with open("NVIDIA_ComputeCapabilities.json", "w") as f:
 	json.dump(d, f)
