@@ -140,9 +140,9 @@ class Plugin(pwem.Plugin):
 
       adGPUCommands = 'cd .. && rm -r %s && git clone %s && cd %s && ' % \
                       (ADGPU_DIC['name'], cls.getAutoDockGPUGithub(), ADGPU_DIC['name'])
-      adGPUCommands += 'make DEVICE=GPU '
+      adGPUCommands += 'make DEVICE=GPU OVERLAP=ON '
       if compCap:
-          adGPUCommands += ' TARGETS={} '.format(compCap)
+          adGPUCommands += 'TARGETS={} '.format(compCap)
       adGPUCommands += '&& touch {}'.format(ADGPU_INSTALLED)
       adGPUCommands = [(adGPUCommands, ADGPU_INSTALLED)]
 
