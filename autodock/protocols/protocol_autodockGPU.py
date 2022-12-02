@@ -26,10 +26,10 @@
 
 import os, glob
 
-from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam, STEPS_PARALLEL, BooleanParam, \
-  LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam, LabelParam, TextParam
+from pyworkflow.protocol.params import IntParam, FloatParam, BooleanParam, \
+  LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam
 import pyworkflow.object as pwobj
-from pyworkflow.utils.path import makePath, createLink
+from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseFileName
@@ -44,6 +44,15 @@ SW, SD, FIRE, AD, ADAM = 0, 1, 2, 3, 4
 searchDic = {SW: 'Solis-Wets', SD: 'Steepest-Descent', FIRE: 'FIRE',
              AD: 'ADADELTA', ADAM: 'ADAM'}
 searchKeys = {SW: 'sw', SD: 'sd', FIRE: 'fire', AD: 'ad', ADAM: 'adam'}
+
+def split_set(sciSet, n):
+  sciList = []
+  for item in sciSet:
+      sciList.append(item.clone())
+
+  k, m = divmod(len(sciList), n)
+  return list(sciList[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
+
 
 class ProtChemAutodockGPU(ProtChemAutodockBase):
   """Perform a docking experiment with AutoDock-GPU https://github.com/ccsb-scripps/AutoDock-GPU"""
@@ -148,17 +157,22 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
   def _insertAllSteps(self):
     cId = self._insertFunctionStep('convertStep', prerequisites=[])
 
+    mols = self.inputSmallMolecules.get()
+    gpuList = self.getGPU_Ids()
+    molGroups = split_set(mols, len(gpuList))
+
     dockSteps = []
     if self.fromReceptor.get() == 0:
       gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
-      for mol in self.inputSmallMolecules.get():
-        dockId = self._insertFunctionStep('dockStep', mol.clone(), prerequisites=[gridId])
+
+      for gpuIdx, mols in zip(gpuList, molGroups):
+        dockId = self._insertFunctionStep('dockStep', mols, gpuIdx, prerequisites=[gridId])
         dockSteps.append(dockId)
     else:
       for pocket in self.inputStructROIs.get():
         gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
-        for mol in self.inputSmallMolecules.get():
-          dockId = self._insertFunctionStep('dockStep', mol.clone(), pocket.clone(), prerequisites=[gridId])
+        for gpuIdx, mols in zip(gpuList, molGroups):
+          dockId = self._insertFunctionStep('dockStep', mols, gpuIdx, pocket.clone(), prerequisites=[gridId])
           dockSteps.append(dockId)
 
     self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
@@ -200,7 +214,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())
     self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=outDir)
 
-  def dockStep(self, mol, pocket=None):
+  def dockStep(self, mols, gpuIdx, pocket=None):
     # Prepare grid
     if self.doFlexRes:
         flexReceptorFn, receptorFn = self.getFlexFiles()
@@ -213,15 +227,19 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     else:
         fldFile = '{}.maps.fld'.format(self.getReceptorName())
 
-    gpuID = ' '.join(self.getGPU_Ids())
+    batchFile = os.path.abspath(os.path.join(outDir, 'batchFile_{}.txt'.format(gpuIdx)))
+    with open(batchFile, 'w') as f:
+        f.write('{}\n'.format(fldFile))
+        for mol in mols:
+            molFn = self.getMolLigandFileName(mol)
+            molBase = molFn.split('/')[-1]
+            molLink = os.path.join(outDir, molBase)
+            os.link(molFn, molLink)
 
-    molFn = self.getMolLigandFileName(mol)
-    molBase = molFn.split('/')[-1]
-    molLink = os.path.join(outDir, molBase)
-    os.link(molFn, molLink)
+            f.write('{}\n{}\n'.format(molBase, getBaseFileName(molBase)))
 
-    args = '-L {} -M {} -D "{}" -n {} --rmstol {} -C 1 --output-cluster-poses auto '.\
-      format(molBase, fldFile, gpuID, self.nRuns.get(), self.rmsTol.get())
+    args = '-B {} -D {} -n {} --rmstol {} -C 1 --output-cluster-poses auto '.\
+      format(batchFile, gpuIdx, self.nRuns.get(), self.rmsTol.get())
     if self.doFlexRes:
         args += '-F {} '.format(flexReceptorFn)
     args += self.getADGPUArgs()
