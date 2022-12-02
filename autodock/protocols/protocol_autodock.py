@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
+# * Authors:     Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -28,7 +28,7 @@ import os, glob
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam, STEPS_PARALLEL, BooleanParam, \
-  LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam, LabelParam, TextParam
+  LEVEL_ADVANCED, StringParam, EnumParam, LabelParam, TextParam
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
@@ -197,14 +197,6 @@ class ProtChemAutodock(ProtChemAutodockBase):
 
 
   def _defineParams(self, form):
-    form.addHidden(USE_GPU, BooleanParam, default=True,
-                   label="Use GPU for execution: ",
-                   help="This protocol has both CPU and GPU implementation.\
-                                         Select the one you want to use.")
-
-    form.addHidden(GPU_LIST, StringParam, default='0', label="Choose GPU IDs",
-                   help="Add a list of GPU devices that can be used")
-
     super()._defineParams(form)
 
     form.addSection(label="Search")
@@ -315,14 +307,14 @@ class ProtChemAutodock(ProtChemAutodockBase):
     dockSteps = []
     if self.fromReceptor.get() == 0:
       gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
-      for gpuIdx, mol in enumerate(self.inputSmallMolecules.get()):
-        dockId = self._insertFunctionStep('dockStep', mol.clone(), gpuIdx, prerequisites=[gridId])
+      for mol in self.inputSmallMolecules.get():
+        dockId = self._insertFunctionStep('dockStep', mol.clone(), prerequisites=[gridId])
         dockSteps.append(dockId)
     else:
       for pocket in self.inputStructROIs.get():
         gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
-        for gpuIdx, mol in enumerate(self.inputSmallMolecules.get()):
-          dockId = self._insertFunctionStep('dockStep', mol.clone(), gpuIdx, pocket.clone(), prerequisites=[gridId])
+        for mol in self.inputSmallMolecules.get():
+          dockId = self._insertFunctionStep('dockStep', mol.clone(), pocket.clone(), prerequisites=[gridId])
           dockSteps.append(dockId)
 
     self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
@@ -364,7 +356,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
     args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())
     self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=outDir)
 
-  def dockStep(self, mol, gpuIdx, pocket=None):
+  def dockStep(self, mol, pocket=None):
     # Prepare grid
     if self.doFlexRes:
         flexReceptorFn, receptorFn = self.getFlexFiles()
@@ -376,15 +368,8 @@ class ProtChemAutodock(ProtChemAutodockBase):
     dpfFile = self.writeDPF(outDir, molFn, receptorFn, flexReceptorFn)
 
     fnDLG = dpfFile.replace('.dpf', '.dlg')
-    if not getattr(self, USE_GPU):
-      args = "-p %s -l %s" % (dpfFile, fnDLG)
-      self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
-    else:
-      gpuList = self.getGPU_Ids()
-      gpuID = gpuList[gpuIdx % len(gpuList)]
-      fnDPF = self.commentFirstLine(dpfFile)
-      args = '-I {} -D {}'.format(fnDPF, gpuID)
-      autodock_plugin.runAutodockGPU(self, args, outDir)
+    args = "-p %s -l %s" % (dpfFile, fnDLG)
+    self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
 
   def createOutputStep(self):
     outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
@@ -531,11 +516,6 @@ class ProtChemAutodock(ProtChemAutodockBase):
           f.write(myDPFstr)
       return fnDPF
 
-  def getGPU_Ids(self):
-    gpus = []
-    for gp in getattr(self, GPU_LIST).get().split(','):
-      gpus.append(str(int(gp) + 1))
-    return gpus
 
   def getLigandsFileNames(self):
     ligFns = []
@@ -572,9 +552,6 @@ class ProtChemAutodock(ProtChemAutodockBase):
 
   def _validate(self):
       vals = []
-      if getattr(self, USE_GPU) and self.searchType.get() != LGA:
-          vals.append('The use of a search type other than LGA for the GPU version is not possible. Either use the CPU '
-                      'version or another search type.')
       return vals
 
   def commentFirstLine(self, fn):
