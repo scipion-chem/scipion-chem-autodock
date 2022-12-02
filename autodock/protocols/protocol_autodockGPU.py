@@ -151,14 +151,14 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     dockSteps = []
     if self.fromReceptor.get() == 0:
       gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
-      for gpuIdx, mol in enumerate(self.inputSmallMolecules.get()):
-        dockId = self._insertFunctionStep('dockStep', mol.clone(), gpuIdx, prerequisites=[gridId])
+      for mol in self.inputSmallMolecules.get():
+        dockId = self._insertFunctionStep('dockStep', mol.clone(), prerequisites=[gridId])
         dockSteps.append(dockId)
     else:
       for pocket in self.inputStructROIs.get():
         gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
-        for gpuIdx, mol in enumerate(self.inputSmallMolecules.get()):
-          dockId = self._insertFunctionStep('dockStep', mol.clone(), gpuIdx, pocket.clone(), prerequisites=[gridId])
+        for mol in self.inputSmallMolecules.get():
+          dockId = self._insertFunctionStep('dockStep', mol.clone(), pocket.clone(), prerequisites=[gridId])
           dockSteps.append(dockId)
 
     self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
@@ -200,7 +200,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())
     self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=outDir)
 
-  def dockStep(self, mol, gpuIdx, pocket=None):
+  def dockStep(self, mol, pocket=None):
     # Prepare grid
     if self.doFlexRes:
         flexReceptorFn, receptorFn = self.getFlexFiles()
@@ -208,19 +208,19 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
         flexReceptorFn, receptorFn = None, self.receptorFile
     outDir = self.getOutputPocketDir(pocket)
 
-    molFn = self.getMolLigandFileName(mol)
-    molBase = molFn.split('/')[-1]
-    molLink = os.path.join(outDir, molBase)
-    os.link(molFn, molLink)
     if self.doFlexRes:
         fldFile = 'receptor_rig.maps.fld'
     else:
         fldFile = '{}.maps.fld'.format(self.getReceptorName())
 
-    gpuList = self.getGPU_Ids()
-    gpuID = gpuList[gpuIdx % len(gpuList)]
+    gpuID = ' '.join(self.getGPU_Ids())
 
-    args = '-L {} -M {} -D {} -n {} --rmstol {} -C 1 --output-cluster-poses auto '.\
+    molFn = self.getMolLigandFileName(mol)
+    molBase = molFn.split('/')[-1]
+    molLink = os.path.join(outDir, molBase)
+    os.link(molFn, molLink)
+
+    args = '-L {} -M {} -D "{}" -n {} --rmstol {} -C 1 --output-cluster-poses auto '.\
       format(molBase, fldFile, gpuID, self.nRuns.get(), self.rmsTol.get())
     if self.doFlexRes:
         args += '-F {} '.format(flexReceptorFn)
