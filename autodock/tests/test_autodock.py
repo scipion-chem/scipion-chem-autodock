@@ -210,7 +210,7 @@ class TestAutoDock(TestAutoSite, TestADMeekoLigands):
                 ProtChemAutodock,
                 inputStructROIs=pocketsProt.outputStructROIs,
                 inputSmallMolecules=self.protPrepareLigandADT.outputSmallMolecules,
-                fromReceptor=1, pocketRadiusN=5, nRuns=2,
+                fromReceptor=1, pocketRadiusN=1.2, nRuns=2,
                 numberOfThreads=4)
             self.proj.launchProtocol(protAutoDock, wait=False)
 
@@ -250,7 +250,7 @@ class TestAutoDockGPU(TestAutoDock):
                 ProtChemAutodock,
                 inputStructROIs=pocketsProt.outputStructROIs,
                 inputSmallMolecules=self.protMeeko.outputSmallMolecules,
-                fromReceptor=1, pocketRadiusN=5, nRuns=2,
+                fromReceptor=1, pocketRadiusN=1.2, nRuns=2,
                 numberOfThreads=4, useGpu=True)
             self.proj.launchProtocol(protAutoDock, wait=False)
 
