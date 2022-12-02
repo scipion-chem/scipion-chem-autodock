@@ -39,16 +39,16 @@ from pwchem.constants import MGL_DIC
 from autodock import Plugin as autodock_plugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
 
-
 SW, SD, FIRE, AD, ADAM = 0, 1, 2, 3, 4
 searchDic = {SW: 'Solis-Wets', SD: 'Steepest-Descent', FIRE: 'FIRE',
              AD: 'ADADELTA', ADAM: 'ADAM'}
 searchKeys = {SW: 'sw', SD: 'sd', FIRE: 'fire', AD: 'ad', ADAM: 'adam'}
 
+
 def split_set(sciSet, n):
   sciList = []
   for item in sciSet:
-      sciList.append(item.clone())
+    sciList.append(item.clone())
 
   k, m = divmod(len(sciList), n)
   return list(sciList[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
@@ -58,7 +58,6 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
   """Perform a docking experiment with AutoDock-GPU https://github.com/ccsb-scripps/AutoDock-GPU"""
   _label = 'AutoDock-GPU docking'
   _program = ""
-
 
   def _defineParams(self, form):
     form.addHidden(USE_GPU, BooleanParam, default=True,
@@ -76,7 +75,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     group.addParam('heuristics', BooleanParam, label='Use heuristics to guess parameters: ', default=True,
                    help='Use heuristics implemented in the AutoDock-GPU software to guess the optimal number of '
                         'evaluations and the local search method')
-    group.addParam('heurmax', IntParam, label='Limit number of evaluations (heurMax): ', 
+    group.addParam('heurmax', IntParam, label='Limit number of evaluations (heurMax): ',
                    default=12000000, condition='heuristics', expertLevel=LEVEL_ADVANCED,
                    help='Asymptotic heuristics # evals limit (smooth limit)')
     group.addParam('autostop', BooleanParam, label='Perform autoStop: ', default=True,
@@ -94,17 +93,17 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     group.addParam('gaNumEvals', IntParam, label='Number of evaluations: ', default=2500000,
                    help='Set the maximum number of energy evaluations performed during each GA, LGA, or LS run')
     group.addParam('gaNumGens', IntParam, label='Number of generations: ', default=42000,
-                  help='This is the maximum number of generations simulated during each GA or LGA run')
+                   help='This is the maximum number of generations simulated during each GA or LGA run')
 
     line = group.addLine('Genetic algorithm (LGA) rates: ', expertLevel=LEVEL_ADVANCED,
-                          help='Probability that a particular gene is mutated / pairs in the population will exchange '
-                               'genetic material / selection rates')
+                         help='Probability that a particular gene is mutated / pairs in the population will exchange '
+                              'genetic material / selection rates')
     line.addParam('mrat', FloatParam, label='Mutation: ', default=0.02)
     line.addParam('crat', FloatParam, label='Crossover: ', default=0.8)
     line.addParam('trat', FloatParam, label='Selection: ', default=0.6)
 
     line = group.addLine('Maximum LGA deltas: ', expertLevel=LEVEL_ADVANCED,
-                          help='Maximum LGA movement (Å) / angle (º) delta')
+                         help='Maximum LGA movement (�) / angle (�) delta')
     line.addParam('dmov', FloatParam, label='Movement: ', default=2.0)
     line.addParam('dang', FloatParam, label='Angle: ', default=90)
 
@@ -118,7 +117,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
                         'phenotype of any given individual, per generation')
 
     line = group.addLine('Solis-Wets variance: ', expertLevel=LEVEL_ADVANCED, condition='lsType=={}'.format(SW),
-                         help='Maximum Solis-Wets movement (Å) / angle (º) variance for making changes to genes '
+                         help='Maximum Solis-Wets movement (�) / angle (�) variance for making changes to genes '
                               '(i.e. translations, orientation and torsions)')
     line.addParam('swLbRho', FloatParam, label='Lower bound: ', default=0.01)
     line.addParam('swMovD', FloatParam, label='Movement: ', default=2)
@@ -130,28 +129,27 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     form.addParallelSection(threads=4, mpi=1)
 
   def getADGPUArgs(self):
-      args = ''
-      if self.heuristics:
-          args += '-H 1 -E {} '.format(self.heurmax.get())
-      else:
-          args += '-e {} -l {} '.format(self.gaNumEvals.get(), searchKeys[self.lsType.get()])
+    args = ''
+    if self.heuristics:
+      args += '-H 1 -E {} '.format(self.heurmax.get())
+    else:
+      args += '-e {} -l {} '.format(self.gaNumEvals.get(), searchKeys[self.lsType.get()])
 
-          args += '-g {} -p {} '. \
-            format(self.gaNumGens.get(), self.lsMaxIts.get(), self.gaPop.get())
-          args += '--mrat {} --crat {} --trat {} '.\
-            format(self.mrat.get(), self.crat.get(), self.trat.get())
+      args += '-g {} -p {} '. \
+        format(self.gaNumGens.get(), self.lsMaxIts.get(), self.gaPop.get())
+      args += '--mrat {} --crat {} --trat {} '. \
+        format(self.mrat.get(), self.crat.get(), self.trat.get())
 
-          args += '--dmov {} --dang {} '.format(self.dang.get(), self.dang.get())
-          args += '--lsit {} --lsrat {} '.format(self.lsMaxIts.get(), self.lsFreq.get())
+      args += '--dmov {} --dang {} '.format(self.dang.get(), self.dang.get())
+      args += '--lsit {} --lsrat {} '.format(self.lsMaxIts.get(), self.lsFreq.get())
 
-          if self.lsType.get() == SW:
-            args += '--rholb {} --lsmov {} --lsang {} --cslim {} '. \
-              format(self.swLbRho.get(), self.swMovD.get(), self.swAngD.get(), self.swMaxSucc.get())
+      if self.lsType.get() == SW:
+        args += '--rholb {} --lsmov {} --lsang {} --cslim {} '. \
+          format(self.swLbRho.get(), self.swMovD.get(), self.swAngD.get(), self.swMaxSucc.get())
 
-      if self.autostop:
-          args += '-A 1 -a {} --stopstd {} '.format(self.asfreq.get(), self.stopstd.get())
-      return args
-
+    if self.autostop:
+      args += '-A 1 -a {} --stopstd {} '.format(self.asfreq.get(), self.stopstd.get())
+    return args
 
   # --------------------------- INSERT steps functions --------------------
   def _insertAllSteps(self):
@@ -165,15 +163,15 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     if self.fromReceptor.get() == 0:
       gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
 
-      for gpuIdx, mols in zip(gpuList, molGroups):
-        dockId = self._insertFunctionStep('dockStep', mols, gpuIdx, prerequisites=[gridId])
-        dockSteps.append(dockId)
+      # for gpuIdx, mols in zip(gpuList, molGroups):
+      dockId = self._insertFunctionStep('dockStep', mols, gpuList, prerequisites=[gridId])
+      dockSteps.append(dockId)
     else:
       for pocket in self.inputStructROIs.get():
         gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
-        for gpuIdx, mols in zip(gpuList, molGroups):
-          dockId = self._insertFunctionStep('dockStep', mols, gpuIdx, pocket.clone(), prerequisites=[gridId])
-          dockSteps.append(dockId)
+        # for gpuIdx, mols in zip(gpuList, molGroups):
+        dockId = self._insertFunctionStep('dockStep', mols, gpuList, pocket.clone(), prerequisites=[gridId])
+        dockSteps.append(dockId)
 
     self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
@@ -214,34 +212,34 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())
     self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=outDir)
 
-  def dockStep(self, mols, gpuIdx, pocket=None):
+  def dockStep(self, mols, gpuIdxs, pocket=None):
     # Prepare grid
     if self.doFlexRes:
-        flexReceptorFn, receptorFn = self.getFlexFiles()
+      flexReceptorFn, receptorFn = self.getFlexFiles()
     else:
-        flexReceptorFn, receptorFn = None, self.receptorFile
+      flexReceptorFn, receptorFn = None, self.receptorFile
     outDir = self.getOutputPocketDir(pocket)
 
     if self.doFlexRes:
-        fldFile = 'receptor_rig.maps.fld'
+      fldFile = 'receptor_rig.maps.fld'
     else:
-        fldFile = '{}.maps.fld'.format(self.getReceptorName())
+      fldFile = '{}.maps.fld'.format(self.getReceptorName())
 
-    batchFile = os.path.abspath(os.path.join(outDir, 'batchFile_{}.txt'.format(gpuIdx)))
+    batchFile = os.path.abspath(os.path.join(outDir, 'batchFile.txt'))
     with open(batchFile, 'w') as f:
-        f.write('{}\n'.format(fldFile))
-        for mol in mols:
-            molFn = self.getMolLigandFileName(mol)
-            molBase = molFn.split('/')[-1]
-            molLink = os.path.join(outDir, molBase)
-            os.link(molFn, molLink)
+      f.write('{}\n'.format(fldFile))
+      for mol in mols:
+        molFn = self.getMolLigandFileName(mol)
+        molBase = molFn.split('/')[-1]
+        molLink = os.path.join(outDir, molBase)
+        os.link(molFn, molLink)
 
-            f.write('{}\n{}\n'.format(molBase, getBaseFileName(molBase)))
+        f.write('{}\n{}\n'.format(molBase, getBaseFileName(molBase)))
 
-    args = '-B {} -D {} -n {} --rmstol {} -C 1 --output-cluster-poses auto '.\
-      format(batchFile, gpuIdx, self.nRuns.get(), self.rmsTol.get())
+    args = '-B {} -D {} -n {} --rmstol {} -C 1 --output-cluster-poses auto '. \
+      format(batchFile, ','.join(gpuIdxs), self.nRuns.get(), self.rmsTol.get())
     if self.doFlexRes:
-        args += '-F {} '.format(flexReceptorFn)
+      args += '-F {} '.format(flexReceptorFn)
     args += self.getADGPUArgs()
     autodock_plugin.runAutodockGPU(self, args, outDir)
 
@@ -326,7 +324,6 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       ligFns.append(mol.getFileName())
     return ligFns
 
-
   def getMolLigandFileName(self, mol):
     molName = mol.getUniqueName()
     for ligFileName in self.ligandFileNames:
@@ -352,10 +349,9 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
           i += 1
     return molDic
 
-
   def _validate(self):
-      vals = []
-      return vals
+    vals = []
+    return vals
 
   def commentFirstLine(self, fn):
     with open(fn) as f:
@@ -366,4 +362,3 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
   def getDockedLigandsFiles(self, outDir):
     return list(glob.glob(os.path.join(outDir, '*.dlg')))
-
