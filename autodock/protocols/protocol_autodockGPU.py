@@ -45,15 +45,6 @@ searchDic = {SW: 'Solis-Wets', SD: 'Steepest-Descent', FIRE: 'FIRE',
 searchKeys = {SW: 'sw', SD: 'sd', FIRE: 'fire', AD: 'ad', ADAM: 'adam'}
 
 
-def split_set(sciSet, n):
-  sciList = []
-  for item in sciSet:
-    sciList.append(item.clone())
-
-  k, m = divmod(len(sciList), n)
-  return list(sciList[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
-
-
 class ProtChemAutodockGPU(ProtChemAutodockBase):
   """Perform a docking experiment with AutoDock-GPU https://github.com/ccsb-scripps/AutoDock-GPU"""
   _label = 'AutoDock-GPU docking'
@@ -157,19 +148,15 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
     mols = self.inputSmallMolecules.get()
     gpuList = self.getGPU_Ids()
-    molGroups = split_set(mols, len(gpuList))
 
     dockSteps = []
     if self.fromReceptor.get() == 0:
       gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
-
-      # for gpuIdx, mols in zip(gpuList, molGroups):
       dockId = self._insertFunctionStep('dockStep', mols, gpuList, prerequisites=[gridId])
       dockSteps.append(dockId)
     else:
       for pocket in self.inputStructROIs.get():
         gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
-        # for gpuIdx, mols in zip(gpuList, molGroups):
         dockId = self._insertFunctionStep('dockStep', mols, gpuList, pocket.clone(), prerequisites=[gridId])
         dockSteps.append(dockId)
 
