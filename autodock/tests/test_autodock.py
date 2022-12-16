@@ -238,7 +238,7 @@ class TestAutoDockGPU(TestAutoDock):
     def _runAutoDock(self, pocketsProt=None):
         if pocketsProt == None:
             protAutoDock = self.newProtocol(
-                ProtChemAutodock,
+                ProtChemAutodockGPU,
                 inputAtomStruct=self.protPrepareReceptor.outputStructure,
                 inputSmallMolecules=self.protMeeko.outputSmallMolecules,
                 fromReceptor=0, radius=24, nRuns=2,
@@ -247,7 +247,7 @@ class TestAutoDockGPU(TestAutoDock):
 
         else:
             protAutoDock = self.newProtocol(
-                ProtChemAutodock,
+                ProtChemAutodockGPU,
                 inputStructROIs=pocketsProt.outputStructROIs,
                 inputSmallMolecules=self.protMeeko.outputSmallMolecules,
                 fromReceptor=1, pocketRadiusN=1.2, nRuns=2,
@@ -354,3 +354,22 @@ class TestGridADT(TestADPrepareReceptor):
         spacing, radius = 1.0, 37.0
         protGrid = self._runCreateGrid(spacing, radius)
         self.assertIsNotNone(getattr(protGrid, 'outputGrid', None))
+
+class TestAutoDockScoring(TestAutoDockGPU):
+
+    def _runScoring(self, inputProt):
+        protScore = self.newProtocol(
+            ProtChemAutodockScore,
+            inputSmallMolecules=inputProt.outputSmallMolecules,
+            radius=20)
+        self.proj.launchProtocol(protScore, wait=True)
+
+        return protScore
+
+
+    def test(self):
+        protAutoDock1 = self._runAutoDock()
+        self._waitOutput(protAutoDock1, 'outputSmallMolecules', sleepTime=10)
+        protScore = self._runScoring(protAutoDock1)
+        self.assertIsNotNone(getattr(protScore, 'outputSmallMolecules', None))
+
