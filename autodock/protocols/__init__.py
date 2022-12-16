@@ -34,4 +34,5 @@ from .protocol_autoSite import ProtChemAutoSite
 from .protocol_autoSite_pharmacophore import ProtChemAutoSiteGenPharmacophore
 from .protocol_meeko_ligands import ProtChemMeekoLigands
 from .protocol_dock_vina import ProtChemVinaDocking
+from .protocol_autodock_score import ProtChemAutodockScore
 

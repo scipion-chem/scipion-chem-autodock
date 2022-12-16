@@ -41,7 +41,10 @@ for prot in [Autodock_GridGeneration, ProtChemAutodock, ProtChemVinaDocking, Pro
                                  inputs=['inputAtomStruct'],
                                  outputs=['radius'])
 
-
+GetRadiusProtein().addTarget(protocol=ProtChemAutodockScore,
+                             targets=['radius'],
+                             inputs=['inputSmallMolecules'],
+                             outputs=['radius'])
 
 
 

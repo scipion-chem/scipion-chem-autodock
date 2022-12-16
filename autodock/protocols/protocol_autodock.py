@@ -106,9 +106,9 @@ class ProtChemAutodockBase(EMProtocol):
     def getGridId(self, outDir):
         return outDir.split('_')[-1]
 
-    def convert2PDBQT(self, smallMol, oDir):
+    def convert2PDBQT(self, smallMol, oDir, pose=False):
         '''Convert ligand to pdbqt using prepare_ligand4 of ADT'''
-        inFile = smallMol.getFileName()
+        inFile = smallMol.getFileName() if not pose else smallMol.getPoseFile()
         if os.path.splitext(inFile)[1] not in ['.pdb', '.mol2', '.pdbq']:
           # Convert to formats recognized by ADT
           outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
@@ -397,9 +397,9 @@ class ProtChemAutodock(ProtChemAutodockBase):
             newSmallMol.copy(smallMol, copyId=False)
             newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
             if 'ki' in molDic[posId]:
-              newSmallMol._ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
+              newSmallMol._ligandEfficiency = pwobj.String(molDic[posId]['ki'])
             else:
-              newSmallMol._ligandEfficiency = pwobj.Float(None)
+              newSmallMol._ligandEfficiency = pwobj.String(None)
             if os.path.getsize(molDic[posId]['file']) > 0:
               newSmallMol.poseFile.set(molDic[posId]['file'])
               newSmallMol.setPoseId(posId)
@@ -455,8 +455,15 @@ class ProtChemAutodock(ProtChemAutodockBase):
       self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                   autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py') + args, cwd=outDir)
 
+      myDPFstr, cont = '', True
       with open(baseDPF) as f:
-          myDPFstr = '\n'.join(f.read().split('\n')[:19])
+        for line in f:
+          if not cont:
+            break
+          elif line.startswith('torsdof'):
+            cont = False
+
+          myDPFstr += line
 
       myDPFstr += '\n\n# Search parameters\n'
       if self.searchType.get() in [LGA, GA, LS]:
@@ -541,7 +548,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
         elif line.startswith('DOCKED: USER    Estimated Free Energy'):
           molDic[posId]['energy'] = line.split('=')[1].split('kcal/mol')[0]
         elif line.startswith('DOCKED: USER    Estimated Inhibition'):
-          molDic[posId]['ki'] = line.split()[7]
+          molDic[posId]['ki'] = ' '.join(line.split()[7:9])
         elif line.startswith('DOCKED: REMARK') or line.startswith('TER'):
           molDic[posId]['pdb'] += line[8:]
         elif line.startswith('DOCKED: ATOM'):
