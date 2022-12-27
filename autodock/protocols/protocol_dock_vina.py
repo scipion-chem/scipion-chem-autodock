@@ -87,9 +87,13 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
     def convertStep(self):
-      mols = self.inputSmallMolecules.get()
-      for mol in mols:
-        self.convert2PDBQT(mol, self._getTmpPath())
+      self.ligandFileNames = []
+      for mol in self.inputSmallMolecules.get():
+          fnSmall, smallDir = self.convert2PDBQT(mol, self._getTmpPath())
+          self.ligandFileNames.append(fnSmall)
+
+      with open(self.getConvertedLigandsFile(), 'w') as f:
+          f.write('\n'.join(self.ligandFileNames))
 
       receptorFile = self.getOriginalReceptorFile()
       if receptorFile.endswith('.pdb'):
@@ -192,17 +196,6 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
         return paramsFile
 
 ########################### Utils functions ############################
-
-    def convert2PDBQT(self, smallMol, oDir):
-        oFile, oDir = super().convert2PDBQT(smallMol, oDir)
-
-        write = 'w'
-        if os.path.exists(self.getConvertedLigandsFile()):
-            write = 'a'
-        with open(self.getConvertedLigandsFile(), write) as f:
-            f.write(oFile + '\n')
-
-        return oFile, oDir
 
     def convertReceptor2PDB(self, proteinFile):
         inName, inExt = os.path.splitext(os.path.basename(proteinFile))
