@@ -24,4 +24,4 @@
 # *
 # **************************************************************************
 
-from pyworkflow.tests import *
+from autodock.tests.test_autodock import *

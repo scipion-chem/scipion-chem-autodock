@@ -44,7 +44,7 @@ class ProtChemMeekoLigands(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules",
+        form.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
                       label='Set of small molecules:', allowsNull=False,
                       help='Input small molecules to be prepared with Meeko')
 
@@ -85,7 +85,7 @@ class ProtChemMeekoLigands(EMProtocol):
         self._insertFunctionStep('createOutput')
 
     def preparationStep(self):
-        mols = self.inputSmallMols.get()
+        mols = self.inputSmallMolecules.get()
         paramsFile = self.writeParamsFile(mols)
 
         Plugin.runScript(self, scriptName, paramsFile, env='rdkit', cwd=self._getExtraPath())
@@ -139,7 +139,7 @@ class ProtChemMeekoLigands(EMProtocol):
                 outputSmallMolecules.append(newSmallMol)
 
         self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
-        self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
+        self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
 
     def writeParamsFile(self, molsScipion):

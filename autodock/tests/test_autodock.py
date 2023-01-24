@@ -86,8 +86,8 @@ class TestADPrepareLigands(BaseTest):
         cls.protPrepareLigandADT = cls.newProtocol(
             ProtChemADTPrepareLigands,
             doConformers=True, method_conf=0, number_conf=2, rmsd_cutoff=0.375)
-        cls.protPrepareLigandADT.inputSmallMols.set(cls.protImportSmallMols)
-        cls.protPrepareLigandADT.inputSmallMols.setExtended('outputSmallMolecules')
+        cls.protPrepareLigandADT.inputSmallMolecules.set(cls.protImportSmallMols)
+        cls.protPrepareLigandADT.inputSmallMolecules.setExtended('outputSmallMolecules')
 
         cls.proj.launchProtocol(cls.protPrepareLigandADT, wait=False)
 
@@ -103,8 +103,8 @@ class TestADMeekoLigands(TestADPrepareLigands):
     def _runPrepareLigandsMeeko(cls):
         cls.protMeeko = cls.newProtocol(
             ProtChemMeekoLigands)
-        cls.protMeeko.inputSmallMols.set(cls.protImportSmallMols)
-        cls.protMeeko.inputSmallMols.setExtended('outputSmallMolecules')
+        cls.protMeeko.inputSmallMolecules.set(cls.protImportSmallMols)
+        cls.protMeeko.inputSmallMolecules.setExtended('outputSmallMolecules')
 
         cls.proj.launchProtocol(cls.protMeeko, wait=False)
 
@@ -178,7 +178,7 @@ class TestAutoDock(TestAutoSite, TestADMeekoLigands):
         cls.protOBabel = cls.newProtocol(
             ProtChemOBabelPrepareLigands,
             inputType=0, method_charges=0,
-            inputSmallMols=cls.protImportSmallMols.outputSmallMolecules,
+            inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules,
             doConformers=True, method_conf=0, number_conf=2, rmsd_cutoff=0.375)
 
         cls.proj.launchProtocol(cls.protOBabel, wait=False)

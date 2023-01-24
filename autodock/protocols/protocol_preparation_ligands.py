@@ -40,7 +40,7 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
     def _defineParams(self, form):
         self.typeRL="ligand"
         form.addSection(label='Input')
-        form.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules",
+        form.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
                       label='Set of small molecules:', allowsNull=False,
                       help='It must be in pdb or mol2 format, you may use Schrodinger convert to change it')
         ProtChemADTPrepare._defineParamsBasic(self, form)
@@ -76,7 +76,7 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
 
     def preparationStep(self):
         self.preparedFiles = []
-        for mol in self.inputSmallMols.get():
+        for mol in self.inputSmallMolecules.get():
             fnSmall = mol.getFileName()
             fnMol = os.path.split(fnSmall)[1]
             fnRoot, ext = os.path.splitext(fnMol)
@@ -145,11 +145,11 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
                 outputSmallMolecules.append(newSmallMol)
 
         self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
-        self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
+        self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
     def _warnings(self):
       ws = []
-      for mol in self.inputSmallMols.get():
+      for mol in self.inputSmallMolecules.get():
           if mol.getFileName().endswith('.sdf') and (self.repair.get()==3 or self.repair.get()==1):
               ws.append('The Autodock4 script prepare_ligand4.py cannot handle to add hydrogens to '
                         'molecules coming from 2D sdf files. Do you want to continue performing a '
