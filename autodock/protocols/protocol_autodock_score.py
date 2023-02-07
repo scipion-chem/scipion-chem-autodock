@@ -31,7 +31,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseFileName, performBatchThreading
+from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseFileName, makeSubsets
 from pwchem import Plugin as pwchem_plugin
 from pwchem.constants import MGL_DIC
 
@@ -70,19 +70,19 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
     self.receptorFile = self.getOriginalReceptorFile()
 
     convSteps, scoreSteps = [], []
+    subsets = makeSubsets(self.getInputMols(), self.numberOfThreads.get(), cloneItem=True)
 
-    mols = self.getInputMols()
-    for mol in mols:
-        cId = self._insertFunctionStep('convertStep', mol.clone(), prerequisites=[])
-        convSteps.append(cId)
+    for mols in subsets:
+      cId = self._insertFunctionStep('convertStep', mols, prerequisites=[])
+      convSteps.append(cId)
 
     gridId = self._insertFunctionStep('generateGridsStep', prerequisites=convSteps)
 
-    for mol in mols:
-        dockId = self._insertFunctionStep('scoreStep', mol.clone(), prerequisites=[gridId])
+    for mols in subsets:
+        dockId = self._insertFunctionStep('scoreStep', mols, prerequisites=[gridId])
         scoreSteps.append(dockId)
 
-    self._insertFunctionStep('createOutputStep', mols, prerequisites=scoreSteps)
+    self._insertFunctionStep('createOutputStep', prerequisites=scoreSteps)
 
   def getInputMols(self):
       mols = []
@@ -91,9 +91,10 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
               mols.append(mol.clone())
       return mols
 
-  def convertStep(self, mol):
-    fnSmall, smallDir = self.convert2PDBQT(mol, self._getExtraPath('conformers'), pose=True)
-    self.ligandFileNames.append(fnSmall)
+  def convertStep(self, mols):
+    for mol in mols:
+        fnSmall, smallDir = self.convert2PDBQT(mol, self._getExtraPath('conformers'), pose=True)
+        self.ligandFileNames.append(fnSmall)
 
     if not '.pdbqt' in self.receptorFile:
       self.receptorFile = self.convertReceptor2PDBQT(self.receptorFile)
@@ -119,20 +120,21 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
     args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())
     self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=outDir)
 
-  def scoreStep(self, mol, pocket=None):
+  def scoreStep(self, mols):
     # Prepare grid
     flexReceptorFn, receptorFn = None, self.receptorFile
     outDir = self.getScoringDir()
 
-    molFn = self.getMolLigandName(mol)
-    dpfFile = self.writeDPF(outDir, molFn, receptorFn, flexReceptorFn)
+    for mol in mols:
+        molFn = self.getMolLigandName(mol)
+        dpfFile = self.writeDPF(outDir, molFn, receptorFn, flexReceptorFn)
 
-    fnDLG = dpfFile.replace('.dpf', '.dlg')
-    args = "-p %s -l %s" % (dpfFile, fnDLG)
-    self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
+        fnDLG = dpfFile.replace('.dpf', '.dlg')
+        args = "-p %s -l %s" % (dpfFile, fnDLG)
+        self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
 
 
-  def createOutputStep(self, mols):
+  def createOutputStep(self):
     outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
 
     scoresDic = {}
@@ -141,7 +143,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
         scoresDic[molName] = self.parseDockedMolsDLG(dlgFile)
 
 
-    for smallMol in mols:
+    for smallMol in self.getInputMols():
       molName = smallMol.getUniqueName()
       if molName in scoresDic:
         molDic = scoresDic[molName]
