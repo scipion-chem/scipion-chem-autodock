@@ -26,13 +26,12 @@
 
 import os, glob
 
-from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam, STEPS_PARALLEL, BooleanParam, \
-  LEVEL_ADVANCED, StringParam, EnumParam, LabelParam, TextParam
+from pyworkflow.protocol.params import FloatParam, MultiPointerParam
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseFileName
+from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseFileName, performBatchThreading
 from pwchem import Plugin as pwchem_plugin
 from pwchem.constants import MGL_DIC
 
@@ -55,7 +54,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
   def _defineParams(self, form):
     form.addSection(label='Input')
     group = form.addGroup('Input')
-    group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
+    group.addParam('inputSmallMolecules', MultiPointerParam, pointerClass="SetOfSmallMolecules",
                    label='Input small molecules: ',
                    help="Input small molecules to be scored with AutoDock4")
     group.addParam('radius', FloatParam, label='Grid radius for whole protein: ', allowsNull=False,
@@ -67,24 +66,35 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
 
   # --------------------------- INSERT steps functions --------------------
   def _insertAllSteps(self):
-    cId = self._insertFunctionStep('convertStep', prerequisites=[])
-
-    scoreSteps = []
-    gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
-    for mol in self.inputSmallMolecules.get():
-      dockId = self._insertFunctionStep('scoreStep', mol.clone(), prerequisites=[gridId])
-      scoreSteps.append(dockId)
-
-    self._insertFunctionStep('createOutputStep', prerequisites=scoreSteps)
-
-  def convertStep(self):
     self.ligandFileNames = []
-    # todo: paralelize as in schrodinger
-    for mol in self.inputSmallMolecules.get():
-      fnSmall, smallDir = self.convert2PDBQT(mol.clone(), self._getExtraPath('conformers'), pose=True)
-      self.ligandFileNames.append(fnSmall)
-
     self.receptorFile = self.getOriginalReceptorFile()
+
+    convSteps, scoreSteps = [], []
+
+    mols = self.getInputMols()
+    for mol in mols:
+        cId = self._insertFunctionStep('convertStep', mol.clone(), prerequisites=[])
+        convSteps.append(cId)
+
+    gridId = self._insertFunctionStep('generateGridsStep', prerequisites=convSteps)
+
+    for mol in mols:
+        dockId = self._insertFunctionStep('scoreStep', mol.clone(), prerequisites=[gridId])
+        scoreSteps.append(dockId)
+
+    self._insertFunctionStep('createOutputStep', mols, prerequisites=scoreSteps)
+
+  def getInputMols(self):
+      mols = []
+      for inputPointer in self.inputSmallMolecules:
+          for mol in inputPointer.get():
+              mols.append(mol.clone())
+      return mols
+
+  def convertStep(self, mol):
+    fnSmall, smallDir = self.convert2PDBQT(mol, self._getExtraPath('conformers'), pose=True)
+    self.ligandFileNames.append(fnSmall)
+
     if not '.pdbqt' in self.receptorFile:
       self.receptorFile = self.convertReceptor2PDBQT(self.receptorFile)
 
@@ -122,7 +132,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
     self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
 
 
-  def createOutputStep(self):
+  def createOutputStep(self, mols):
     outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
 
     scoresDic = {}
@@ -131,7 +141,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
         scoresDic[molName] = self.parseDockedMolsDLG(dlgFile)
 
 
-    for smallMol in self.inputSmallMolecules.get():
+    for smallMol in mols:
       molName = smallMol.getUniqueName()
       if molName in scoresDic:
         molDic = scoresDic[molName]
@@ -181,7 +191,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
     return list(glob.glob(os.path.join(outDir, '*.dlg')))
 
   def getOriginalReceptorFile(self):
-      return self.inputSmallMolecules.get().getProteinFile()
+      return self.inputSmallMolecules[0].get().getProteinFile()
 
   def getReceptorName(self):
       atomStructFn = self.getOriginalReceptorFile()

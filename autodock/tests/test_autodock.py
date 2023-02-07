@@ -358,10 +358,10 @@ class TestGridADT(TestADPrepareReceptor):
 class TestAutoDockScoring(TestAutoDockGPU):
 
     def _runScoring(self, inputProt):
-        protScore = self.newProtocol(
-            ProtChemAutodockScore,
-            inputSmallMolecules=inputProt.outputSmallMolecules,
-            radius=20)
+        protScore = self.newProtocol(ProtChemAutodockScore, radius=20)
+        protScore.inputSmallMolecules.append(inputProt)
+        protScore.inputSmallMolecules[-1].setExtended('outputSmallMolecules')
+
         self.proj.launchProtocol(protScore, wait=True)
 
         return protScore
