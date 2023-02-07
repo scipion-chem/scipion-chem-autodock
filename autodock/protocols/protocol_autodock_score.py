@@ -228,6 +228,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
               break
           elif line.startswith('move'):
               cont = False
+              line = line.replace('#', ' #')
 
           myDPFstr += line
 
