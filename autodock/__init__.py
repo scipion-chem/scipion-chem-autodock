@@ -95,10 +95,10 @@ class Plugin(pwem.Plugin):
     @classmethod
     def addVinaPackage(cls, env, default=False):
         VINA_INSTALLED = 'vina_installed'
-        vinaCommands = 'conda create -y -n vina-env python=3 && '
+        vinaCommands = 'conda create -y -n vina-env python=3.10 && '
         vinaCommands += '%s conda activate vina-env && ' % (cls.getCondaActivationCmd())
-        vinaCommands += 'conda install -y -c conda-forge numpy swig boost-cpp sphinx sphinx_rtd_theme && '
-        vinaCommands += 'pip install vina && touch {}'.format(VINA_INSTALLED)
+        vinaCommands += 'conda install -y -c conda-forge numpy=1.23.5 swig boost-cpp sphinx sphinx_rtd_theme vina && '
+        vinaCommands += 'touch {}'.format(VINA_INSTALLED)
         vinaCommands = [(vinaCommands, VINA_INSTALLED)]
 
         env.addPackage(VINA_DIC['name'], version=VINA_DIC['version'],
