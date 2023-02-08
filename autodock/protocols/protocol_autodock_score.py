@@ -149,8 +149,8 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
         molDic = scoresDic[molName]
 
         newSmallMol = SmallMolecule()
-        newSmallMol.copy(smallMol, copyId=True)
-        newSmallMol._energy = pwobj.Float(molDic['energy'])
+        newSmallMol.copy(smallMol, copyId=False)
+        newSmallMol._ADEnergy = pwobj.Float(molDic['energy'])
         if 'ki' in molDic:
           newSmallMol._ligandEfficiency = pwobj.String(molDic['ki'])
         else:
@@ -165,6 +165,14 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
     self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
   ########################### Utils functions ############################
+
+  def reorderIds(self, inSet):
+    '''Return the set with the reordered ids and a mapper dictionary {newId: oldId}'''
+    idsDic = {}
+    for i, item in enumerate(inSet):
+      idsDic[i + 1] = item.getObjId()
+      item.setObjId(i + 1)
+    return inSet, idsDic
 
   def convertReceptor2PDB(self, proteinFile):
     inName, inExt = os.path.splitext(os.path.basename(proteinFile))
