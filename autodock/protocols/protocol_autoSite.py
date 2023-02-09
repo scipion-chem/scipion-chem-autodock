@@ -85,12 +85,15 @@ class ProtChemAutoSite(EMProtocol):
 
     def convertInputStep(self):
         '''Moves necessary files to current extra path'''
-        self.receptorFile = self.getStructFileName()
-        if os.path.splitext(self.receptorFile)[1] != '.pdbqt':
-            self.receptorFile = self.convertReceptor2PDBQT(self.receptorFile)
+        oriReceptorFile = self.getStructFileName()
+        if os.path.splitext(oriReceptorFile)[1] != '.pdbqt':
+            self.convertReceptor2PDBQT(oriReceptorFile)
+        else:
+            os.link(oriReceptorFile, self.getPDBQTRecFile())
+
 
     def predictPocketStep(self):
-        args = ' -r {}'.format(os.path.abspath(self.receptorFile))
+        args = ' -r {}'.format(self.getPDBQTRecFile())
         args += self.getAutoSiteArgs()
         self.runJob(autodock_plugin.getASitePath('bin/autosite'), args, cwd=self._getExtraPath())
 
@@ -102,7 +105,7 @@ class ProtChemAutoSite(EMProtocol):
         for oFile in outFiles:
             oId = self.getIdFromFile(oFile)
             featFile = oFile.replace('_cl_', '_fp_')
-            pock = StructROI(oFile, self.receptorFile, pClass='AutoSite', objId=oId, extraFile=featFile,
+            pock = StructROI(oFile, self.getPDBQTRecFile(), pClass='AutoSite', objId=oId, extraFile=featFile,
                              score=scDic[oId]['score'], energy=scDic[oId]['energy'], nPoints=scDic[oId]['nPoints'],
                              volume=scDic[oId]['volume'])
             outPockets.append(pock)
@@ -148,10 +151,12 @@ class ProtChemAutoSite(EMProtocol):
                                             'score': sline[-4]}
         return scDic
 
+    def getPDBQTRecFile(self):
+        inName, inExt = os.path.splitext(os.path.basename(self.getStructFileName()))
+        return os.path.abspath(self._getExtraPath(inName + '.pdbqt'))
 
     def convertReceptor2PDBQT(self, proteinFile):
-      inName, inExt = os.path.splitext(os.path.basename(proteinFile))
-      oFile = os.path.abspath(os.path.join(self._getExtraPath(inName + '.pdbqt')))
+      oFile = self.getPDBQTRecFile()
 
       args = ' -v -r %s -o %s' % (proteinFile, oFile)
       self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
