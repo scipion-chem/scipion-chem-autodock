@@ -140,6 +140,8 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
     if self.autostop:
       args += '-A 1 -a {} --stopstd {} '.format(self.asfreq.get(), self.stopstd.get())
+
+    args += '-s 44 '
     return args
 
   # --------------------------- INSERT steps functions --------------------
