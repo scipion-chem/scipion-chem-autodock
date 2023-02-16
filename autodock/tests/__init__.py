@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:    Alberto M. Parra Pérez (amparraperez@gmail.com)
+# * Authors:     Daniel Del Hoyo Gomez (ddelhoyo@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -24,4 +24,4 @@
 # *
 # **************************************************************************
 
-from pyworkflow.tests import *
+from autodock.tests.test_autodock import *
