@@ -112,9 +112,11 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
         radius = self.radius.get()
         # Use the original pdb for mass center
         structure, x_center, y_center, z_center = calculate_centerMass(self.getReceptorPDB())
+        nCPUs = self.numberOfThreads.get()
       else:
         radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
         x_center, y_center, z_center = pocket.calculateMassCenter()
+        nCPUs = self.numberOfThreads.get() // len(self.inputStructROIs.get())
 
       mols = self.inputSmallMolecules.get()
       molFiles = []
@@ -128,7 +130,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
                               npts=npts, outDir=outDir, ligandFns=molFiles)
 
       pdbqtFiles = self.getConvertedLigandsFiles()
-      paramsFile = self.writeParamsFile(pdbqtFiles, radius, [x_center, y_center, z_center], gpf_file, outDir)
+      paramsFile = self.writeParamsFile(pdbqtFiles, radius, [x_center, y_center, z_center], gpf_file, outDir, nCPUs)
       autodock_plugin.runScript(self, scriptName, paramsFile, env='vina', cwd=outDir)
 
     def createOutputStep(self):
@@ -165,7 +167,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
 
     ########################### Parameters functions ############################
 
-    def writeParamsFile(self, molFiles, radius, center, gpfFile, outDir):
+    def writeParamsFile(self, molFiles, radius, center, gpfFile, outDir, nCPUs):
         paramsFile = os.path.join(outDir, 'inputParams.txt')
 
         f = open(paramsFile, 'w')
@@ -190,7 +192,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
         f.write('minRMSD:: {}\n'.format(self.rmsTol.get()))
         f.write('maxEvals:: {}\n'.format(self.maxEvals.get()))
 
-        f.write('nCPUs:: {}\n'.format(self.numberOfThreads.get()))
+        f.write('nCPUs:: {}\n'.format(nCPUs))
         f.write('outDir:: {}\n'.format(outDir))
 
         return paramsFile
