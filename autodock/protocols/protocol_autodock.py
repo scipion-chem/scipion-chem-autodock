@@ -116,7 +116,7 @@ class ProtChemAutodockBase(EMProtocol):
                                                                                os.path.abspath(outDir), outName)
             pwchem_plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
             inFile = self._getTmpPath(outName + '.mol2')
-            inFile = relabelMapAtomsMol2(inFile, smallMol.getMapDic())
+            inFile = relabelMapAtomsMol2(inFile)
 
         if not os.path.exists(oDir):
           os.mkdir(oDir)
