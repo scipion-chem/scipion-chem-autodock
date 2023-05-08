@@ -33,7 +33,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseFileName
+from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseFileName, relabelMapAtomsMol2
 from pwchem import Plugin as pwchem_plugin
 from pwchem.constants import MGL_DIC
 
@@ -110,12 +110,13 @@ class ProtChemAutodockBase(EMProtocol):
         '''Convert ligand to pdbqt using prepare_ligand4 of ADT'''
         inFile = smallMol.getFileName() if not pose else smallMol.getPoseFile()
         if os.path.splitext(inFile)[1] not in ['.pdb', '.mol2', '.pdbq']:
-          # Convert to formats recognized by ADT
-          outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
-          args = ' -i "{}" -of mol2 --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
-                                                                             os.path.abspath(outDir), outName)
-          pwchem_plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
-          inFile = self._getTmpPath(outName + '.mol2')
+            # Convert to formats recognized by ADT
+            outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
+            args = ' -i "{}" -of mol2 --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
+                                                                               os.path.abspath(outDir), outName)
+            pwchem_plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+            inFile = self._getTmpPath(outName + '.mol2')
+            inFile = relabelMapAtomsMol2(inFile)
 
         if not os.path.exists(oDir):
           os.mkdir(oDir)
