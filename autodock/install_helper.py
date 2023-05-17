@@ -271,7 +271,7 @@ class InstallHelper():
 
         return self
     
-    def getExtraFile(self, url: str, protocolHome: str, targetName: str, location: str=".", workDir: str=''):
+    def getExtraFile(self, url: str, protocolHome: str, targetName: str, location: str=".", workDir: str='', fileName: str=None):
         """
         ### This function creates the command to download with wget the file in the given link into the given path.
         ### The downloaded file will overwrite a local one if they have the same name.
@@ -283,16 +283,17 @@ class InstallHelper():
         targetName (str): Name of the target file for this command.
         location (str): Optional. Location where the file will be downloaded. It can be absolute or relative to current directory.
         workDir (str): Optional. Directory where the file will be downloaded from.
+        fileName (str): Optional. Name of the file after the download. Use intended for cases when expected name differs from url name.
 
         #### Usage:
-        installer.getExtraFile('https://site.com/myfile.tar', '/home/user/scipion/software/em/test-protocol-1.0', 'FILE_DOWNLOADED', location='/home/user/scipion/software/em/test-protocol-1.0/subdirectory', workDir='/home/user')
+        installer.getExtraFile('https://site.com/myfile.tar', '/home/user/scipion/software/em/test-protocol-1.0', 'FILE_DOWNLOADED', location='/home/user/scipion/software/em/test-protocol-1.0/subdirectory', workDir='/home/user', fileName='test.tar')
 
         #### This function call will generate the following command:
         cd /home/user && mkdir -p /home/user/scipion/software/em/test-protocol-1.0/subdirectory &&
-        wget -O /home/user/scipion/software/em/test-protocol-1.0/subdirectory/myfile.tar https://site.com/myfile.tar && touch /home/user/scipion/software/em/test-protocol-1.0/FILE_DOWNLOADED
+        wget -O /home/user/scipion/software/em/test-protocol-1.0/subdirectory/test.tar https://site.com/myfile.tar && touch /home/user/scipion/software/em/test-protocol-1.0/FILE_DOWNLOADED
         """
         # Getting filename for wget
-        fileName = os.path.basename(url)
+        fileName = fileName if fileName else os.path.basename(url)
         mkdirCmd = "mkdir -p {} && ".format(location) if location else ''
         location = location if location else '.'
 
