@@ -32,6 +32,7 @@ This package contains the protocols for the manipulation of atomic struct object
 import os, subprocess, json
 from .bibtex import _bibtexStr
 from .constants import *
+from .install_helper import InstallHelper
 
 import pwem
 import pyworkflow.utils as pwutils
@@ -60,6 +61,9 @@ class Plugin(pwem.Plugin):
 	
 	@classmethod
 	def defineBinaries(cls, env):
+		"""
+        This function defines the binaries for each package.
+        """
 		cls.addADTPackage(env)
 		cls.addVinaPackage(env)
 		cls.addAutoSitePackage(env)
@@ -80,34 +84,37 @@ class Plugin(pwem.Plugin):
 
 	@classmethod
 	def addADTPackage(cls, env, default=True):
-		ADT_INSTALLED = 'adt_installed'
-		# Downloading AutoDock
-		downloadCmd = 'wget {} -O {} --no-check-certificate && '.format(cls.getADTSuiteUrl(), cls.getADTTar())
-		adtCommands = 'wget {} -O {} --no-check-certificate && '.format(cls.getADTSuiteUrl(), cls.getADTTar())
-		adtCommands += 'tar -xf {} --strip-components 1 && '.format(cls.getADTTar())
-		adtCommands += 'rm {} && touch {}'.format(cls.getADTTar(), ADT_INSTALLED)
-		adtCommands = [(adtCommands, ADT_INSTALLED)]
+		""" This function provides the neccessary commands for installing AutoDock. """
+		# Instantiating the install helper
+		installer = InstallHelper()
 
-		env.addPackage(AUTODOCK_DIC['name'], version=AUTODOCK_DIC['version'],
-					 tar='void.tgz',
-					 commands=adtCommands,
-					 default=default)
+		# Installing protocol
+		installer.getExtraFile(cls.getADTSuiteUrl(), cls.getADTTar(), 'ADT_DOWNLOADED')\
+			.addCommand(f'tar -xf {cls.getADTTar()} --strip-components 1', 'ADT_EXTRACTED')\
+			.addCommand(f'rm {cls.getADTTar()}', 'ADT_INSTALLED')\
+			.addProtocolPackage(env, AUTODOCK_DIC['name'], version=AUTODOCK_DIC['version'], dependencies=['wget'], default=default)
 
 	@classmethod
 	def addVinaPackage(cls, env, default=True):
-		VINA_INSTALLED = 'vina_installed'
-		vinaCommands = 'conda create -y -n vina-env python=3.10 && '
-		vinaCommands += '%s conda activate vina-env && ' % (cls.getCondaActivationCmd())
-		vinaCommands += 'conda install -y -c conda-forge numpy=1.23.5 swig boost-cpp sphinx sphinx_rtd_theme vina && '
-		vinaCommands += 'touch {}'.format(VINA_INSTALLED)
-		vinaCommands = [(vinaCommands, VINA_INSTALLED)]
+		""" This function provides the neccessary commands for installing Vina. """
+		# Instantiating the install helper
+		installer = InstallHelper()
 
-		env.addPackage(VINA_DIC['name'], version=VINA_DIC['version'],
-					 tar='void.tgz', commands=vinaCommands, default=default)
+		# Installing protocol
+		installer.getCondaEnvCommand(VINA_DIC['name'], cls.getVar(VINA_DIC['home']), binaryVersion=VINA_DIC['version'], pythonVersion='3.10', requirementsFile=False)\
+			.addCondaPackages(VINA_DIC['name'], ['numpy=1.23.5', 'swig', 'boost-cpp', 'sphinx_rtd_theme', 'vina'], binaryVersion=VINA_DIC['version'], channel='conda-forge')\
+			.addProtocolPackage(env, VINA_DIC['name'], VINA_DIC['version'], ['conda'], default=default)
 
 	@classmethod
 	def addAutoSitePackage(cls, env, default=True):
-		# todo: check how only adtools or adfr needed
+		""" This function provides the neccessary commands for installing AutoSite. """
+		# TODO: Check how only adtools or adfr needed
+		# Instantiating the install helper
+		installer = InstallHelper()
+
+		# Installing protocol
+		installer.getExtraFile(cls.getADFRSuiteUrl(), ASITE_DIC['home'], 'ASITE_DOWNLOADED')\
+			.addCommand(f'tar -zxf {cls.getASITETar()} --strip-components 1', 'ASITE_EXTRACTED')
 		ASITE_INSTALLED = 'asite_installed'
 		asiteCommands = 'wget {} -O {} --no-check-certificate && '.format(cls.getADFRSuiteUrl(), cls.getASITETar())
 		asiteCommands += 'tar -zxf {} --strip-components 1 && '.format(cls.getASITETar())
