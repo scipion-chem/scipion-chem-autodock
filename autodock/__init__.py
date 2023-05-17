@@ -32,16 +32,17 @@ manipulation of atomic struct objects
 
 import os, subprocess, json
 from .bibtex import _bibtexStr
+from .constants import *
 
 import pwem
-from pyworkflow import Config
 import pyworkflow.utils as pwutils
 
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC
 
-
+# Pluging variables
 _logo = 'autodock_logo.png'
+__version__ = ALPHA_VERSION
 AUTODOCK_DIC = {'name': 'autodock', 'version': '4.2.6', 'home': 'AUTODOCK_HOME'}
 VINA_DIC = {'name': 'vina', 'version': '1.2', 'home': 'VINA_HOME'}
 ASITE_DIC = {'name': 'AutoSite', 'version': '1.0', 'home': 'AUTOSITE_HOME'}
