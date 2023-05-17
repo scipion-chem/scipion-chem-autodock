@@ -90,8 +90,7 @@ class Plugin(pwem.Plugin):
 
 		# Installing protocol
 		installer.getExtraFile(cls.getADTSuiteUrl(), cls.getADTTar(), 'ADT_DOWNLOADED')\
-			.addCommand(f'tar -xf {cls.getADTTar()} --strip-components 1', 'ADT_EXTRACTED')\
-			.addCommand(f'rm {cls.getADTTar()}', 'ADT_INSTALLED')\
+			.addCommand(f'tar -xf {cls.getADTTar()} --strip-components 1 && rm {cls.getADTTar()}', 'ADT_EXTRACTED')\
 			.addProtocolPackage(env, AUTODOCK_DIC['name'], version=AUTODOCK_DIC['version'], dependencies=['wget'], default=default)
 
 	@classmethod
@@ -113,17 +112,10 @@ class Plugin(pwem.Plugin):
 		installer = InstallHelper()
 
 		# Installing protocol
-		installer.getExtraFile(cls.getADFRSuiteUrl(), ASITE_DIC['home'], 'ASITE_DOWNLOADED')\
-			.addCommand(f'tar -zxf {cls.getASITETar()} --strip-components 1', 'ASITE_EXTRACTED')
-		ASITE_INSTALLED = 'asite_installed'
-		asiteCommands = 'wget {} -O {} --no-check-certificate && '.format(cls.getADFRSuiteUrl(), cls.getASITETar())
-		asiteCommands += 'tar -zxf {} --strip-components 1 && '.format(cls.getASITETar())
-		asiteCommands += './install.sh -d . -c 0 -l && '.format(cls.getASITETar())
-		asiteCommands += 'rm {} && touch {}'.format(cls.getASITETar(), ASITE_INSTALLED)
-		asiteCommands = [(asiteCommands, ASITE_INSTALLED)]
-
-		env.addPackage(ASITE_DIC['name'], version=ASITE_DIC['version'],
-					 tar='void.tgz', commands=asiteCommands, default=default)
+		installer.getExtraFile(cls.getADFRSuiteUrl(), ASITE_DIC['home'], 'ASITE_DOWNLOADED', fileName=cls.getASITETar())\
+			.addCommand(f'tar -zxf {cls.getASITETar()} --strip-components 1 && rm {cls.getASITETar()}', 'ASITE_EXTRACTED')\
+			.addCommand('./install.sh -d . -c 0 -l', 'ASITE_INSTALLED')\
+			.addProtocolPackage(env, ASITE_DIC['name'], ASITE_DIC['version'], ['wget'], default=default)
 
 	@classmethod
 	def addMeekoPackage(cls, env, default=True):
