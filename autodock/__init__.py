@@ -161,7 +161,7 @@ class Plugin(pwem.Plugin):
 		for binName in binPaths:
 			if 'autodock_gpu' in binName:
 				program = os.path.join(progDir, binName)
-			break
+				break
 
 		if program:
 			protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
