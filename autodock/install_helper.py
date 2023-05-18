@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import pwem, os
 
 class InstallHelper():
@@ -90,7 +90,7 @@ class InstallHelper():
         commandList = installer.getCommandList()
         """
         return self.__commandList
-
+    
     def addCommand(self, command: str, targetName: str, workDir: str=''):
         """
         ### This function adds the given command with target to the command list.
@@ -310,15 +310,15 @@ class InstallHelper():
         self.addCommand(downloadCmd, targetName, workDir=workDir)
     
         return self
-    
-    def getExtraFiles(self, fileList: List[Tuple[str, str]], binaryName: str=None, workDir: str='', targetNames: List[str]=None):
+
+    def getExtraFiles(self, fileList: List[Dict[str, str]], binaryName: str=None, workDir: str='', targetNames: List[str]=None):
         """
         ### This function creates the command to download with wget the file in the given link into the given path.
         ### The downloaded file will overwrite a local one if they have the same name.
         ### This is done to overwrite potential corrupt files whose download was not fully completed.
 
         #### Parameters:
-        fileList (list[tuple[str, str]]): List containing files to be downloaded. Example: [(url1, path1), (url2, path2)]
+        fileList (list[dict[str, str, str]]): List containing files to be downloaded. Example: [{'url': url1, 'path': path1, 'name': 'test.tar'}, {'url': url2, 'path': path2, 'name': 'test2.tar'}]
         binaryName (str): Optional. Name of the binary.
         Each file is a list contaning url and location to download it. Paths can be an empty string for default location.
         workDir (str): Optional. Directory where the files will be downloaded from.
@@ -327,17 +327,17 @@ class InstallHelper():
         #### Usage:
         installer.getExtraFiles(
             [
-                ('https://site.com/myfile.tar', '/home/user/scipion/software/em/test-package-1.0/subdirectory1'),
-                ('https://site.com/myfile.tar2', '/home/user/scipion/software/em/test-package-1.0/subdirectory2')
+                {'url': 'https://site.com/myfile.tar', 'path': '/home/user/scipion/software/em/test-package-1.0/subdirectory1', 'name': 'test.tar'},
+                {'url': 'https://site.com/myfile.tar2', 'path': '/home/user/scipion/software/em/test-package-1.0/subdirectory2', 'name': 'test2.tar2'}
             ],
             binaryName='myBinary', workDir='/home/user', targetNames=['DOWNLOADED_FILE_1', 'DOWNLOADED_FILE_2'])
 
         #### This function call will generate the following commands:
         cd /home/user && mkdir -p /home/user/scipion/software/em/test-package-1.0/subdirectory1 &&
-        wget -O /home/user/scipion/software/em/test-package-1.0/subdirectory1/myfile.tar https://site.com/myfile.tar && touch /home/user/scipion/software/em/test-package-1.0/DOWNLOADED_FILE_1
+        wget -O /home/user/scipion/software/em/test-package-1.0/subdirectory1/test.tar https://site.com/myfile.tar && touch /home/user/scipion/software/em/test-package-1.0/DOWNLOADED_FILE_1
         
         cd /home/user && mkdir -p /home/user/scipion/software/em/test-package-1.0/subdirectory2 &&
-        wget -O /home/user/scipion/software/em/test-package-1.0/subdirectory2/myfile.tar2 https://site.com/myfile.tar2 && touch /home/user/scipion/software/em/test-package-1.0/DOWNLOADED_FILE_2
+        wget -O /home/user/scipion/software/em/test-package-1.0/subdirectory2/test2.tar2 https://site.com/myfile.tar2 && touch /home/user/scipion/software/em/test-package-1.0/DOWNLOADED_FILE_2
         """
         # Defining binary name
         binaryName = binaryName if binaryName else self.__packageName
@@ -347,8 +347,20 @@ class InstallHelper():
 
         # For each file in the list, download file
         for idx in range(len(fileList)):
+            # Checking if file dictionary contains url
+            if 'url' not in fileList[idx]:
+                raise KeyError("ERROR: Download url has not been set for at least one file. You can create the appropiate dictionary calling function getFileDict.")
+            
+            # Getting proper file dictionary
+            kwargs = {}
+            if 'name' in fileList[idx]:
+                kwargs['name'] = fileList[idx]['name']
+            if 'path' in fileList[idx]:
+                kwargs['path'] = fileList[idx]['path']
+            file = fileList[idx] if ('path' in fileList[idx] and 'name' in fileList[idx]) else self.getFileDict(fileList[idx]['url'], **kwargs)
+
             targetName = targetNames[idx] if targetNames else (defaultTargetPreffix + str(idx))
-            self.getExtraFile(fileList[idx][0], self.__packageHome, targetName, location=fileList[idx][1], workDir=workDir)
+            self.getExtraFile(file['url'], self.__packageHome, targetName, location=file['path'], workDir=workDir, fileName=file['name'])
     
         return self
     
@@ -366,3 +378,12 @@ class InstallHelper():
         installer.addPackage(env, dependencies=['wget', 'conda'], default=True)
         """
         env.addPackage(self.__packageName, version=self.__packageVersion, tar='void.tgz', commands=self.__commandList, neededProgs=dependencies, default=default)
+    
+    #--------------------------------------- PUBLIC UTILS FUNCTIONS ---------------------------------------#
+    def getFileDict(url: str, location: str='.', fileName: str=None) -> Dict[str, str]:
+        """ This function generates the dictionary for a downloadable file. """
+        # Getting file name
+        fileName = fileName if fileName else os.path.basename(url)
+
+        # Returning dictionary
+        return {'url': url, 'path': location, 'name': fileName}        
