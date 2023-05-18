@@ -139,8 +139,8 @@ class Plugin(pwem.Plugin):
 
 		# Installing package
 		installer.getCloneCommand(cls.getAutoDockGPUGithub(), binaryFolderName=adtGPU, targeName='ATDGPU_CLONED')\
-			.addCommand(f'cd {adtGPU} && make DEVICE=CUDA OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
-			.addPackage(env, dependencies=['git', 'make'], default=default)
+			.addCommand(f'cd {adtGPU} && make DEVICE=GPU OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
+			.addPackage(env, dependencies=['git', 'make'], default=default, vars=enVars, updateCuda=True)
 
 	# ---------------------------------- Protocol functions-----------------------
 	@classmethod
