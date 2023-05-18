@@ -45,7 +45,7 @@ _logo = 'autodock_logo.png'
 __version__ = ALPHA_VERSION
 AUTODOCK_DIC = {'name': 'autoDock', 'version': '4.2.6', 'home': 'AUTODOCK_HOME'}
 VINA_DIC = {'name': 'vina', 'version': '1.2', 'home': 'VINA_HOME'}
-ASITE_DIC = {'name': 'autoSite', 'version': '1.0', 'home': 'AUTOSITE_HOME'}
+ASITE_DIC = {'name': 'autoSite', 'version': DEFAULT_VERSION, 'home': 'AUTOSITE_HOME'}
 MEEKO_DIC = {'name': 'meeko', 'version': '0.3.3', 'home': 'MEEKO_HOME'}
 ADGPU_DIC = {'name': 'autoDockGPU', 'version': DEFAULT_VERSION, 'home': 'ADGPU_HOME'}
 
@@ -67,7 +67,6 @@ class Plugin(pwem.Plugin):
 		cls.addADTPackage(env)
 		cls.addVinaPackage(env)
 		cls.addAutoSitePackage(env)
-		cls.addMeekoPackage(env)
 		cls.addAutoDockGPUPackage(env)
 
 	@classmethod
@@ -86,57 +85,51 @@ class Plugin(pwem.Plugin):
 	def addADTPackage(cls, env, default=True):
 		""" This function provides the neccessary commands for installing AutoDock. """
 		# Instantiating the install helper
-		installer = InstallHelper()
+		installer = InstallHelper(AUTODOCK_DIC['name'], packageVersion=AUTODOCK_DIC['version'])
 
-		# Installing protocol
-		installer.getExtraFile(cls.getADTSuiteUrl(), cls.getADTTar(), 'ADT_DOWNLOADED')\
+		# Installing package
+		installer.getExtraFile(cls.getADTSuiteUrl(), 'ADT_DOWNLOADED', fileName=cls.getADTTar())\
 			.addCommand(f'tar -xf {cls.getADTTar()} --strip-components 1 && rm {cls.getADTTar()}', 'ADT_EXTRACTED')\
-			.addProtocolPackage(env, AUTODOCK_DIC['name'], version=AUTODOCK_DIC['version'], dependencies=['wget'], default=default)
+			.addPackage(env, dependencies=['wget'], default=default)
 
 	@classmethod
 	def addVinaPackage(cls, env, default=True):
-		""" This function provides the neccessary commands for installing Vina. """
+		""" This function provides the neccessary commands for installing AutoDock-Vina. """
 		# Instantiating the install helper
-		installer = InstallHelper()
+		installer = InstallHelper(VINA_DIC['name'], packageVersion=VINA_DIC['version'])
 
-		# Installing protocol
-		installer.getCondaEnvCommand(VINA_DIC['name'], cls.getVar(VINA_DIC['home']), binaryVersion=VINA_DIC['version'], pythonVersion='3.10', requirementsFile=False)\
-			.addCondaPackages(VINA_DIC['name'], ['numpy=1.23.5', 'swig', 'boost-cpp', 'sphinx_rtd_theme', 'vina'], binaryVersion=VINA_DIC['version'], channel='conda-forge')\
-			.addProtocolPackage(env, VINA_DIC['name'], VINA_DIC['version'], ['conda'], default=default)
+		# Installing package
+		installer.getCloneCommand('https://github.com/ccsb-scripps/AutoDock-Vina.git', targeName='ADT_VINA_CLONED')\
+			.getCondaEnvCommand(pythonVersion='3.10', requirementsFile=False)\
+			.addCondaPackages(['numpy=1.23.5', 'swig', 'boost-cpp', 'sphinx_rtd_theme', 'vina'], channel='conda-forge')\
+			.addPackage(env, ['git', 'conda'], default=default)
 
 	@classmethod
 	def addAutoSitePackage(cls, env, default=True):
 		""" This function provides the neccessary commands for installing AutoSite. """
 		# TODO: Check how only adtools or adfr needed
 		# Instantiating the install helper
-		installer = InstallHelper()
+		installer = InstallHelper(ASITE_DIC['name'], packageVersion=ASITE_DIC['version'])
 
-		# Installing protocol
-		installer.getExtraFile(cls.getADFRSuiteUrl(), ASITE_DIC['home'], 'ASITE_DOWNLOADED', fileName=cls.getASITETar())\
+		# Generating AutoSite installation commands
+		installer.getExtraFile(cls.getADFRSuiteUrl(), 'ASITE_DOWNLOADED', fileName=cls.getASITETar())\
 			.addCommand(f'tar -zxf {cls.getASITETar()} --strip-components 1 && rm {cls.getASITETar()}', 'ASITE_EXTRACTED')\
-			.addCommand('./install.sh -d . -c 0 -l', 'ASITE_INSTALLED')\
-			.addProtocolPackage(env, ASITE_DIC['name'], ASITE_DIC['version'], ['wget'], default=default)
-
-	@classmethod
-	def addMeekoPackage(cls, env, default=True):
-		MEEKO_INSTALLED = 'meeko_installed'
-		meekoCommands = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getVar("RDKIT_ENV_ACTIVATION"))
-		meekoCommands += 'pip install meeko && touch {}'.format(MEEKO_INSTALLED)
-		meekoCommands = [(meekoCommands, MEEKO_INSTALLED)]
-
-		env.addPackage(MEEKO_DIC['name'], version=MEEKO_DIC['version'],
-					 tar='void.tgz', commands=meekoCommands, default=default)
+			.addCommand('./install.sh -d . -c 0 -l', 'ASITE_INSTALLED')
+		
+		# Generating meeko installation commands
+		installer.addCommand(f'{cls.getCondaActivationCmd()} {cls.getVar("RDKIT_ENV_ACTIVATION")} && pip install meeko', 'MEEKO_INSTALLED')
+		
+		# Adding package
+		installer.addPackage(env, ['wget', 'conda'], default=default)
 
 	@classmethod
 	def addAutoDockGPUPackage(cls, env, default=True):
+		""" This function provides the neccessary commands for installing AutoDock-GPU. """
 		ADGPU_INSTALLED = 'ADGPU_INSTALLED'
 
-		compCap = None
 		compCapDic = cls.getNVIDIACompCapDic()
-
 		nvidiaName = cls.getNVIDIAName()
-		if nvidiaName in compCapDic:
-			compCap = compCapDic[nvidiaName]
+		compCap = compCapDic[nvidiaName] if nvidiaName in compCapDic else None
 
 		adGPUCommands = 'cd .. && rm -r %s && git clone %s && cd %s && ' % \
 						(ADGPU_DIC['name'], cls.getAutoDockGPUGithub(), ADGPU_DIC['name'])
