@@ -23,14 +23,17 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import re, shutil
-import os
+import re, shutil, os
+
+from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, LEVEL_ADVANCED
+from pyworkflow.utils.path import createLink
+import pyworkflow.object as pwobj
 
 from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile
-from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, LEVEL_ADVANCED
-import pyworkflow.object as pwobj
-from .protocol_preparation_receptor import ProtChemADTPrepare
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
+
+from autodock.protocols.protocol_preparation_receptor import ProtChemADTPrepare
+
 
 class ProtChemADTPrepareLigands(ProtChemADTPrepare):
     """Prepare ligands using Autodocking Tools from MGL"""
@@ -77,11 +80,11 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
     def preparationStep(self):
         self.preparedFiles = []
         for mol in self.inputSmallMolecules.get():
-            fnSmall = mol.getFileName()
+            fnSmall = os.path.abspath(mol.getFileName())
             fnMol = os.path.split(fnSmall)[1]
             fnRoot, ext = os.path.splitext(fnMol)
 
-            fnOut = self._getExtraPath(fnRoot+"-prep.pdbqt")
+            fnOut = os.path.abspath(self._getExtraPath(fnRoot+"-prep.pdbqt"))
             self.preparedFiles.append(fnOut)
 
             if ext == '.sdf' and (self.repair.get()==3 or self.repair.get()==1):
@@ -92,13 +95,15 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
                 runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
             else:
                 if ext == '.sdf':
-                    auxPDB = self._getTmpPath(os.path.basename(fnOut).replace('.pdbqt', '.pdb'))
+                    auxPDB = os.path.abspath(self._getTmpPath(os.path.basename(fnOut).replace('.pdbqt', '.pdb')))
                     args = ' -isdf {} -h -opdb -O {}'.format(os.path.abspath(fnSmall), os.path.abspath(auxPDB))
                     runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
                     fnSmall = auxPDB
 
+                # Neccessary to have a local copy of ligandFile from mgltools 1.5.7
+                createLink(fnSmall, self._getExtraPath(os.path.basename(fnSmall)))
                 args = ' -v -l %s -o %s' % (fnSmall, fnOut)
-                ProtChemADTPrepare.callPrepare(self, "prepare_ligand4", args)
+                ProtChemADTPrepare.callPrepare(self, "prepare_ligand4", args, outDir=self._getExtraPath())
 
     def conformer_generation(self):
       """ Generate a number of conformers of the same small molecule in pdbqt format with
