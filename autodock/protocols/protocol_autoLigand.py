@@ -39,15 +39,16 @@ from pyworkflow.protocol import params
 
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.constants import *
-from pwchem.utils import splitPDBLine, runOpenBabel, generate_gpf, calculate_centerMass
+from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, insistentRun
 from pwchem import Plugin as pwchem_plugin
 
 from autodock import Plugin as autodock_plugin
+from autodock.protocols.protocol_autodock import ProtChemAutodockBase
 
 
 NUMBER, RANGE = 0, 1
 
-class ProtChemAutoLigand(EMProtocol):
+class ProtChemAutoLigand(ProtChemAutodockBase):
     """Perform a pocket find experiment with autoLigand. See the help at
        http://autodock.scripps.edu/faqs-help/manual/autodock-4-2-user-guide/AutoDock4.2_UserGuide.pdf"""
     _label = 'autoLigand'
@@ -128,17 +129,21 @@ class ProtChemAutoLigand(EMProtocol):
 
     def convertInputStep(self):
         '''Moves necessary files to current extra path'''
-        self.receptorFile = self.getStructFileName()
-        if os.path.splitext(self.receptorFile)[1] != '.pdbqt':
-            self.receptorFile = self.convertReceptor2PDBQT(self.receptorFile)
+        receptorFile = self.getOriginalReceptorFile()
+        if receptorFile.endswith('.pdb'):
+            self.convertReceptor2PDBQT(receptorFile)
+            shutil.copy(receptorFile, self.getReceptorPDB())
+        elif receptorFile.endswith('.pdbqt'):
+            self.convertReceptor2PDB(receptorFile)
+            shutil.copy(receptorFile, self.getReceptorPDBQT())
 
     def generateGridStep(self):
         outDir = self._getExtraPath()
         if self.prevGrid:
-            shutil.copytree(self.getStructDir(), outDir, dirs_exist_ok=True)
+            shutil.copytree(self.getReceptorDir(), outDir, dirs_exist_ok=True)
         else:
             radius = self.radius.get()
-            strFile = self.getStructFileName()
+            strFile = self.getOriginalReceptorFile()
             if os.path.splitext(strFile)[1] == '.pdbqt':
                 pdbFile = os.path.abspath(self._getTmpPath('pdbInput.pdb'))
                 args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(strFile), pdbFile)
@@ -150,15 +155,15 @@ class ProtChemAutoLigand(EMProtocol):
             npts = (radius * 2) / self.spacing.get()
 
             makePath(outDir)
-            gpf_file = generate_gpf(self.receptorFile, spacing=self.spacing.get(),
+            gpf_file = generate_gpf(self.getReceptorPDBQT(), spacing=self.spacing.get(),
                                     xc=x_center, yc=y_center, zc=z_center,
                                     npts=npts, outDir=outDir)
 
-            args = "-p {} -l {}.glg".format(gpf_file, self.getStructName())
-            self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=outDir)
+            args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())
+            insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
 
     def predictPocketStep(self, pocketSize):
-        pdbName = self.getStructName()
+        pdbName = self.getReceptorName()
         program = "AutoLigand"
         args = ' -r {} -p {}'.format(pdbName, pocketSize)
 
@@ -194,13 +199,13 @@ class ProtChemAutoLigand(EMProtocol):
 
     def createOutputStep(self):
         outFiles, resultsFile = self.organizeOutput()
+        receptorFile = self.getOriginalReceptorFile()
 
         outPockets = SetOfStructROIs(filename=self._getPath('pockets.sqlite'))
         for oFile in outFiles:
-            pock = StructROI(os.path.abspath(oFile), self.receptorFile, os.path.abspath(resultsFile),
+            pock = StructROI(os.path.abspath(oFile), receptorFile, os.path.abspath(resultsFile),
                                  pClass='AutoLigand')
             outPockets.append(pock)
-
         outHETMFile = outPockets.buildPDBhetatmFile()
 
         self._defineOutputs(outputStructROIs=outPockets)
@@ -276,7 +281,7 @@ class ProtChemAutoLigand(EMProtocol):
         return outFiles, resultsFile
 
     def manageIds(self, finalPockets, resultsFiles):
-        newResFile = self._getPath('{}_Results.txt'.format(self.getStructName()))
+        newResFile = self._getPath('{}_Results.txt'.format(self.getReceptorName()))
         newOutFiles, i = [], 1
         with open(newResFile, 'w') as fOut:
           for pocket in finalPockets:
@@ -294,15 +299,6 @@ class ProtChemAutoLigand(EMProtocol):
             newOutFiles.append(newFile)
             i+=1
         return newOutFiles, newResFile
-
-    def convertReceptor2PDBQT(self, proteinFile):
-      inName, inExt = os.path.splitext(os.path.basename(proteinFile))
-      oFile = os.path.abspath(os.path.join(self._getExtraPath(inName + '.pdbqt')))
-
-      args = ' -v -r %s -o %s' % (proteinFile, oFile)
-      self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
-                  autodock_plugin.getADTPath('Utilities24/prepare_receptor4.py') + args)
-      return oFile
 
     def getResultsLine(self, resFile, lineId):
       i=1
@@ -330,33 +326,23 @@ class ProtChemAutoLigand(EMProtocol):
     def getTmpSizePath(self, pocketSize, file=''):
         return self._getTmpPath('Size_{}/{}'.format(pocketSize, file))
 
-    def getStructName(self):
-        return self.getStructFileName().split('/')[-1].split('.')[0]
-
-    def getStructFileName(self):
+    def getOriginalReceptorFile(self):
         if self.prevGrid:
             return self.inputGrid.get().getProteinFile()
         else:
             return self.inputAtomStruct.get().getFileName()
 
-    def getStructDir(self):
-        atomStructFn = self.getStructFileName()
-        return '/'.join(atomStructFn.split('/')[:-1])
-
     def getOutFileName(self):
-      pdbName = self.getStructName()
+      pdbName = self.getReceptorName()
       return self._getExtraPath('{}_out.pdbqt'.format(pdbName))
 
     # --------------------------- INFO functions -----------------------------------
-
-    def _citations(self):
-        return []
 
     def _warnings(self):
       """ Try to find warnings on define params. """
       import re
       warnings = []
-      inpFile = os.path.abspath(self.getStructFileName())
+      inpFile = os.path.abspath(self.getOriginalReceptorFile())
       with open(inpFile) as f:
         fileStr = f.read()
       if re.search('\nHETATM', fileStr):

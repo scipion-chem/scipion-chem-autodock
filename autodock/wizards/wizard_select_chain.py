@@ -83,6 +83,10 @@ SelectResidueWizardQT().addTarget(protocol=ProtChemAutodockGPU,
                                   inputs=[{'fromReceptor': ['inputAtomStruct', 'inputStructROIs']}, 'flexChain'],
                                   outputs=['flexPosition'])
 
+SelectMultiLigandWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
+                               targets=['het2keep'],
+                               inputs=['inputAtomStruct'],
+                               outputs=['het2keep'])
 
 class AddFlexibleWizard(EmWizard):
   _targets = [(ProtChemAutodock, ['addFlex']), (ProtChemVinaDocking, ['addFlex']), (ProtChemAutodockGPU, ['addFlex'])]
