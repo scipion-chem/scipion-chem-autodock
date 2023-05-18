@@ -181,7 +181,7 @@ class InstallHelper():
 
         #### Parameters:
         binaryName (str): Optional. Name of the binary. Default is package name.
-        binaryPath (str): Path to the binary. It can be absolute or relative to current directory.
+        binaryPath (str): Optional. Path to the binary. It can be absolute or relative to current directory.
         binaryVersion (str): Optional. Binary's version. Default is package version.
         pythonVersion (str): Optional. Python version needed for the package.
         requirementsFile (bool): Optional. Defines if a Python requirements file exists.
@@ -216,8 +216,11 @@ class InstallHelper():
         # Command prefix for Python packages installation
         requirementPrefixCmd = '$CONDA_PREFIX/bin/pip install'
 
+        # Requirements file name
+        requirementFileName = os.path.join(binaryPath, requirementFileName) if requirementFileName and binaryPath else requirementFileName
+
         # Command for installing Python packages with requirements file
-        installWithFile = requirementPrefixCmd + ' -r ' + requirementFileName if requirementsFile else ''
+        installWithFile = (requirementPrefixCmd + ' -r ' + requirementFileName) if requirementsFile else ''
 
         # Command for installing Python packages manually
         installManual = ' '.join(requirementList)
@@ -233,12 +236,12 @@ class InstallHelper():
         targetName = targetName if targetName else '{}_CONDA_ENV_CREATED'.format(binaryName.upper())
         
         # Crafting final command string
-        command = pwem.Plugin.getCondaActivationCmd() + ' ' + createEnvCmd              # Basic commands: hook and env creation
-        command += ' && ' + self.__getEnvActivationCommand(binaryName, binaryVersion=binaryVersion)   # Env activation
-        command += ' && cd {}'.format(binaryPath) if binaryPath else ''                 # cd to binary path if proceeds
-        command += pythonCommands                                                       # Python related commands
-        command += " && ".join(extraCommands)                                           # Extra conda commands
-        command += ' && cd {}'.format(self.__packageHome) if binaryPath else ''               # Return to package's root directory
+        command = pwem.Plugin.getCondaActivationCmd() + ' ' + createEnvCmd                          # Basic commands: hook and env creation
+        command += ' && ' + self.__getEnvActivationCommand(binaryName, binaryVersion=binaryVersion) # Env activation
+        command += ' && cd {}'.format(binaryPath) if binaryPath else ''                             # cd to binary path if proceeds
+        command += pythonCommands                                                                   # Python related commands
+        command += " && ".join(extraCommands)                                                       # Extra conda commands
+        command += ' && cd {}'.format(self.__packageHome) if binaryPath else ''                     # Return to package's root directory
         
         # Adding command
         self.addCommand(command, targetName)
@@ -304,7 +307,6 @@ class InstallHelper():
         # Getting filename for wget
         fileName = fileName if fileName else os.path.basename(url)
         mkdirCmd = "mkdir -p {} && ".format(location) if location else ''
-        location = location if location else '.'
 
         downloadCmd = "{}wget -O {} {}".format(mkdirCmd, os.path.join(location, fileName), url)
         self.addCommand(downloadCmd, targetName, workDir=workDir)
@@ -360,7 +362,7 @@ class InstallHelper():
             file = fileList[idx] if ('path' in fileList[idx] and 'name' in fileList[idx]) else self.getFileDict(fileList[idx]['url'], **kwargs)
 
             targetName = targetNames[idx] if targetNames else (defaultTargetPreffix + str(idx))
-            self.getExtraFile(file['url'], self.__packageHome, targetName, location=file['path'], workDir=workDir, fileName=file['name'])
+            self.getExtraFile(file['url'], targetName, location=file['path'], workDir=workDir, fileName=file['name'])
     
         return self
     
@@ -380,10 +382,10 @@ class InstallHelper():
         env.addPackage(self.__packageName, version=self.__packageVersion, tar='void.tgz', commands=self.__commandList, neededProgs=dependencies, default=default)
     
     #--------------------------------------- PUBLIC UTILS FUNCTIONS ---------------------------------------#
-    def getFileDict(url: str, location: str='.', fileName: str=None) -> Dict[str, str]:
+    def getFileDict(self, url: str, path: str='.', fileName: str=None) -> Dict[str, str]:
         """ This function generates the dictionary for a downloadable file. """
         # Getting file name
         fileName = fileName if fileName else os.path.basename(url)
 
         # Returning dictionary
-        return {'url': url, 'path': location, 'name': fileName}        
+        return {'url': url, 'path': path, 'name': fileName}        
