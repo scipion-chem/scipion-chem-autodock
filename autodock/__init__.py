@@ -125,23 +125,22 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def addAutoDockGPUPackage(cls, env, default=True):
 		""" This function provides the neccessary commands for installing AutoDock-GPU. """
-		ADGPU_INSTALLED = 'ADGPU_INSTALLED'
+		# Instantiating the install helper
+		installer = InstallHelper(ADGPU_DIC['name'], packageVersion=ADGPU_DIC['version'])
 
+		# Getting Nvidia card data
 		compCapDic = cls.getNVIDIACompCapDic()
 		nvidiaName = cls.getNVIDIAName()
 		compCap = compCapDic[nvidiaName] if nvidiaName in compCapDic else None
+		targetsFlag = f' TARGETS={compCap}' if compCap else ''
 
-		adGPUCommands = 'cd .. && rm -r %s && git clone %s && cd %s && ' % \
-						(ADGPU_DIC['name'], cls.getAutoDockGPUGithub(), ADGPU_DIC['name'])
-		adGPUCommands += 'make DEVICE=GPU OVERLAP=ON '
-		if compCap:
-			adGPUCommands += 'TARGETS={} '.format(compCap)
-		adGPUCommands += '&& touch {}'.format(ADGPU_INSTALLED)
-		adGPUCommands = [(adGPUCommands, ADGPU_INSTALLED)]
+		# Defining binary name
+		adtGPU = 'AutoDockGPU'
 
-
-		env.addPackage(ADGPU_DIC['name'], tar='void.tgz', commands=adGPUCommands, default=default,
-					 vars=enVars, updateCuda=True)
+		# Installing package
+		installer.getCloneCommand(cls.getAutoDockGPUGithub(), binaryFolderName=adtGPU, targeName='ATDGPU_CLONED')\
+			.addCommand(f'cd {adtGPU} && make DEVICE=CUDA OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
+			.addPackage(env, dependencies=['git', 'make'], default=default)
 
 	# ---------------------------------- Protocol functions-----------------------
 	@classmethod
