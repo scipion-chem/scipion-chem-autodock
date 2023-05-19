@@ -44,30 +44,63 @@ from pwchem.constants import MGL_DIC
 _logo = 'autodock_logo.png'
 __version__ = ALPHA_VERSION
 AUTODOCK_DIC = {'name': 'autoDock', 'version': '4.2.6', 'home': 'AUTODOCK_HOME'}
+ADGPU_DIC = {'name': 'autoDockGPU', 'version': DEFAULT_VERSION, 'home': 'ADGPU_HOME'}
 VINA_DIC = {'name': 'vina', 'version': '1.2', 'home': 'VINA_HOME'}
+VINAGPU_DIC = {'name': 'vinaGPU', 'version': DEFAULT_VERSION, 'home': 'VINAGPU_HOME'}
 ASITE_DIC = {'name': 'autoSite', 'version': DEFAULT_VERSION, 'home': 'AUTOSITE_HOME'}
 MEEKO_DIC = {'name': 'meeko', 'version': '0.3.3', 'home': 'MEEKO_HOME'}
-ADGPU_DIC = {'name': 'autoDockGPU', 'version': DEFAULT_VERSION, 'home': 'ADGPU_HOME'}
 
+# Installation variables
 enVars = {'GPU_INCLUDE_PATH': pwem.Config.CUDA_BIN.replace('bin', 'include'), 'GPU_LIBRARY_PATH': pwem.Config.CUDA_LIB}
 
 class Plugin(pwem.Plugin):
+	"""
+    Definition of class variables. For each package, a variable will be created.
+    _<packageNameInLowercase>Home will contain the full path of the package, ending with a folder whose name will be <packageNameFirstLetterLowercase>-<defaultPackageVersion> variable.
+        For example: _atdHome = "~/Documents/scipion/software/em/autoDock-4.2.6"
+    
+    Inside that package, for each binary, there will also be another variable.
+    _<binaryNameInLowercase>Binary will be a folder inside _<packageNameInLowercase>Home and its name will be <binaryName>.
+        For example: _atdBinary = "~/Documents/scipion/software/em/autoDock-4.2.6/AutoDock"
+    """
+	# AutoDock
+	_atdHome = os.path.join(pwem.Config.EM_ROOT, AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version'])
+	_atdBinary = os.path.join(_atdHome, 'AutoDock')
+
+	# AutoDockGPU
+	_atdgpuHome = os.path.join(pwem.Config.EM_ROOT, ADGPU_DIC['name'] + '-' + ADGPU_DIC['version'])
+	_atdgpuBinary = os.path.join(_atdgpuHome, 'AutoDockGPU')
+
+	# Vina
+	_vinaHome = os.path.join(pwem.Config.EM_ROOT, VINA_DIC['name'] + '-' + VINA_DIC['version'])
+	_vinaBinary = os.path.join(_vinaHome, 'AutoDock-Vina')
+
+	# VinaGPU
+	_vinagpuHome = os.path.join(pwem.Config.EM_ROOT, VINAGPU_DIC['name'] + '-' + VINAGPU_DIC['version'])
+	_vinagpuBinary = os.path.join(_vinagpuHome, 'AutoDock-VinaGPU')
+
+	# AutoSite
+	_asiteHome = os.path.join(pwem.Config.EM_ROOT, ASITE_DIC['name'] + '-' + ASITE_DIC['version'])
+	_asiteBinary = _asiteHome
+
 	@classmethod
 	def _defineVariables(cls):
-		cls._defineEmVar(AUTODOCK_DIC['home'], os.path.join(pwem.Config.EM_ROOT, AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version']))
-		cls._defineEmVar(ADGPU_DIC['home'], os.path.join(pwem.Config.EM_ROOT, ADGPU_DIC['name'] + '-' + ADGPU_DIC['version']))
-		cls._defineEmVar(VINA_DIC['home'], os.path.join(pwem.Config.EM_ROOT, VINA_DIC['name'] + '-' + VINA_DIC['version']))
-		cls._defineEmVar(ASITE_DIC['home'], os.path.join(pwem.Config.EM_ROOT, ASITE_DIC['name'] + '-' + ASITE_DIC['version']))
+		cls._defineEmVar(AUTODOCK_DIC['home'], cls._atdHome)
+		cls._defineEmVar(ADGPU_DIC['home'], cls._atdgpuHome)
+		cls._defineEmVar(VINA_DIC['home'], cls._vinaHome)
+		cls._defineEmVar(VINAGPU_DIC['home'], cls._vinagpuHome)
+		cls._defineEmVar(ASITE_DIC['home'], cls._asiteHome)
 	
 	@classmethod
 	def defineBinaries(cls, env):
 		"""
         This function defines the binaries for each package.
         """
-		cls.addADTPackage(env)
-		cls.addAutoDockGPUPackage(env)
-		cls.addVinaPackage(env)
-		cls.addAutoSitePackage(env)
+		#cls.addADTPackage(env)
+		#cls.addAutoDockGPUPackage(env)
+		#cls.addVinaPackage(env)
+		cls.addVinaGPUPackage(env)
+		#cls.addAutoSitePackage(env)
 
 	@classmethod
 	def getEnviron(cls):
@@ -85,7 +118,7 @@ class Plugin(pwem.Plugin):
 	def addADTPackage(cls, env, default=True):
 		""" This function provides the neccessary commands for installing AutoDock. """
 		# Instantiating the install helper
-		installer = InstallHelper(AUTODOCK_DIC['name'], packageVersion=AUTODOCK_DIC['version'])
+		installer = InstallHelper(AUTODOCK_DIC['name'], packageHome=cls.getVar(AUTODOCK_DIC['home']), packageVersion=AUTODOCK_DIC['version'])
 
 		# Installing package
 		installer.getExtraFile(cls.getADTSuiteUrl(), 'ADT_DOWNLOADED', fileName=cls.getADTTar())\
@@ -96,7 +129,7 @@ class Plugin(pwem.Plugin):
 	def addAutoDockGPUPackage(cls, env, default=True):
 		""" This function provides the neccessary commands for installing AutoDock-GPU. """
 		# Instantiating the install helper
-		installer = InstallHelper(ADGPU_DIC['name'], packageVersion=ADGPU_DIC['version'])
+		installer = InstallHelper(ADGPU_DIC['name'], packageHome=cls.getVar(ADGPU_DIC['home']), packageVersion=ADGPU_DIC['version'])
 
 		# Getting Nvidia card data
 		compCapDic = cls.getNVIDIACompCapDic()
@@ -104,32 +137,47 @@ class Plugin(pwem.Plugin):
 		compCap = compCapDic[nvidiaName] if nvidiaName in compCapDic else None
 		targetsFlag = f' TARGETS={compCap}' if compCap else ''
 
-		# Defining binary name
-		adtGPU = 'AutoDockGPU'
-
 		# Installing package
-		installer.getCloneCommand(cls.getAutoDockGPUGithub(), binaryFolderName=adtGPU, targeName='ATDGPU_CLONED')\
-			.addCommand(f'cd {adtGPU} && make DEVICE=GPU OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
+		installer.getCloneCommand(cls.getAutoDockGPUGithub(), binaryFolderName=cls._atdBinary, targeName='ATDGPU_CLONED')\
+			.addCommand(f'cd {cls._atdBinary} && make DEVICE=GPU OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
 			.addPackage(env, dependencies=['git', 'make'], default=default, vars=enVars, updateCuda=True)
 
 	@classmethod
 	def addVinaPackage(cls, env, default=True):
 		""" This function provides the neccessary commands for installing AutoDock-Vina. """
 		# Instantiating the install helper
-		installer = InstallHelper(VINA_DIC['name'], packageVersion=VINA_DIC['version'])
+		installer = InstallHelper(VINA_DIC['name'], packageHome=cls.getVar(VINA_DIC['home']), packageVersion=VINA_DIC['version'])
 
 		# Installing package
 		installer.getCloneCommand('https://github.com/ccsb-scripps/AutoDock-Vina.git', targeName='ADT_VINA_CLONED')\
 			.getCondaEnvCommand(pythonVersion='3.10', requirementsFile=False)\
 			.addCondaPackages(['numpy=1.23.5', 'swig', 'boost-cpp', 'sphinx_rtd_theme', 'vina'], channel='conda-forge')\
 			.addPackage(env, ['git', 'conda'], default=default)
+	
+	@classmethod
+	def addVinaGPUPackage(cls, env, default=True):
+		""" This function procvides the neccessary commands for installing AutoDock-VinaGPU. """
+		# Instantiating the install helper
+		installer = InstallHelper(VINAGPU_DIC['name'], packageHome=cls.getVar(VINAGPU_DIC['home']), packageVersion=VINAGPU_DIC['version'])
+
+		# Defining variables
+		boostFoldername = 'boost'
+		boostFilename = boostFoldername + '.tar.gz'
+
+		# Installing package
+		installer.getCloneCommand('https://github.com/DeltaGroupNJUPT/Vina-GPU-2.0.git', binaryFolderName=cls._vinagpuBinary, targeName='VINA_GPU_CLONED')\
+			.getExtraFile('https://boostorg.jfrog.io/artifactory/main/release/1.82.0/source/boost_1_82_0.tar.gz', 'BOOST_DOWNLOADED', fileName=boostFilename)\
+			.addCommand(f'mkdir -p {boostFoldername} && tar -xf {boostFilename} --strip-components 1 -C {boostFoldername} && rm {boostFilename}', 'BOOST_EXTRACTED')\
+			.getCondaEnvCommand(requirementsFile=False)\
+			.addCondaPackages(['cuda'], channel="\"nvidia/label/cuda-11.5.0\"")\
+			.addPackage(env, dependencies=['wget', 'tar', 'conda', 'make'], default=default)
 
 	@classmethod
 	def addAutoSitePackage(cls, env, default=True):
 		""" This function provides the neccessary commands for installing AutoSite. """
 		# TODO: Check how only adtools or adfr needed
 		# Instantiating the install helper
-		installer = InstallHelper(ASITE_DIC['name'], packageVersion=ASITE_DIC['version'])
+		installer = InstallHelper(ASITE_DIC['name'], packageHome=cls.getVar(ASITE_DIC['home']), packageVersion=ASITE_DIC['version'])
 
 		# Generating AutoSite installation commands
 		installer.getExtraFile(cls.getADFRSuiteUrl(), 'ASITE_DOWNLOADED', fileName=cls.getASITETar())\
