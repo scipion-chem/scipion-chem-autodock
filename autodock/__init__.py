@@ -164,14 +164,35 @@ class Plugin(pwem.Plugin):
 		# Defining variables
 		boostFoldername = 'boost'
 		boostFilename = boostFoldername + '.tar.gz'
+		boostPath = os.path.join(cls.getVar(VINAGPU_DIC['home']), boostFoldername)
 
-		# Installing package
-		installer.getCloneCommand('https://github.com/DeltaGroupNJUPT/Vina-GPU-2.0.git', binaryFolderName=cls._vinagpuBinary, targeName='VINA_GPU_CLONED')\
-			.getExtraFile('https://boostorg.jfrog.io/artifactory/main/release/1.82.0/source/boost_1_82_0.tar.gz', 'BOOST_DOWNLOADED', fileName=boostFilename)\
+		# Defining GPU platform and OpenCL version
+		gpuPlatform = '-DNVIDIA_PLATFORM' if cls.getGPUPlatform() == 'nvidia' else '-DAMD_PLATFORM'
+		openCLVersion = '-OPENCL_3_0' if cls.getOpenCLVersion() == '3.0' else '-OPENCL_2_0'
+
+		# Defining the path to the script that modifies the makefile
+		makefileModifier = os.path.join(os.path.dirname(__file__), 'utils', 'modify_atdvinagpu_makefile.py')
+
+		# Defining AutoDock-VinaGPU makefile location
+		makefile = os.path.join(cls._vinagpuBinary, 'Vina-GPU+', 'Makefile')
+
+		# Cloning AutoDock-VinaGPU
+		installer.getCloneCommand('https://github.com/DeltaGroupNJUPT/Vina-GPU-2.0.git', binaryFolderName=cls._vinagpuBinary, targeName='VINA_GPU_CLONED')
+
+		# Downloading and extracting Boost library
+		installer.getExtraFile('https://boostorg.jfrog.io/artifactory/main/release/1.82.0/source/boost_1_82_0.tar.gz', 'BOOST_DOWNLOADED', fileName=boostFilename)\
 			.addCommand(f'mkdir -p {boostFoldername} && tar -xf {boostFilename} --strip-components 1 -C {boostFoldername} && rm {boostFilename}', 'BOOST_EXTRACTED')\
-			.getCondaEnvCommand(requirementsFile=False)\
-			.addCondaPackages(['cuda'], channel="\"nvidia/label/cuda-11.5.0\"")\
-			.addPackage(env, dependencies=['wget', 'tar', 'conda', 'make'], default=default)
+			.getCondaEnvCommand(requirementsFile=False)
+		
+		# Installing CUDA in a Conda enviroment
+		installer.addCondaPackages(['cuda'], channel="\"nvidia/label/cuda-11.5.0\"")
+
+		# Modifying makefile and compiling
+		installer.addCommand(f'{cls.getCondaActivationCmd()} {cls.getEnvActivationCommand(VINAGPU_DIC["name"], VINAGPU_DIC["version"])} && python3 {makefileModifier} {makefile} {boostPath} $CONDA_PREFIX {openCLVersion} {gpuPlatform}', 'MAKEFILE_MODIFIED')\
+			.addCommand('make clean && make source && ./Vina-GPU+ --config ./input_file_example/2bm2_config.txt && make clean && make', 'VINA_GPU_COMPILED', workDir=os.path.dirname(makefile))
+		
+		# Adding package
+		installer.addPackage(env, dependencies=['wget', 'tar', 'conda', 'make'], default=default)
 
 	@classmethod
 	def addAutoSitePackage(cls, env, default=True):
@@ -245,6 +266,11 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def getEnvActivation(cls, env):
 		return cls.getVar("{}_ENV_ACTIVATION".format(env.upper()))
+	
+	@classmethod
+	def getEnvActivationCommand(cls, binaryName, binaryVersion):
+		""" This function returns the command for activating an enviroment given the name and version. """
+		return f'conda activate {binaryName[0].lower()}{binaryName[1:]}-{binaryVersion}'
 
 	@classmethod
 	def getScriptsDir(cls, scriptName):
@@ -295,3 +321,23 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def getASITETar(cls):
 		return ASITE_DIC['name'] + '-' + ASITE_DIC['version'] + '.tgz'
+	
+	@classmethod
+	def getOpenCLVersion(cls):
+		""" This function returns the OpenCL version available in the current device. """
+		try:
+			# If OpenCL is not installed, the following command will return an error
+			version = subprocess.run(["clinfo | grep \"Platform Version\" | awk \'{print $4}\'"], capture_output=True, shell=True)
+			return version.stdout.decode('utf-8').strip()
+		except Exception:
+			return None
+	
+	@classmethod
+	def getGPUPlatform(cls):
+		""" This function returns the GPU platform of the current device. """
+		try:
+			# If no Nvidia drivers are present, the following command will reuturn an error
+			subprocess.run(["nvidia-smi"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+			return 'nvidia'
+		except Exception:
+			return 'amd'
