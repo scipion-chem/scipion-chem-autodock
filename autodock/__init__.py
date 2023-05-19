@@ -244,17 +244,11 @@ class Plugin(pwem.Plugin):
 
 	@classmethod
 	def getEnvActivation(cls, env):
-		activation = cls.getVar("{}_ENV_ACTIVATION".format(env.upper()))
-		return activation
+		return cls.getVar("{}_ENV_ACTIVATION".format(env.upper()))
 
 	@classmethod
 	def getScriptsDir(cls, scriptName):
 		return cls.getPluginHome('scripts/%s' % scriptName)
-
-	@classmethod
-	def getEnvActivation(cls, env):
-		activation = cls.getVar("{}_ENV_ACTIVATION".format(env.upper()))
-		return activation
 
 	@classmethod
 	def getVinaPath(cls, path=''):
