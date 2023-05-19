@@ -55,9 +55,9 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def _defineVariables(cls):
 		cls._defineEmVar(AUTODOCK_DIC['home'], os.path.join(pwem.Config.EM_ROOT, AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version']))
+		cls._defineEmVar(ADGPU_DIC['home'], os.path.join(pwem.Config.EM_ROOT, ADGPU_DIC['name'] + '-' + ADGPU_DIC['version']))
 		cls._defineEmVar(VINA_DIC['home'], os.path.join(pwem.Config.EM_ROOT, VINA_DIC['name'] + '-' + VINA_DIC['version']))
 		cls._defineEmVar(ASITE_DIC['home'], os.path.join(pwem.Config.EM_ROOT, ASITE_DIC['name'] + '-' + ASITE_DIC['version']))
-		cls._defineEmVar(ADGPU_DIC['home'], os.path.join(pwem.Config.EM_ROOT, ADGPU_DIC['name'] + '-' + ADGPU_DIC['version']))
 	
 	@classmethod
 	def defineBinaries(cls, env):
@@ -65,9 +65,9 @@ class Plugin(pwem.Plugin):
         This function defines the binaries for each package.
         """
 		cls.addADTPackage(env)
+		cls.addAutoDockGPUPackage(env)
 		cls.addVinaPackage(env)
 		cls.addAutoSitePackage(env)
-		cls.addAutoDockGPUPackage(env)
 
 	@classmethod
 	def getEnviron(cls):
@@ -91,6 +91,26 @@ class Plugin(pwem.Plugin):
 		installer.getExtraFile(cls.getADTSuiteUrl(), 'ADT_DOWNLOADED', fileName=cls.getADTTar())\
 			.addCommand(f'tar -xf {cls.getADTTar()} --strip-components 1 && rm {cls.getADTTar()}', 'ADT_EXTRACTED')\
 			.addPackage(env, dependencies=['wget'], default=default)
+
+	@classmethod
+	def addAutoDockGPUPackage(cls, env, default=True):
+		""" This function provides the neccessary commands for installing AutoDock-GPU. """
+		# Instantiating the install helper
+		installer = InstallHelper(ADGPU_DIC['name'], packageVersion=ADGPU_DIC['version'])
+
+		# Getting Nvidia card data
+		compCapDic = cls.getNVIDIACompCapDic()
+		nvidiaName = cls.getNVIDIAName()
+		compCap = compCapDic[nvidiaName] if nvidiaName in compCapDic else None
+		targetsFlag = f' TARGETS={compCap}' if compCap else ''
+
+		# Defining binary name
+		adtGPU = 'AutoDockGPU'
+
+		# Installing package
+		installer.getCloneCommand(cls.getAutoDockGPUGithub(), binaryFolderName=adtGPU, targeName='ATDGPU_CLONED')\
+			.addCommand(f'cd {adtGPU} && make DEVICE=GPU OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
+			.addPackage(env, dependencies=['git', 'make'], default=default, vars=enVars, updateCuda=True)
 
 	@classmethod
 	def addVinaPackage(cls, env, default=True):
@@ -121,26 +141,6 @@ class Plugin(pwem.Plugin):
 		
 		# Adding package
 		installer.addPackage(env, ['wget', 'conda'], default=default)
-
-	@classmethod
-	def addAutoDockGPUPackage(cls, env, default=True):
-		""" This function provides the neccessary commands for installing AutoDock-GPU. """
-		# Instantiating the install helper
-		installer = InstallHelper(ADGPU_DIC['name'], packageVersion=ADGPU_DIC['version'])
-
-		# Getting Nvidia card data
-		compCapDic = cls.getNVIDIACompCapDic()
-		nvidiaName = cls.getNVIDIAName()
-		compCap = compCapDic[nvidiaName] if nvidiaName in compCapDic else None
-		targetsFlag = f' TARGETS={compCap}' if compCap else ''
-
-		# Defining binary name
-		adtGPU = 'AutoDockGPU'
-
-		# Installing package
-		installer.getCloneCommand(cls.getAutoDockGPUGithub(), binaryFolderName=adtGPU, targeName='ATDGPU_CLONED')\
-			.addCommand(f'cd {adtGPU} && make DEVICE=GPU OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
-			.addPackage(env, dependencies=['git', 'make'], default=default, vars=enVars, updateCuda=True)
 
 	# ---------------------------------- Protocol functions-----------------------
 	@classmethod
