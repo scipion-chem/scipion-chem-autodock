@@ -45,10 +45,11 @@ _logo = 'autodock_logo.png'
 __version__ = ALPHA_VERSION
 AUTODOCK_DIC = {'name': 'autoDock', 'version': '4.2.6', 'home': 'AUTODOCK_HOME'}
 ADGPU_DIC = {'name': 'autoDockGPU', 'version': DEFAULT_VERSION, 'home': 'ADGPU_HOME'}
-VINA_DIC = {'name': 'vina', 'version': '1.2', 'home': 'VINA_HOME'}
+VINA_DIC = {'name': 'vina', 'version': '1.2.3', 'home': 'VINA_HOME'}
 VINAGPU_DIC = {'name': 'vinaGPU', 'version': DEFAULT_VERSION, 'home': 'VINAGPU_HOME'}
 ASITE_DIC = {'name': 'autoSite', 'version': DEFAULT_VERSION, 'home': 'AUTOSITE_HOME'}
-MEEKO_DIC = {'name': 'meeko', 'version': '0.3.3', 'home': 'MEEKO_HOME'}
+MEEKO_DIC = {'name': 'meeko', 'version': '0.3.3'}
+
 
 # Installation variables
 enVars = {'GPU_INCLUDE_PATH': pwem.Config.CUDA_BIN.replace('bin', 'include'), 'GPU_LIBRARY_PATH': pwem.Config.CUDA_LIB}
@@ -151,7 +152,7 @@ class Plugin(pwem.Plugin):
 		# Installing package
 		installer.getCloneCommand('https://github.com/ccsb-scripps/AutoDock-Vina.git', targeName='ADT_VINA_CLONED')\
 			.getCondaEnvCommand(pythonVersion='3.10', requirementsFile=False)\
-			.addCondaPackages(['numpy=1.23.5', 'swig', 'boost-cpp', 'sphinx_rtd_theme', 'vina'], channel='conda-forge')\
+			.addCondaPackages(['numpy=1.23.5', 'swig', 'boost-cpp', 'sphinx_rtd_theme', f'vina={VINA_DIC["version"]}'], channel='conda-forge')\
 			.addPackage(env, ['git', 'conda'], default=default)
 	
 	@classmethod
@@ -185,7 +186,7 @@ class Plugin(pwem.Plugin):
 			.addCommand('./install.sh -d . -c 0 -l', 'ASITE_INSTALLED')
 		
 		# Generating meeko installation commands
-		installer.addCommand(f'{cls.getCondaActivationCmd()} {cls.getVar("RDKIT_ENV_ACTIVATION")} && pip install meeko', 'MEEKO_INSTALLED')
+		installer.addCommand(f'{cls.getCondaActivationCmd()} {cls.getVar("RDKIT_ENV_ACTIVATION")} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED')
 		
 		# Adding package
 		installer.addPackage(env, ['wget', 'conda'], default=default)
@@ -251,20 +252,25 @@ class Plugin(pwem.Plugin):
 		return cls.getPluginHome('scripts/%s' % scriptName)
 
 	@classmethod
-	def getADTPath(cls, path=''):
-		return pwchemPlugin.getProgramHome(MGL_DIC, os.path.join('MGLToolsPckgs', 'AutoDockTools', path))
-
-	@classmethod
-	def getAutodockPath(cls, path=''):
-		return os.path.join(cls.getVar('AUTODOCK_HOME'), path)
+	def getEnvActivation(cls, env):
+		activation = cls.getVar("{}_ENV_ACTIVATION".format(env.upper()))
+		return activation
 
 	@classmethod
 	def getVinaPath(cls, path=''):
 		return os.path.join(cls.getVar('VINA_HOME'), path)
 
 	@classmethod
-	def getASitePath(cls, path=''):
-		return os.path.join(cls.getVar('AUTOSITE_HOME'), path)
+	def getPackagePath(cls, package='AUTODOCK', path=''):
+		return os.path.join(cls.getVar('{}_HOME'.format(package.upper())), path)
+
+	@classmethod
+	def getVinaScriptsPath(cls, scriptName=''):
+		return cls.getPackagePath(package='VINA', path='AutoDock-Vina/example/autodock_scripts/{}'.format(scriptName))
+
+	@classmethod
+	def getADTPath(cls, path=''):
+		return pwchemPlugin.getProgramHome(MGL_DIC, os.path.join('MGLToolsPckgs', 'AutoDockTools', path))
 
 	@classmethod
 	def getADTSuiteUrl(cls):
@@ -277,17 +283,20 @@ class Plugin(pwem.Plugin):
 			format(ASITE_DIC['version'])
 
 	@classmethod
-	def getVinaURL(cls):
-		return 'https://vina.scripps.edu/wp-content/uploads/sites/55/2020/12/autodock_vina_{}_linux_x86.tgz'.\
-			format(VINA_DIC['version'].replace('.', '_'))
-
-	@classmethod
 	def getAutoDockGPUGithub(cls):
 		return 'https://github.com/ccsb-scripps/AutoDock-GPU.git'
 
 	@classmethod
+	def getVinaGithub(cls):
+		return 'https://github.com/ccsb-scripps/AutoDock-Vina.git'
+
+	@classmethod
 	def getADTTar(cls):
 		return AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version'] + '.tar'
+
+	@classmethod
+	def getASITETar(cls):
+		return ASITE_DIC['name'] + '-' + ASITE_DIC['version'] + '.tgz'
 
 	@classmethod
 	def getASITETar(cls):

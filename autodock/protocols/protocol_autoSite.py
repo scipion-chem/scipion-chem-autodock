@@ -30,21 +30,20 @@ protein structure using the AutoSite software
 
 """
 
-import os
+import os, shutil
 
-from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, EnumParam, FloatParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, FloatParam, LEVEL_ADVANCED
 from pyworkflow.protocol import params
 
 from pwchem.objects import SetOfStructROIs, StructROI
-from pwchem.constants import *
-from pwchem import Plugin as pwchem_plugin
+from pwchem.utils import insistentRun
 
 from autodock import Plugin as autodock_plugin
+from autodock.protocols.protocol_autodock import ProtChemAutodockBase
 
 
 
-class ProtChemAutoSite(EMProtocol):
+class ProtChemAutoSite(ProtChemAutodockBase):
     """Perform a pocket find experiment with AutoSite. See the help at
        http://autodock.scripps.edu/faqs-help/manual/autodock-4-2-user-guide/AutoDock4.2_UserGuide.pdf"""
     _label = 'AutoSite'
@@ -85,17 +84,18 @@ class ProtChemAutoSite(EMProtocol):
 
     def convertInputStep(self):
         '''Moves necessary files to current extra path'''
-        oriReceptorFile = self.getStructFileName()
+        oriReceptorFile = self.getOriginalReceptorFile()
         if os.path.splitext(oriReceptorFile)[1] != '.pdbqt':
             self.convertReceptor2PDBQT(oriReceptorFile)
         else:
-            os.link(oriReceptorFile, self.getPDBQTRecFile())
-
+            shutil.copy(oriReceptorFile, self.getReceptorPDBQT())
+        self.cleanPDBQT(self.getReceptorPDBQT())
 
     def predictPocketStep(self):
-        args = ' -r {}'.format(self.getPDBQTRecFile())
-        args += self.getAutoSiteArgs()
-        self.runJob(autodock_plugin.getASitePath('bin/autosite'), args, cwd=self._getExtraPath())
+        fnReceptor = self.getReceptorPDBQT()
+        argsSite = self.getAutoSiteArgs(fnReceptor)
+        insistentRun(self, autodock_plugin.getPackagePath(package='AUTOSITE', path='bin/autosite'), argsSite,
+                     nMax=5, cwd=self._getExtraPath())
 
     def createOutputStep(self):
         outFiles = self.getOutFiles()
@@ -105,7 +105,7 @@ class ProtChemAutoSite(EMProtocol):
         for oFile in outFiles:
             oId = self.getIdFromFile(oFile)
             featFile = oFile.replace('_cl_', '_fp_')
-            pock = StructROI(oFile, self.getPDBQTRecFile(), pClass='AutoSite', objId=oId, extraFile=featFile,
+            pock = StructROI(oFile, self.getOriginalReceptorFile(), pClass='AutoSite', objId=oId, extraFile=featFile,
                              score=scDic[oId]['score'], energy=scDic[oId]['energy'], nPoints=scDic[oId]['nPoints'],
                              volume=scDic[oId]['volume'])
             outPockets.append(pock)
@@ -116,9 +116,14 @@ class ProtChemAutoSite(EMProtocol):
 
 
     # --------------------------- Utils functions --------------------
-    def getAutoSiteArgs(self):
-        args = ' --spacing {} --nneighbors {} -bc user {} {} {}'.\
-            format(self.spacing.get(), self.nneighbors.get(), self.cutC.get(), self.cutO.get(), self.cutH.get())
+    def getOriginalReceptorFile(self):
+        return self.inputAtomStruct.get().getFileName()
+
+
+    def getAutoSiteArgs(self, fnReceptor):
+        args = ' -r {} --spacing {} --nneighbors {} -bc user {} {} {}'.\
+            format(fnReceptor, self.spacing.get(), self.nneighbors.get(), self.cutC.get(), self.cutO.get(),
+                   self.cutH.get())
         if self.pepScore:
             args += ' --pep'
         return args
@@ -128,7 +133,7 @@ class ProtChemAutoSite(EMProtocol):
         return int(os.path.basename(file).split('_')[-1].split('.')[0])
 
     def getOutFiles(self, key='_cl_'):
-        outFiles, pdbName = [], self.getStructName()
+        outFiles, pdbName = [], self.getReceptorName()
         allFiles = os.listdir(self._getExtraPath(pdbName))
         for file in allFiles:
             if key in file:
@@ -136,7 +141,7 @@ class ProtChemAutoSite(EMProtocol):
         return outFiles
 
     def getScoresDic(self):
-        scDic, resultsFile = {}, self._getExtraPath(self.getStructName() + '_AutoSiteSummary.log')
+        scDic, resultsFile = {}, self._getExtraPath(self.getReceptorName() + '_AutoSiteSummary.log')
         inScores = False
         with open(resultsFile) as f:
             for line in f:
@@ -151,26 +156,8 @@ class ProtChemAutoSite(EMProtocol):
                                             'score': sline[-4]}
         return scDic
 
-    def getPDBQTRecFile(self):
-        inName, inExt = os.path.splitext(os.path.basename(self.getStructFileName()))
-        return os.path.abspath(self._getExtraPath(inName + '.pdbqt'))
-
-    def convertReceptor2PDBQT(self, proteinFile):
-      oFile = self.getPDBQTRecFile()
-
-      args = ' -v -r %s -o %s' % (proteinFile, oFile)
-      self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
-                  autodock_plugin.getADTPath('Utilities24/prepare_receptor4.py') + args)
-      return oFile
-
     def getTmpSizePath(self, pocketSize, file=''):
         return self._getTmpPath('Size_{}/{}'.format(pocketSize, file))
-
-    def getStructName(self):
-        return self.getStructFileName().split('/')[-1].split('.')[0]
-
-    def getStructFileName(self):
-        return os.path.abspath(self.inputAtomStruct.get().getFileName())
 
     # --------------------------- INFO functions -----------------------------------
 
