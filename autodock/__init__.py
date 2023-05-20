@@ -189,7 +189,7 @@ class Plugin(pwem.Plugin):
 
 		# Modifying makefile and compiling
 		installer.addCommand(f'{cls.getCondaActivationCmd()} {cls.getEnvActivationCommand(VINAGPU_DIC["name"], VINAGPU_DIC["version"])} && python3 {makefileModifier} {makefile} {boostPath} $CONDA_PREFIX {openCLVersion} {gpuPlatform}', 'MAKEFILE_MODIFIED')\
-			.addCommand('make clean && make source && ./Vina-GPU+ --config ./input_file_example/2bm2_config.txt && make clean && make', 'VINA_GPU_COMPILED', workDir=os.path.dirname(makefile))
+			.addCommand('make source && ./Vina-GPU+ --config ./input_file_example/2bm2_config.txt && make clean && make', 'VINA_GPU_COMPILED', workDir=os.path.dirname(makefile))
 		
 		# Adding package
 		installer.addPackage(env, dependencies=['wget', 'tar', 'conda', 'make'], default=default)
