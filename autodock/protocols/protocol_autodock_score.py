@@ -24,14 +24,14 @@
 # *
 # **************************************************************************
 
-import os, glob
+import os, glob, shutil
 
 from pyworkflow.protocol.params import FloatParam, MultiPointerParam
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseFileName, makeSubsets
+from pwchem.utils import generate_gpf, calculate_centerMass, getBaseFileName, makeSubsets, insistentRun
 from pwchem import Plugin as pwchem_plugin
 from pwchem.constants import MGL_DIC
 
@@ -67,7 +67,6 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
   # --------------------------- INSERT steps functions --------------------
   def _insertAllSteps(self):
     self.ligandFileNames = []
-    self.receptorFile = self.getOriginalReceptorFile()
 
     convSteps, scoreSteps = [], []
     subsets = makeSubsets(self.getInputMols(), self.numberOfThreads.get(), cloneItem=True)
@@ -93,14 +92,19 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
 
   def convertStep(self, mols):
     for mol in mols:
-        fnSmall, smallDir = self.convert2PDBQT(mol, self._getExtraPath('conformers'), pose=True)
+        fnSmall, smallDir = self.convertLigand2PDBQT(mol, self._getExtraPath('conformers'), pose=True)
         self.ligandFileNames.append(fnSmall)
 
-    if not '.pdbqt' in self.receptorFile:
-      self.receptorFile = self.convertReceptor2PDBQT(self.receptorFile)
+    receptorFile = self.getOriginalReceptorFile()
+    if receptorFile.endswith('.pdb'):
+        self.convertReceptor2PDBQT(receptorFile)
+        shutil.copy(receptorFile, self.getReceptorPDB())
+    elif receptorFile.endswith('.pdbqt'):
+        self.convertReceptor2PDB(receptorFile)
+        shutil.copy(receptorFile, self.getReceptorPDBQT())
 
   def generateGridsStep(self):
-    fnReceptor = self.receptorFile
+    fnReceptor = self.getReceptorPDBQT()
     outDir = self.getScoringDir()
 
     radius = self.radius.get()
@@ -118,11 +122,10 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
                             npts=npts, outDir=outDir, ligandFns=self.ligandFileNames)
 
     args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())
-    self.runJob(autodock_plugin.getAutodockPath("autogrid4"), args, cwd=outDir)
+    insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
 
   def scoreStep(self, mols):
-    # Prepare grid
-    flexReceptorFn, receptorFn = None, self.receptorFile
+    flexReceptorFn, receptorFn = None, self.getReceptorPDBQT()
     outDir = self.getScoringDir()
 
     for mol in mols:
@@ -131,7 +134,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
 
         fnDLG = dpfFile.replace('.dpf', '.dlg')
         args = "-p %s -l %s" % (dpfFile, fnDLG)
-        self.runJob(autodock_plugin.getAutodockPath("autodock4"), args, cwd=outDir)
+        self.runJob(autodock_plugin.getPackagePath(package='AUTODOCK', path="autodock4"), args, cwd=outDir)
 
 
   def createOutputStep(self):
@@ -174,25 +177,6 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
       item.setObjId(i + 1)
     return inSet, idsDic
 
-  def convertReceptor2PDB(self, proteinFile):
-    inName, inExt = os.path.splitext(os.path.basename(proteinFile))
-    oFile = os.path.abspath(os.path.join(self._getTmpPath(inName + '.pdb')))
-
-    args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(proteinFile), oFile)
-    runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
-
-    return oFile
-
-  def convertReceptor2PDBQT(self, proteinFile):
-    inName, inExt = os.path.splitext(os.path.basename(proteinFile))
-    oFile = os.path.abspath(os.path.join(self._getExtraPath(inName + '.pdbqt')))
-
-    args = ' -v -r %s -o %s' % (proteinFile, oFile)
-    self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
-                autodock_plugin.getADTPath('Utilities24/prepare_receptor4.py') + args)
-
-    return oFile
-
   def getScoringDir(self):
       return self._getExtraPath('scoring')
 
@@ -202,10 +186,6 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
 
   def getOriginalReceptorFile(self):
       return self.inputSmallMolecules[0].get().getProteinFile()
-
-  def getReceptorName(self):
-      atomStructFn = self.getOriginalReceptorFile()
-      return atomStructFn.split('/')[-1].split('.')[0]
 
   def getMolLigandName(self, mol):
     molName = mol.getUniqueName()
