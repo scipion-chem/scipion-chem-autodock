@@ -188,6 +188,12 @@ class ProtChemAutodockBase(EMProtocol):
             return atomStructFn.split('/')[-1].split('.')[0]
         else:
             return self.inputStructROIs.get().getProteinName()
+    def _validate(self):
+      vals = []
+      if self.doFlexRes.get() and not self.flexList.get().strip():
+          vals.append('You need to define the flexible residues and add them to the list using the wizard to perform '
+                      'the flexible docking')
+      return vals
 
 class ProtChemAutodock(ProtChemAutodockBase):
   """Perform a docking experiment with autodock. Grid must be generated in this protocol in order to take into
@@ -556,11 +562,6 @@ class ProtChemAutodock(ProtChemAutodockBase):
           molDic[posId]['pdb'] += line[8:]
           i += 1
     return molDic
-
-
-  def _validate(self):
-      vals = []
-      return vals
 
   def commentFirstLine(self, fn):
     with open(fn) as f:
