@@ -301,12 +301,6 @@ class ProtChemAutodockBase(EMProtocol):
         dirs.sort()
         return dirs
 
-    def getReceptorName(self):
-        if self.fromReceptor.get() == 0:
-            atomStructFn = self.getOriginalReceptorFile()
-            return atomStructFn.split('/')[-1].split('.')[0]
-        else:
-            return self.inputStructROIs.get().getProteinName()
     def _validate(self):
       vals = []
       if self.doFlexRes.get() and not self.flexList.get().strip():
