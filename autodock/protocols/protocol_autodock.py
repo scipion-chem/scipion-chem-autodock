@@ -189,8 +189,15 @@ class ProtChemAutodockBase(EMProtocol):
         return os.path.abspath(self._getExtraPath('inputLigands', path))
 
     def convertInputPDBQTFiles(self):
+        oDir = self.getInputLigandsPath()
+        if not os.path.exists(oDir):
+          os.mkdir(oDir)
         for mol in self.inputSmallMolecules.get():
-            fnSmall, smallDir = self.convertLigand2PDBQT(mol.clone(), self.getInputLigandsPath())
+            molFile = mol.getFileName()
+            if not molFile.endswith('.pdbqt'):
+                fnSmall, smallDir = self.convertLigand2PDBQT(mol.clone(), oDir)
+            else:
+                shutil.copy(molFile, self.getInputLigandsPath(getBaseFileName(molFile+'.pdbqt')))
 
     def getInputPDBQTFiles(self):
         ligandFileNames = []
@@ -303,9 +310,10 @@ class ProtChemAutodockBase(EMProtocol):
 
     def _validate(self):
       vals = []
-      if self.doFlexRes.get() and not self.flexList.get().strip():
-          vals.append('You need to define the flexible residues and add them to the list using the wizard to perform '
-                      'the flexible docking')
+      if hasattr(self, 'doFlexRes'):
+          if self.doFlexRes.get() and not self.flexList.get().strip():
+              vals.append('You need to define the flexible residues and add them to the list using the wizard to perform '
+                          'the flexible docking')
       return vals
 
 class ProtChemAutodock(ProtChemAutodockBase):

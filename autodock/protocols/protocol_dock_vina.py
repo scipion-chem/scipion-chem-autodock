@@ -31,7 +31,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import calculate_centerMass, generate_gpf, insistentRun
+from pwchem.utils import calculate_centerMass, generate_gpf, insistentRun, getBaseFileName
 from pwchem import Plugin as pwchem_plugin
 
 from autodock import Plugin as autodock_plugin
@@ -76,8 +76,14 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
 
     def convertStep(self):
       self.ligandFileNames = []
+
       for mol in self.inputSmallMolecules.get():
-          fnSmall, smallDir = self.convertLigand2PDBQT(mol, self._getTmpPath())
+          molFile = mol.getFileName()
+          if not molFile.endswith('.pdbqt'):
+              fnSmall, smallDir = self.convertLigand2PDBQT(mol, self._getTmpPath())
+          else:
+              fnSmall = os.path.abspath(self._getTmpPath(getBaseFileName(molFile + '.pdbqt')))
+              shutil.copy(molFile, fnSmall)
           self.ligandFileNames.append(fnSmall)
 
       with open(self.getConvertedLigandsFile(), 'w') as f:
