@@ -136,6 +136,7 @@ class ProtChemAutodockBase(EMProtocol):
         npts = (radius * 2) / self.spacing.get()
         zn_ffFile = autodock_plugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
           if self.doZnDock.get() else None
+        zn_ffFile = autodock_plugin.getPackagePath(package='AUTOSITE', path='CCSBpckgs/AutoDockTools/AD4_parameters.dat')
         gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(),
                                 xc=x_center, yc=y_center, zc=z_center,
                                 npts=npts, outDir=outDir, ligandFns=self.getInputPDBQTFiles(), zn_ffFile=zn_ffFile)
@@ -538,6 +539,8 @@ class ProtChemAutodock(ProtChemAutodockBase):
                   autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py ') + args, cwd=outDir, shell=True)
 
       myDPFstr, cont = '', True
+      zn_ffFile = autodock_plugin.getPackagePath(package='AUTOSITE', path='CCSBpckgs/AutoDockTools/AD4_parameters.dat')
+      myDPFstr += '\nparameter_file {}\n'.format(zn_ffFile)
       with open(baseDPF) as f:
         for line in f:
           if not cont:
