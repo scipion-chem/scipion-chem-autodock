@@ -207,7 +207,7 @@ class Plugin(pwem.Plugin):
 			.addCommand('./install.sh -d . -c 0 -l', 'ASITE_INSTALLED')
 		
 		# Generating meeko installation commands
-		installer.addCommand(f'{cls.getCondaActivationCmd()} {cls.getVar("RDKIT_ENV_ACTIVATION")} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED')
+		installer.addCommand(f'{cls.getEnvActivation("rdkit")} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED')
 		
 		# Adding package
 		installer.addPackage(env, ['wget', 'conda'], default=default)
