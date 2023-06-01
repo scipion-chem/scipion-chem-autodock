@@ -1,3 +1,8 @@
+"""
+This file is used when installing Vina-GPU.
+It modifies the makefile to compile Vina-GPU with the necessary values.
+"""
+
 import sys
 
 def modifyATDVinaGPUMakefile(filePath, boostLibPath, openCLLibPath, openCLVersion, gpuPlatform):
