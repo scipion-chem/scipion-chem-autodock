@@ -97,11 +97,11 @@ class Plugin(pwem.Plugin):
 		"""
         This function defines the binaries for each package.
         """
-		#cls.addADTPackage(env)
-		#cls.addAutoDockGPUPackage(env)
-		#cls.addVinaPackage(env)
-		cls.addVinaGPUPackage(env)
-		#cls.addAutoSitePackage(env)
+		cls.addADTPackage(env)
+		cls.addAutoDockGPUPackage(env)
+		cls.addVinaPackage(env)
+		#cls.addVinaGPUPackage(env)
+		cls.addAutoSitePackage(env)
 
 	@classmethod
 	def getEnviron(cls):
