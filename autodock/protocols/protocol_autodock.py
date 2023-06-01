@@ -189,8 +189,15 @@ class ProtChemAutodockBase(EMProtocol):
         return os.path.abspath(self._getExtraPath('inputLigands', path))
 
     def convertInputPDBQTFiles(self):
+        oDir = self.getInputLigandsPath()
+        if not os.path.exists(oDir):
+          os.mkdir(oDir)
         for mol in self.inputSmallMolecules.get():
-            fnSmall, smallDir = self.convertLigand2PDBQT(mol.clone(), self.getInputLigandsPath())
+            molFile = mol.getFileName()
+            if not molFile.endswith('.pdbqt'):
+                fnSmall, smallDir = self.convertLigand2PDBQT(mol.clone(), oDir)
+            else:
+                shutil.copy(molFile, self.getInputLigandsPath(getBaseFileName(molFile+'.pdbqt')))
 
     def getInputPDBQTFiles(self):
         ligandFileNames = []
@@ -301,6 +308,13 @@ class ProtChemAutodockBase(EMProtocol):
         dirs.sort()
         return dirs
 
+    def _validate(self):
+      vals = []
+      if hasattr(self, 'doFlexRes'):
+          if self.doFlexRes.get() and not self.flexList.get().strip():
+              vals.append('You need to define the flexible residues and add them to the list using the wizard to perform '
+                          'the flexible docking')
+      return vals
 
 class ProtChemAutodock(ProtChemAutodockBase):
   """Perform a docking experiment with autodock. Grid must be generated in this protocol in order to take into
@@ -495,7 +509,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
 
         fnDLG = dpfFile.replace('.dpf', '.dlg')
         args = " -p %s -l %s" % (dpfFile, fnDLG)
-        progCall = autodock_plugin.getAutodockPath("autodock4") + args
+        progCall = autodock_plugin.getPackagePath('AUTODOCK', "autodock4") + args
         subprocess.check_call(progCall, cwd=outDir, shell=True)
 
   def getNTPocket(self, it=None):
@@ -615,11 +629,6 @@ class ProtChemAutodock(ProtChemAutodockBase):
           molDic[posId]['pdb'] += line[8:]
           i += 1
     return molDic
-
-
-  def _validate(self):
-      vals = []
-      return vals
 
   def commentFirstLine(self, fn):
     with open(fn) as f:
