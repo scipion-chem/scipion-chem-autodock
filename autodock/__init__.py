@@ -80,7 +80,7 @@ class Plugin(pwem.Plugin):
       return environ
 
     @classmethod
-    def addADTPackage(cls, env, default=False):
+    def addADTPackage(cls, env, default=True):
         ADT_INSTALLED = 'adt_installed'
         adtCommands = 'wget {} -O {} --no-check-certificate && '.format(cls.getADTSuiteUrl(), cls.getADTTar())
         adtCommands += 'tar -xf {} --strip-components 1 && '.format(cls.getADTTar())
@@ -90,10 +90,10 @@ class Plugin(pwem.Plugin):
         env.addPackage(AUTODOCK_DIC['name'], version=AUTODOCK_DIC['version'],
                        tar='void.tgz',
                        commands=adtCommands,
-                       default=True)
+                       default=default)
 
     @classmethod
-    def addVinaPackage(cls, env, default=False):
+    def addVinaPackage(cls, env, default=True):
         VINA_INSTALLED = 'vina_installed'
         vinaCommands = 'conda create -y -n vina-env python=3.10 && '
         vinaCommands += '%s conda activate vina-env && ' % (cls.getCondaActivationCmd())
@@ -104,10 +104,10 @@ class Plugin(pwem.Plugin):
         vinaCommands = [(vinaCommands, VINA_INSTALLED)]
 
         env.addPackage(VINA_DIC['name'], version=VINA_DIC['version'],
-                       tar='void.tgz', commands=vinaCommands, default=True)
+                       tar='void.tgz', commands=vinaCommands, default=default)
 
     @classmethod
-    def addAutoSitePackage(cls, env, default=False):
+    def addAutoSitePackage(cls, env, default=True):
       # todo: check how only adtools or adfr needed
       ASITE_INSTALLED = 'asite_installed'
       asiteCommands = 'wget {} -O {} --no-check-certificate && '.format(cls.getADFRSuiteUrl(), cls.getASITETar())
@@ -117,20 +117,20 @@ class Plugin(pwem.Plugin):
       asiteCommands = [(asiteCommands, ASITE_INSTALLED)]
 
       env.addPackage(ASITE_DIC['name'], version=ASITE_DIC['version'],
-                     tar='void.tgz', commands=asiteCommands, default=True)
+                     tar='void.tgz', commands=asiteCommands, default=default)
 
     @classmethod
-    def addMeekoPackage(cls, env, default=False):
+    def addMeekoPackage(cls, env, default=True):
       MEEKO_INSTALLED = 'meeko_installed'
       meekoCommands = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getVar("RDKIT_ENV_ACTIVATION"))
       meekoCommands += 'pip install meeko && touch {}'.format(MEEKO_INSTALLED)
       meekoCommands = [(meekoCommands, MEEKO_INSTALLED)]
 
       env.addPackage(MEEKO_DIC['name'], version=MEEKO_DIC['version'],
-                     tar='void.tgz', commands=meekoCommands, default=True)
+                     tar='void.tgz', commands=meekoCommands, default=default)
 
     @classmethod
-    def addAutoDockGPUPackage(cls, env, default=False):
+    def addAutoDockGPUPackage(cls, env, default=True):
       ADGPU_INSTALLED = 'ADGPU_INSTALLED'
 
       compCap = None
@@ -149,7 +149,7 @@ class Plugin(pwem.Plugin):
       adGPUCommands = [(adGPUCommands, ADGPU_INSTALLED)]
 
 
-      env.addPackage(ADGPU_DIC['name'], tar='void.tgz', commands=adGPUCommands, default=True,
+      env.addPackage(ADGPU_DIC['name'], tar='void.tgz', commands=adGPUCommands, default=default,
                      vars=enVars, updateCuda=True)
 
 
@@ -189,9 +189,12 @@ class Plugin(pwem.Plugin):
         print('No autodock_gpu binary was found in {}'.format(progDir))
 
     @classmethod
-    def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False):
+    def runScript(cls, protocol, scriptName, args, env, scriptDir=None, cwd=None, popen=False):
       """ Run rdkit command from a given protocol. """
-      scriptName = cls.getScriptsDir(scriptName)
+      if not scriptDir:
+          scriptName = cls.getScriptsDir(scriptName)
+      else:
+          scriptName = os.path.join(scriptDir, scriptName)
       fullProgram = '%s %s && %s %s' % (cls.getCondaActivationCmd(), cls.getEnvActivation(env), 'python', scriptName)
       if not popen:
         protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
@@ -219,6 +222,7 @@ class Plugin(pwem.Plugin):
     def getADTPath(cls, path=''):
         return pwchemPlugin.getProgramHome(MGL_DIC, os.path.join('MGLToolsPckgs', 'AutoDockTools', path))
 
+    # Get software source urls
     @classmethod
     def getADTSuiteUrl(cls):
       return 'https://autodock.scripps.edu/wp-content/uploads/sites/56/2021/10/autodocksuite-{}-x86_64Linux2.tar'.\
