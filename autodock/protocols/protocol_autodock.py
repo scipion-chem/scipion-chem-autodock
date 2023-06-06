@@ -71,7 +71,7 @@ class ProtChemAutodockBase(EMProtocol):
         form.addSection(label='Input')
         inputGroup = form.addGroup('Receptor specification')
         inputGroup.addParam('fromReceptor', EnumParam, label='Dock on : ', default=1,
-                       choices=['Whole protein', 'SetOfStructROIs'],
+                       choices=['Whole protein', 'SetOfStructROIs'], display=EnumParam.DISPLAY_HLIST,
                        help='Whether to dock on a whole protein surface or on specific regions')
 
         # Docking on whole protein
