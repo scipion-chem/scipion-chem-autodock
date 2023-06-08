@@ -32,6 +32,7 @@ import pyworkflow.object as pwobj
 
 from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
+from pwchem.constants import RDKIT_DIC
 
 from autodock import Plugin
 
@@ -88,7 +89,7 @@ class ProtChemMeekoLigands(EMProtocol):
         mols = self.inputSmallMolecules.get()
         paramsFile = self.writeParamsFile(mols)
 
-        Plugin.runScript(self, scriptName, paramsFile, env='rdkit', cwd=self._getExtraPath())
+        Plugin.runScript(self, scriptName, paramsFile, envDict=RDKIT_DIC, cwd=self._getExtraPath())
 
     def conformer_generation(self):
       """ Generate a number of conformers of the same small molecule in pdbqt format with

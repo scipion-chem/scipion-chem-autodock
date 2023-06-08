@@ -30,7 +30,7 @@ from pwem.objects.data import AtomStruct
 
 from pwchem import Plugin as pwchem_plugin
 from pwchem.utils import clean_PDB
-from pwchem.constants import MGL_DIC
+from pwchem.constants import MGL_DIC, RDKIT_DIC
 from pwchem.protocols import ProtChemPrepareReceptor
 
 from autodock import Plugin as autodock_plugin
@@ -170,8 +170,7 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
 
             auxOut = fnOut.replace('.pdbqt', '_tz.pdbqt')
             args = ' -r {} -o {}'.format(fnOut, auxOut)
-            fullProgram = '%s %s && %s %s' % (
-                pwchem_plugin.getCondaActivationCmd(), pwchem_plugin.getEnvActivation('rdkit'), 'python', zincPrepPath)
+            fullProgram = '%s && %s %s' % (pwchem_plugin.getEnvActivationCommand(RDKIT_DIC), 'python', zincPrepPath)
             self.runJob(fullProgram, args, cwd=self._getExtraPath())
 
     def createOutput(self):
