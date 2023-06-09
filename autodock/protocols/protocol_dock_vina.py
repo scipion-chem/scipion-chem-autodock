@@ -30,12 +30,13 @@ from pyworkflow.protocol import params
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath
 
+from pwchem import Plugin as pwchem_plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import calculate_centerMass, generate_gpf, insistentRun, getBaseFileName
-from pwchem import Plugin as pwchem_plugin
 
 from autodock import Plugin as autodock_plugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
+from autodock.constants import VINA_DIC
 
 meekoScript = 'meeko_preparation.py'
 scriptName = 'vina_docking.py'
@@ -138,7 +139,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       if not self.doZnDock.get() and scoreFunc == 'vina':
           paramsFile = self.writeParamsFile(fnReceptor, pdbqtFiles, radius, [x_center, y_center, z_center], gpf_file,
                                             outDir, nCPUs, flexFn)
-          autodock_plugin.runScript(self, scriptName, paramsFile, env='vina', cwd=outDir)
+          autodock_plugin.runScript(self, scriptName, paramsFile, envDict=VINA_DIC, cwd=outDir)
       else:
           scoreFunc = scoreFunc if not self.doZnDock.get() and not flexFn else 'ad4'
           args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())

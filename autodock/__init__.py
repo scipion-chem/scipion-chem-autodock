@@ -38,23 +38,16 @@ import pwem
 import pyworkflow.utils as pwutils
 
 from pwchem import Plugin as pwchemPlugin
-from pwchem.constants import MGL_DIC
+from pwchem.constants import MGL_DIC, RDKIT_DIC
 
 # Pluging variables
 _logo = 'autodock_logo.png'
 __version__ = ALPHA_VERSION
-AUTODOCK_DIC = {'name': 'autoDock', 'version': '4.2.6', 'home': 'AUTODOCK_HOME'}
-ADGPU_DIC = {'name': 'autoDockGPU', 'version': DEFAULT_VERSION, 'home': 'ADGPU_HOME'}
-VINA_DIC = {'name': 'vina', 'version': '1.2.3', 'home': 'VINA_HOME'}
-VINAGPU_DIC = {'name': 'vinaGPU', 'version': DEFAULT_VERSION, 'home': 'VINAGPU_HOME'}
-ASITE_DIC = {'name': 'autoSite', 'version': DEFAULT_VERSION, 'home': 'AUTOSITE_HOME'}
-MEEKO_DIC = {'name': 'meeko', 'version': '0.3.3'}
-
 
 # Installation variables
 enVars = {'GPU_INCLUDE_PATH': pwem.Config.CUDA_BIN.replace('bin', 'include'), 'GPU_LIBRARY_PATH': pwem.Config.CUDA_LIB}
 
-class Plugin(pwem.Plugin):
+class Plugin(pwchemPlugin):
 	"""
     Definition of class variables. For each package, a variable will be created.
     _<packageNameInLowercase>Home will contain the full path of the package, ending with a folder whose name will be <packageNameFirstLetterLowercase>-<defaultPackageVersion> variable.
@@ -83,6 +76,7 @@ class Plugin(pwem.Plugin):
 	# AutoSite
 	_asiteHome = os.path.join(pwem.Config.EM_ROOT, ASITE_DIC['name'] + '-' + ASITE_DIC['version'])
 	_asiteBinary = _asiteHome
+
 
 	@classmethod
 	def _defineVariables(cls):
@@ -188,7 +182,7 @@ class Plugin(pwem.Plugin):
 		installer.addCondaPackages(['cuda'], channel="\"nvidia/label/cuda-11.5.0\"")
 
 		# Modifying makefile and compiling
-		installer.addCommand(f'{cls.getCondaActivationCmd()} {cls.getEnvActivationCommand(VINAGPU_DIC["name"], VINAGPU_DIC["version"])} && python3 {makefileModifier} {makefile} {boostPath} $CONDA_PREFIX {openCLVersion} {gpuPlatform}', 'MAKEFILE_MODIFIED')\
+		installer.addCommand(f'{cls.getEnvActivationCommand(VINAGPU_DIC)} && python3 {makefileModifier} {makefile} {boostPath} $CONDA_PREFIX {openCLVersion} {gpuPlatform}', 'MAKEFILE_MODIFIED')\
 			.addCommand('make source && ./Vina-GPU+ --config ./input_file_example/2bm2_config.txt && make clean && make', 'VINA_GPU_COMPILED', workDir=os.path.dirname(makefile))
 		
 		# Adding package
@@ -207,7 +201,7 @@ class Plugin(pwem.Plugin):
 			.addCommand('./install.sh -d . -c 0 -l', 'ASITE_INSTALLED')
 		
 		# Generating meeko installation commands
-		installer.addCommand(f'{cls.getEnvActivation("rdkit")} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED')
+		installer.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED')
 		
 		# Adding package
 		installer.addPackage(env, ['wget', 'conda'], default=default)
@@ -236,10 +230,10 @@ class Plugin(pwem.Plugin):
 		protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
 
 	@classmethod
-	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False):
+	def runScript(cls, protocol, scriptName, args, envDict, cwd=None, popen=False):
 		""" Run rdkit command from a given protocol. """
 		scriptName = cls.getScriptsDir(scriptName)
-		fullProgram = '%s %s && %s %s' % (cls.getCondaActivationCmd(), cls.getEnvActivation(env), 'python', scriptName)
+		fullProgram = '%s && %s %s' % (cls.getEnvActivationCommand(envDict), 'python', scriptName)
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 		else:
@@ -262,15 +256,6 @@ class Plugin(pwem.Plugin):
 		import autodock
 		fnDir = os.path.split(autodock.__file__)[0]
 		return os.path.join(fnDir, path)
-
-	@classmethod
-	def getEnvActivation(cls, env):
-		return cls.getVar("{}_ENV_ACTIVATION".format(env.upper()))
-	
-	@classmethod
-	def getEnvActivationCommand(cls, binaryName, binaryVersion):
-		""" This function returns the command for activating an enviroment given the name and version. """
-		return f'conda activate {binaryName[0].lower()}{binaryName[1:]}-{binaryVersion}'
 
 	@classmethod
 	def getScriptsDir(cls, scriptName):
