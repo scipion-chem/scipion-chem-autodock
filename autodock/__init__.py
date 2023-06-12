@@ -133,8 +133,8 @@ class Plugin(pwchemPlugin):
 		targetsFlag = f' TARGETS={compCap}' if compCap else ''
 
 		# Installing package
-		installer.getCloneCommand(cls.getAutoDockGPUGithub(), binaryFolderName=cls._atdBinary, targeName='ATDGPU_CLONED')\
-			.addCommand(f'cd {cls._atdBinary} && make DEVICE=GPU OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
+		installer.getCloneCommand(cls.getAutoDockGPUGithub(), binaryFolderName=cls._atdgpuBinary, targeName='ATDGPU_CLONED')\
+			.addCommand(f'cd {cls._atdgpuBinary} && make DEVICE=GPU OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
 			.addPackage(env, dependencies=['git', 'make'], default=default, vars=enVars, updateCuda=True)
 
 	@classmethod
@@ -211,7 +211,7 @@ class Plugin(pwchemPlugin):
 	def runAutodockGPU(cls, protocol, args, cwd=None):
 		""" Run autodock gpu command from a given protocol """
 		program = ''
-		progDir = pwchemPlugin.getProgramHome(ADGPU_DIC, path='bin')
+		progDir = pwchemPlugin.getProgramHome(ADGPU_DIC, path='AutoDockGPU/bin')
 		binPaths = os.listdir(progDir)
 		for binName in binPaths:
 			if 'autodock_gpu' in binName:

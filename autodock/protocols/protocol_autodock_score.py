@@ -185,7 +185,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
     return list(glob.glob(os.path.join(outDir, '*.dlg')))
 
   def getOriginalReceptorFile(self):
-      return self.inputSmallMolecules.get().getProteinFile()
+      return self.inputSmallMolecules[0].get().getProteinFile()
 
   def getMolLigandName(self, mol):
     molName = mol.getUniqueName()

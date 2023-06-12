@@ -32,7 +32,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import getBaseFileName
+from pwchem.utils import *
 
 from autodock import Plugin as autodock_plugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
@@ -169,6 +169,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       outDir = self.getOutputPocketDir(pocket)
 
       fldFile = '{}.maps.fld'.format(self.getReceptorName())
+      self.fixFldFile(os.path.join(outDir, fldFile))
 
       batchFile = os.path.abspath(os.path.join(outDir, 'batchFile.txt'))
       with open(batchFile, 'w') as f:
@@ -235,6 +236,18 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
   ########################### Utils functions ############################
+
+  def fixFldFile(self, fldFile):
+    s = ''
+    with open(fldFile) as f:
+      for line in f:
+        if line.startswith('#MACROMOLECULE'):
+          sline = line.split()
+          line = '{} ../{}\n'.format(sline[0], getBaseFileName(sline[1]).strip()+'.pdbqt')
+        s += line
+    with open(fldFile, 'w') as f:
+      f.write(s)
+
 
   def getGPU_Ids(self):
     gpus = []
