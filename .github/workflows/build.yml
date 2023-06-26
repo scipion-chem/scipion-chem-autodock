@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     # Define the steps to be taken in the job
-    steps:    
+    steps:
     # Installing scipion and miniconda dependencies
     - name: Install dependencies
       run: |
