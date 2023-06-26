@@ -29,16 +29,19 @@
 This package contains the protocols for the manipulation of atomic struct objects
 """
 
+# General imports
 import os, subprocess, json
-from .bibtex import _bibtexStr
-from .constants import *
-from .install_helper import InstallHelper
 
+# Scipion em imports
 import pwem
 import pyworkflow.utils as pwutils
+from scipion.install.funcs import InstallHelper
 
+# Plugin imports
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC, RDKIT_DIC
+from .bibtex import _bibtexStr
+from .constants import *
 
 # Pluging variables
 _logo = 'autodock_logo.png'
