@@ -204,7 +204,7 @@ class Plugin(pwchemPlugin):
 			.addCommand('./install.sh -d . -c 0 -l', 'ASITE_INSTALLED')
 		
 		# Generating meeko installation commands
-		installer.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"].lower()}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED')
+		installer.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED')
 
 		print(installer.getCommandList())
 		
