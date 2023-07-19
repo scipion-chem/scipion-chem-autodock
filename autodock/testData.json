@@ -2,7 +2,8 @@
 	"datasets": ["model_building_tutorial"],
 	"skippable": {
 		"gpu": [
-
+			"test_autodock.TestAutoDockGPU",
+			"test_autodock.TestAutoDockScoring"
 		],
 		"dependencies": [
 			
