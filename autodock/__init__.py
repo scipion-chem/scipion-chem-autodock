@@ -207,7 +207,7 @@ class Plugin(pwchemPlugin):
 		installer.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED')
 		
 		# Adding package
-		installer.addPackage(env, ['wget', 'conda'], default=default)
+		installer.addPackage(env, dependencies=['wget', 'conda'], default=default)
 
 	# ---------------------------------- Protocol functions-----------------------
 	@classmethod
