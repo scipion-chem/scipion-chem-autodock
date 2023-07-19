@@ -129,16 +129,18 @@ class Plugin(pwchemPlugin):
 		# Instantiating the install helper
 		installer = InstallHelper(ADGPU_DIC['name'], packageHome=cls.getVar(ADGPU_DIC['home']), packageVersion=ADGPU_DIC['version'])
 
-		# Getting Nvidia card data
-		compCapDic = cls.getNVIDIACompCapDic()
-		nvidiaName = cls.getNVIDIAName()
-		compCap = compCapDic[nvidiaName] if nvidiaName in compCapDic else None
-		targetsFlag = f' TARGETS={compCap}' if compCap else ''
+		# Only install AutoDockGPU on systems with Nvidia GPUs
+		if cls.getGPUPlatform() == 'nvidia':
+			# Getting Nvidia card data
+			compCapDic = cls.getNVIDIACompCapDic()
+			nvidiaName = cls.getNVIDIAName()
+			compCap = compCapDic[nvidiaName] if nvidiaName in compCapDic else None
+			targetsFlag = f' TARGETS={compCap}' if compCap else ''
 
-		# Installing package
-		installer.getCloneCommand(cls.getAutoDockGPUGithub(), binaryFolderName=cls._atdgpuBinary, targeName='ATDGPU_CLONED')\
-			.addCommand(f'cd {cls._atdgpuBinary} && make DEVICE=GPU OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
-			.addPackage(env, dependencies=['git', 'make'], default=default, vars=enVars, updateCuda=True)
+			# Installing package
+			installer.getCloneCommand(cls.getAutoDockGPUGithub(), binaryFolderName=cls._atdgpuBinary, targeName='ATDGPU_CLONED')\
+				.addCommand(f'cd {cls._atdgpuBinary} && make DEVICE=GPU OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
+				.addPackage(env, dependencies=['git', 'make'], default=default, vars=enVars, updateCuda=True)
 
 	@classmethod
 	def addVinaPackage(cls, env, default=True):
