@@ -108,7 +108,7 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
         if len(failedMols) > 0:
           with open(os.path.abspath(self._getExtraPath('failedPreparations.txt')), 'w') as f:
             for molFn in failedMols:
-              f.write(molFn)
+              f.write(molFn + '\n')
 
     def conformer_generation(self):
       """ Generate a number of conformers of the same small molecule in pdbqt format with
@@ -133,7 +133,7 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
       if len(failedMols) > 0:
         with open(os.path.abspath(self._getExtraPath('failedConfomerGeneration.txt')), 'w') as f:
           for molFn in failedMols:
-            f.write(molFn)
+            f.write(molFn + '\n')
 
     def createOutput(self):
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
