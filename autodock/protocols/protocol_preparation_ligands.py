@@ -108,7 +108,7 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
               failedMols.append(fnOut)
 
         if len(failedMols) > 0:
-          with open(self._getExtraPath('failedPreparations.txt')) as f:
+          with open(os.path.abspath(self._getExtraPath('failedPreparations.txt'))) as f:
             for molFn in failedMols:
               f.write(molFn)
 
@@ -133,7 +133,7 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
           failedMols.append(fnRoot)
 
       if len(failedMols) > 0:
-        with open(self._getExtraPath('failedConfomerGeneration.txt')) as f:
+        with open(os.path.abspath(self._getExtraPath('failedConfomerGeneration.txt'))) as f:
           for molFn in failedMols:
             f.write(molFn)
 
