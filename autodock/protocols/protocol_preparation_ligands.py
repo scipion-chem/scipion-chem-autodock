@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import re, shutil, os
+import re, shutil, os, glob
 
 from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, LEVEL_ADVANCED
 from pyworkflow.utils.path import createLink
@@ -41,7 +41,7 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
     _program = ""
 
     def _defineParams(self, form):
-        self.typeRL="ligand"
+        self.typeRL = "ligand"
         form.addSection(label='Input')
         form.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
                       label='Set of small molecules:', allowsNull=False,
@@ -78,39 +78,46 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
         self._insertFunctionStep('createOutput')
 
     def preparationStep(self):
-        self.preparedFiles = []
+        failedMols = []
         for mol in self.inputSmallMolecules.get():
             fnSmall = os.path.abspath(mol.getFileName())
             fnMol = os.path.split(fnSmall)[1]
             fnRoot, ext = os.path.splitext(fnMol)
 
             fnOut = os.path.abspath(self._getExtraPath(fnRoot+"-prep.pdbqt"))
-            self.preparedFiles.append(fnOut)
 
-            if ext == '.sdf' and (self.repair.get()==3 or self.repair.get()==1):
-                # AUTODOCK: Cannot handle add hydrogens to files coming from 2D sdf files
-                args = ' -isdf {} -h -opdbqt -O {}'.format(os.path.abspath(fnSmall), os.path.abspath(fnOut))
-                if self.preserveCharges.get() == 0:
-                    args += ' --partialcharge gasteiger'
-                runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
-            else:
-                if ext == '.sdf':
-                    auxPDB = os.path.abspath(self._getTmpPath(os.path.basename(fnOut).replace('.pdbqt', '.pdb')))
-                    args = ' -isdf {} -h -opdb -O {}'.format(os.path.abspath(fnSmall), os.path.abspath(auxPDB))
-                    runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
-                    fnSmall = auxPDB
+            try:
+              if ext == '.sdf' and (self.repair.get() == 3 or self.repair.get() == 1):
+                  # AUTODOCK: Cannot handle add hydrogens to files coming from 2D sdf files
+                  args = ' -isdf {} -h -opdbqt -O {}'.format(os.path.abspath(fnSmall), os.path.abspath(fnOut))
+                  if self.preserveCharges.get() == 0:
+                      args += ' --partialcharge gasteiger'
+                  runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
+              else:
+                  if ext == '.sdf':
+                      auxPDB = os.path.abspath(self._getTmpPath(os.path.basename(fnOut).replace('.pdbqt', '.pdb')))
+                      args = ' -isdf {} -h -opdb -O {}'.format(os.path.abspath(fnSmall), os.path.abspath(auxPDB))
+                      runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
+                      fnSmall = auxPDB
 
-                # Neccessary to have a local copy of ligandFile from mgltools 1.5.7
-                createLink(fnSmall, self._getExtraPath(os.path.basename(fnSmall)))
-                args = ' -v -l %s -o %s' % (fnSmall, fnOut)
-                ProtChemADTPrepare.callPrepare(self, "prepare_ligand4", args, outDir=self._getExtraPath())
+                  # Neccessary to have a local copy of ligandFile from mgltools 1.5.7
+                  createLink(fnSmall, self._getExtraPath(os.path.basename(fnSmall)))
+                  args = ' -v -l %s -o %s' % (fnSmall, fnOut)
+                  ProtChemADTPrepare.callPrepare(self, "prepare_ligand4", args, outDir=self._getExtraPath())
+            except:
+              failedMols.append(fnOut)
+
+        if len(failedMols) > 0:
+          with open(self._getExtraPath('failedPreparations.txt')) as f:
+            for molFn in failedMols:
+              f.write(molFn)
 
     def conformer_generation(self):
       """ Generate a number of conformers of the same small molecule in pdbqt format with
           openbabel using two different algorithm
       """
-
-      for file in self.preparedFiles:
+      failedMols = []
+      for file in glob.glob(self._getExtraPath('*-prep.pdbqt')):
         fnRoot = re.split("-prep", os.path.split(file)[1])[0]  # ID or filename without -prep.mol2
 
         if self.method_conf.get() == 0:  # Genetic algorithm
@@ -120,11 +127,19 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
           args = " %s --confab --original --verbose --conf %s --rcutoff %s -O %s_conformers.pdbqt" % \
                  (os.path.abspath(file), str(self.number_conf.get() - 1), str(self.rmsd_cutoff.get()), fnRoot)
 
-        runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
+        try:
+          runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
+        except:
+          failedMols.append(fnRoot)
+
+      if len(failedMols) > 0:
+        with open(self._getExtraPath('failedConfomerGeneration.txt')) as f:
+          for molFn in failedMols:
+            f.write(molFn)
 
     def createOutput(self):
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
-        for file in self.preparedFiles:
+        for file in glob.glob(self._getExtraPath('*-prep.pdbqt')):
             fnRoot = re.split("-prep", os.path.split(file)[1])[0]
             if self.doConformers.get():
                 outDir = self._getExtraPath(fnRoot)
