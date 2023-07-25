@@ -76,7 +76,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     line.addParam('stopstd', FloatParam, label='Energy tolerance: ', default=0.15)
 
     group = form.addGroup('Global search', condition='not heuristics')
-    group.addParam('gaPop', IntParam, label='Population size', default=150,
+    group.addParam('gaPop', IntParam, label='Population size: ', default=150,
                    help='This is the number of individuals in the population. Each individual is a coupling of a '
                         'genotype and its associated phenotype')
     group.addParam('gaNumEvals', IntParam, label='Number of evaluations: ', default=2500000,
@@ -124,7 +124,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     else:
       args += '-e {} -l {} '.format(self.gaNumEvals.get(), searchKeys[self.lsType.get()])
 
-      args += '-g {} -p {} '. \
+      args += '-g {} -i {} -p {} '. \
         format(self.gaNumGens.get(), self.lsMaxIts.get(), self.gaPop.get())
       args += '--mrat {} --crat {} --trat {} '. \
         format(self.mrat.get(), self.crat.get(), self.trat.get())
@@ -258,7 +258,6 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
   def parseDockedMolsDLG(self, fnDlg):
     molDic = {}
-    i = 1
     with open(fnDlg) as fRes:
       for line in fRes:
         if line.startswith('DOCKED: MODEL'):
@@ -272,7 +271,6 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
           molDic[posId]['pdb'] += line[8:]
         elif line.startswith('DOCKED: ATOM'):
           molDic[posId]['pdb'] += line[8:]
-          i += 1
     return molDic
 
   def commentFirstLine(self, fn):
