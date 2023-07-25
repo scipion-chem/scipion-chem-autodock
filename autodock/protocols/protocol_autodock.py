@@ -217,8 +217,11 @@ class ProtChemAutodockBase(EMProtocol):
             print('No original receptor file found')
 
     def getReceptorName(self):
-        fnReceptor = self.getOriginalReceptorFile()
-        return getBaseFileName(fnReceptor)
+        if not hasattr(self, 'receptorName'):
+            fnReceptor = self.getOriginalReceptorFile()
+            return getBaseFileName(fnReceptor)
+        else:
+            return self.receptorName
 
     def getReceptorDir(self):
         fnReceptor = self.getOriginalReceptorFile()

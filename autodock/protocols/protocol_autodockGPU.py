@@ -146,6 +146,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
   def _insertAllSteps(self):
       cId = self._insertFunctionStep('convertStep', prerequisites=[])
       gpuList = self.getGPU_Ids()
+      self.receptorName = self.getReceptorName()
 
       dockSteps = []
       if self.fromReceptor.get() == 0:
