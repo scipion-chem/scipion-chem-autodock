@@ -136,7 +136,7 @@ class ProtChemAutodockBase(EMProtocol):
         npts = (radius * 2) / self.spacing.get()
         zn_ffFile = autodock_plugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
           if self.doZnDock.get() else None
-        gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(),
+        gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(), addLigTypes=False,
                                 xc=x_center, yc=y_center, zc=z_center,
                                 npts=npts, outDir=outDir, ligandFns=self.getInputPDBQTFiles(), zn_ffFile=zn_ffFile)
 
