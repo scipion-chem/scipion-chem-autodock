@@ -150,12 +150,12 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
       dockSteps = []
       if self.fromReceptor.get() == 0:
-        gridId = self._insertFunctionStep('generateGridsStep', addLigType=False, prerequisites=[cId])
+        gridId = self._insertFunctionStep('generateGridsStep', None, False, prerequisites=[cId])
         dockId = self._insertFunctionStep('dockStep', gpuList, prerequisites=[gridId])
         dockSteps.append(dockId)
       else:
         for pocket in self.inputStructROIs.get():
-          gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
+          gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), False, prerequisites=[cId])
           dockId = self._insertFunctionStep('dockStep', gpuList, pocket.clone(), prerequisites=[gridId])
           dockSteps.append(dockId)
 
