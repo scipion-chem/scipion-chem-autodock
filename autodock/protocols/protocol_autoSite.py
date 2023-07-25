@@ -95,7 +95,7 @@ class ProtChemAutoSite(ProtChemAutodockBase):
         fnReceptor = self.getReceptorPDBQT()
         argsSite = self.getAutoSiteArgs(fnReceptor)
         insistentRun(self, autodock_plugin.getPackagePath(package='AUTOSITE', path='bin/autosite'), argsSite,
-                     nMax=5, cwd=self._getExtraPath())
+                     nMax=5, cwd=self._getExtraPath(), sleepTime=5)
 
     def createOutputStep(self):
         outFiles = self.getOutFiles()

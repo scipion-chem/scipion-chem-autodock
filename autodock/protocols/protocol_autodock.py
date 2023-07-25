@@ -121,7 +121,7 @@ class ProtChemAutodockBase(EMProtocol):
           self.convertReceptor2PDB(receptorFile)
           shutil.copy(receptorFile, self.getReceptorPDBQT())
 
-    def generateGridsStep(self, pocket=None):
+    def generateGridsStep(self, pocket=None, addLigType=True):
         fnReceptor = self.getReceptorPDBQT()
         outDir = self.getOutputPocketDir(pocket)
         makePath(outDir)
@@ -136,7 +136,7 @@ class ProtChemAutodockBase(EMProtocol):
         npts = (radius * 2) / self.spacing.get()
         zn_ffFile = autodock_plugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
           if self.doZnDock.get() else None
-        gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(), addLigTypes=False,
+        gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(), addLigTypes=addLigType,
                                 xc=x_center, yc=y_center, zc=z_center,
                                 npts=npts, outDir=outDir, ligandFns=self.getInputPDBQTFiles(), zn_ffFile=zn_ffFile)
 
@@ -434,6 +434,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
   # --------------------------- INSERT steps functions --------------------
   def _insertAllSteps(self):
       cId = self._insertFunctionStep('convertStep', prerequisites=[])
+      self.receptorName = self.getReceptorName()
 
       dockSteps = []
       if self.fromReceptor.get() == 0:

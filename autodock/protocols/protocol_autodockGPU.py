@@ -150,7 +150,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
       dockSteps = []
       if self.fromReceptor.get() == 0:
-        gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
+        gridId = self._insertFunctionStep('generateGridsStep', addLigType=False, prerequisites=[cId])
         dockId = self._insertFunctionStep('dockStep', gpuList, prerequisites=[gridId])
         dockSteps.append(dockId)
       else:
