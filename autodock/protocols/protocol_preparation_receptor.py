@@ -25,6 +25,8 @@
 # **************************************************************************
 import os, json
 
+from subprocess import run
+
 from pyworkflow.protocol import params
 from pwem.objects.data import AtomStruct
 
@@ -70,7 +72,7 @@ class ProtChemADTPrepare(ProtChemPrepareReceptor, ProtChemAutodockBase):
         self._insertFunctionStep('preparationStep')
         self._insertFunctionStep('createOutput')
 
-    def callPrepare(self, prog, args, outDir):
+    def callPrepare(self, prog, args, outDir, popen=False):
         if self.repair.get()==3:
             args+=' -A bonds_hydrogens'
         elif self.repair.get()==1:
@@ -113,8 +115,13 @@ class ProtChemADTPrepare(ProtChemPrepareReceptor, ProtChemAutodockBase):
             if self.nonstd.get():
                 args+=" -e"
 
-        self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
-                    autodock_plugin.getADTPath('Utilities24/%s.py'%prog)+args, cwd=outDir)
+        if not popen:
+            self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
+                        autodock_plugin.getADTPath('Utilities24/%s.py'%prog)+args, cwd=outDir)
+        else:
+            fullProgram = pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh ') + \
+                          autodock_plugin.getADTPath('Utilities24/%s.py' % prog)
+            run(fullProgram + args, cwd=outDir, shell=True)
 
     def createOutput(self):
         fnOut = self._getExtraPath('atomStruct.pdbqt')
@@ -162,7 +169,7 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
                                False, self.HETATM.get(), chain_ids, het2keep)
 
         fnOut = self.getReceptorPDBQT()
-        args = ' -v -r %s -o %s' % (os.path.abspath(cleanedPDB), fnOut)
+        args = ' -r %s -o %s' % (os.path.abspath(cleanedPDB), fnOut)
         ProtChemADTPrepare.callPrepare(self, "prepare_receptor4", args, outDir=self._getExtraPath())
 
         if self.doZnDock.get():
