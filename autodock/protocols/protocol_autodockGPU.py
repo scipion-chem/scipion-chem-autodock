@@ -279,7 +279,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     molDic = {}
     with open(fnDlg) as fRes:
       for line in fRes:
-        if line.startswith('DOCKED: MODEL'):
+        if line.startswith('DOCKED: MODEL') and line.split()[-1].strip() != "0":
           posId = line.split()[-1]
           molDic[posId] = {'pdb': ''}
         elif line.startswith('DOCKED: USER    Estimated Free Energy'):
