@@ -126,7 +126,7 @@ class ProtChemMeekoLigands(EMProtocol):
                 confFile = appendToConformersFile(confFile, firstConfFile, beginning=True)
                 confDir = splitConformerFile(confFile, outDir=outDir)
                 for molFile in os.listdir(confDir):
-                    molFile = os.path.abspath(os.path.join(confDir, molFile))
+                    molFile = os.path.join(confDir, molFile)
                     confId = molFile.split('-')[-1].split('.')[0]
 
                     newSmallMol = SmallMolecule(smallMolFilename=molFile, type='AutoDock')

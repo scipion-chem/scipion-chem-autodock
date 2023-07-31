@@ -137,7 +137,7 @@ class ProtChemAutoSite(ProtChemAutodockBase):
         allFiles = os.listdir(self._getExtraPath(pdbName))
         for file in allFiles:
             if key in file:
-                outFiles.append(os.path.abspath(self._getExtraPath(pdbName, file)))
+                outFiles.append(self._getExtraPath(pdbName, file))
         return outFiles
 
     def getScoresDic(self):

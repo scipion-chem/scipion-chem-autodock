@@ -108,7 +108,8 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
             fnRoot = re.split("-prep", os.path.split(file)[1])[0]
             if self.doConformers.get():
                 outDir = self._getExtraPath(fnRoot)
-                os.mkdir(outDir)
+                if not os.path.exists(outDir):
+                  os.mkdir(outDir)
                 firstConfFile = self._getTmpPath('{}-{}.pdbqt'.format(fnRoot, 1))
                 shutil.copy(file, firstConfFile)
                 confFile = self._getExtraPath("{}_conformers.pdbqt".format(fnRoot))
@@ -116,7 +117,7 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
                                                   beginning=True)
                 confDir = splitConformerFile(confFile, outDir=outDir)
                 for molFile in os.listdir(confDir):
-                    molFile = os.path.abspath(os.path.join(confDir, molFile))
+                    molFile = os.path.join(confDir, molFile)
                     confId = molFile.split('-')[-1].split('.')[0]
 
                     newSmallMol = SmallMolecule(smallMolFilename=molFile, type='AutoDock')

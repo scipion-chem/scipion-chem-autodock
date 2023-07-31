@@ -203,10 +203,9 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
 
         outPockets = SetOfStructROIs(filename=self._getPath('pockets.sqlite'))
         for oFile in outFiles:
-            pock = StructROI(os.path.abspath(oFile), receptorFile, os.path.abspath(resultsFile),
-                                 pClass='AutoLigand')
+            pock = StructROI(oFile, receptorFile, resultsFile, pClass='AutoLigand')
             outPockets.append(pock)
-        outHETMFile = outPockets.buildPDBhetatmFile()
+        outPockets.buildPDBhetatmFile()
 
         self._defineOutputs(outputStructROIs=outPockets)
 

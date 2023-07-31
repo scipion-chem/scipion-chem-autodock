@@ -69,7 +69,7 @@ class ProtChemAutoSiteGenPharmacophore(EMProtocol):
         clusts = self.getClustersInfo(roiObj)
 
         outPharm = PharmacophoreChem().create(outputPath=self._getPath())
-        outPharm.setProteinFile(os.path.abspath(roiObj.getProteinFile()))
+        outPharm.setProteinFile(roiObj.getProteinFile())
         for point in clusts:
             pharmFeat = PharmFeature(type=typeDic[point['type']], radius=point['rad'],
                                      x=point['x'], y=point['y'], z=point['z'])

@@ -130,8 +130,8 @@ class Autodock_GridGeneration(ProtChemAutodockBase):
         insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"),
                      args, cwd=self._getExtraPath())
         e_map_file = self._getExtraPath("%s.e.map" %name_protein)
-        self.grid = GridADT(e_map_file, atomStructFn, radius=self.radius.get(), spacing=self.spacing.get(),
-                            massCX=x_center, massCY=y_center, massCZ=z_center, npts=npts)
+        self.grid = GridADT(e_map_file, os.path.relpath(atomStructFn), radius=self.radius.get(),
+                            spacing=self.spacing.get(), massCX=x_center, massCY=y_center, massCZ=z_center, npts=npts)
 
 
     def createOutput(self):
