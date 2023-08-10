@@ -32,7 +32,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import *
+from pwchem.utils import getBaseFileName, performBatchThreading
 
 from autodock import Plugin as autodock_plugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
@@ -291,9 +291,9 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
   def commentFirstLine(self, fn):
     with open(fn) as f:
-      all = '# ' + f.read()
+      allStr = '# ' + f.read()
     with open(fn, 'w') as f:
-      f.write(all)
+      f.write(allStr)
     return fn
 
   def getDockedLigandsFiles(self, outDir):

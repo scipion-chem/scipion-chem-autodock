@@ -30,19 +30,12 @@ atomtype information
 
 """
 
-import os
 
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, EnumParam, FloatParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import PointerParam
 from pyworkflow.protocol import params
 
 from pwchem.objects import PharmacophoreChem, PharmFeature
-from pwchem.constants import *
-from pwchem import Plugin as pwchem_plugin
-
-from autodock import Plugin as autodock_plugin
-
-
 
 class ProtChemAutoSiteGenPharmacophore(EMProtocol):
     """Generate a Pharmacophore from a AutoSite structural ROI """
