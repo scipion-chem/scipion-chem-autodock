@@ -94,15 +94,16 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
                        condition="fillType==0",
                        help="Number of fill points to use. The resulting grids will have this size")
 
-        group.addParam('iniFillPoints', IntParam, default=50, label='Initial fill points',
+        group.addParam('iniFillPoints', IntParam, default=50, label='Initial fill points: ',
                        condition="fillType==1",
-                       help="Number of fill points to use. The resulting grids will have this size")
-        group.addParam('endFillPoints', IntParam, default=100, label='Final fill points',
+                       help="Number of fill points to use. The resulting grids will have this size minimum")
+        group.addParam('endFillPoints', IntParam, default=100, label='Final fill points: ',
                        condition="fillType==1",
-                       help="Number of fill points to use. The resulting grids will have this size")
+                       help="Number of fill points to use. The resulting grids will have this size maximum")
         group.addParam('stepFillPoints', IntParam, default=10, label='Step of fill points',
                        condition="fillType==1",
-                       help="Number of fill points to use. The resulting grids will have this size")
+                       help="When iterating from a initial to a final number of points, number of points step between "
+                            "each iteration")
 
         group.addParam('propShared', FloatParam, default=0.5, label='Proportion of points for overlapping',
                       condition="fillType==1",
