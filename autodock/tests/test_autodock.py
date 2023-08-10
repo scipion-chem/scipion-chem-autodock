@@ -342,7 +342,7 @@ class TestGridADT(TestADPrepareReceptor):
 
     def _runCreateGrid(self, spacing, radius):
         protGrid = self.newProtocol(
-            Autodock_GridGeneration,
+            AutodockGridGeneration,
             inputAtomStruct=self.protImportPDB.outputPdb,
             radius=radius,
             spacing=spacing)

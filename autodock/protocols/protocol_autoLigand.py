@@ -152,15 +152,15 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
             else:
                 pdbFile = strFile
 
-            structure, x_center, y_center, z_center = calculate_centerMass(pdbFile)
+            _, xCenter, yCenter, zCenter = calculate_centerMass(pdbFile)
             npts = (radius * 2) / self.spacing.get()
 
             makePath(outDir)
-            gpf_file = generate_gpf(self.getReceptorPDBQT(), spacing=self.spacing.get(),
-                                    xc=x_center, yc=y_center, zc=z_center,
+            gpfFile = generate_gpf(self.getReceptorPDBQT(), spacing=self.spacing.get(),
+                                    xc=xCenter, yc=yCenter, zc=zCenter,
                                     npts=npts, outDir=outDir)
 
-            args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())
+            args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
             insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
 
     def predictPocketStep(self, pocketSize):

@@ -88,32 +88,30 @@ class ProtChemADTPrepare(ProtChemPrepareReceptor, ProtChemAutodockBase):
             for atom in self.chargeAtoms.get().split(','):
                 args+=" -p %s" % atom.strip()
 
-        cleanup=" -U "
-        first=True
+        cleanup = " -U "
+        first = True
         if self.nphs.get():
-            cleanup+=" nphs"
-            first=False
+            cleanup += " nphs"
+            first = False
         if self.lps.get():
             if not first:
-                cleanup+="_"
-            cleanup+="lps"
-            first=False
+                cleanup += "_"
+            cleanup += "lps"
+            first = False
         if self.waters.get():
             if not first:
-                cleanup+="_"
-            cleanup+="waters"
-            first=False
-        if self.typeRL=="target":
-            if self.nonstdres.get():
-                if not first:
-                    cleanup+="_"
-                cleanup+="nonstdres"
-        if cleanup!="-U ":
-            args+=cleanup
+                cleanup += "_"
+            cleanup += "waters"
+            first = False
+        if self.typeRL == "target" and self.nonstdres.get():
+            if not first:
+                cleanup += "_"
+            cleanup += "nonstdres"
+        if cleanup != "-U ":
+            args += cleanup
 
-        if self.typeRL=="target":
-            if self.nonstd.get():
-                args+=" -e"
+        if self.typeRL == "target" and self.nonstd.get():
+            args += " -e"
 
         if not popen:
             self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
@@ -142,7 +140,7 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
                       label='Atomic Structure:', allowsNull=False,
                       help='Input Atomic structure to prepare for Autodock docking')
 
-        clean = self.defineCleanParams(form, w=False)
+        self.defineCleanParams(form, w=False)
         ProtChemADTPrepare._defineParamsBasic(self, form)
 
         form.addParam('doZnDock', params.BooleanParam, label='Perform Zn metalloprotein preparation: ', default=False,
@@ -151,22 +149,22 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
 
     def preparationStep(self):
         #Clean PDB
-        pdb_ini = self.inputAtomStruct.get().getFileName()
-        filename = os.path.splitext(os.path.basename(pdb_ini))[0]
+        pdbIni = self.inputAtomStruct.get().getFileName()
+        filename = os.path.splitext(os.path.basename(pdbIni))[0]
         fnPdb = self._getExtraPath('%s_clean.pdb' % filename)
 
-        chain_ids = None
+        chainIds = None
         if self.rchains.get():
             chainJson = json.loads(self.chain_name.get())  # From wizard dictionary
             if 'chain' in chainJson:
-                chain_ids = [chainJson["chain"].upper().strip()]
+                chainIds = [chainJson["chain"].upper().strip()]
             elif 'model-chain' in chainJson:
                 modelChains = chainJson["model-chain"].upper().strip()
-                chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
+                chainIds = [x.split('-')[1] for x in modelChains.split(',')]
 
         het2keep = self.het2keep.get().split(', ')
         cleanedPDB = clean_PDB(self.inputAtomStruct.get().getFileName(), fnPdb,
-                               False, self.HETATM.get(), chain_ids, het2keep)
+                               False, self.HETATM.get(), chainIds, het2keep)
 
         fnOut = self.getReceptorPDBQT()
         args = ' -r %s -o %s' % (os.path.abspath(cleanedPDB), fnOut)
@@ -190,7 +188,6 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
 
     def _validate(self):
         errors = []
-        if self.rchains.get():
-            if not self.chain_name.get():
-                errors.append('You must specify the chains to be maintained')
+        if self.rchains.get() and not self.chain_name.get():
+            errors.append('You must specify the chains to be maintained')
         return errors

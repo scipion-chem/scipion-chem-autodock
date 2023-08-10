@@ -294,9 +294,9 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
   def commentFirstLine(self, fn):
     with open(fn) as f:
-      all = '# ' + f.read()
+      allStr = '# ' + f.read()
     with open(fn, 'w') as f:
-      f.write(all)
+      f.write(allStr)
     return fn
 
   def getDockedLigandsFiles(self, outDir):
