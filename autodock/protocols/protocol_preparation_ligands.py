@@ -102,33 +102,36 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
           for molFn in failedMols:
             f.write(molFn + '\n')
 
+    def indOutputCreation(self, file, fnRoot, outputSmallMolecules):
+      if self.doConformers.get():
+        outDir = self._getExtraPath(fnRoot)
+        if not os.path.exists(outDir):
+          os.mkdir(outDir)
+        firstConfFile = self._getTmpPath('{}-{}.pdbqt'.format(fnRoot, 1))
+        shutil.copy(file, firstConfFile)
+        confFile = self._getExtraPath("{}_conformers.pdbqt".format(fnRoot))
+        confFile = appendToConformersFile(confFile, firstConfFile, beginning=True)
+        confDir = splitConformerFile(confFile, outDir=outDir)
+        for molFile in os.listdir(confDir):
+          molFile = os.path.join(confDir, molFile)
+          confId = molFile.split('-')[-1].split('.')[0]
+
+          newSmallMol = SmallMolecule(smallMolFilename=molFile, type='AutoDock')
+          newSmallMol.setMolName(fnRoot)
+          newSmallMol._ConformersFile = pwobj.String(confFile)
+          newSmallMol.setConfId(confId)
+          outputSmallMolecules.append(newSmallMol)
+      else:
+        newSmallMol = SmallMolecule(smallMolFilename=file, type='AutoDock')
+        newSmallMol.setMolName(fnRoot)
+        outputSmallMolecules.append(newSmallMol)
+      return outputSmallMolecules
+
     def createOutput(self):
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
         for file in glob.glob(self._getExtraPath('*-prep.pdbqt')):
             fnRoot = re.split("-prep", os.path.split(file)[1])[0]
-            if self.doConformers.get():
-                outDir = self._getExtraPath(fnRoot)
-                if not os.path.exists(outDir):
-                  os.mkdir(outDir)
-                firstConfFile = self._getTmpPath('{}-{}.pdbqt'.format(fnRoot, 1))
-                shutil.copy(file, firstConfFile)
-                confFile = self._getExtraPath("{}_conformers.pdbqt".format(fnRoot))
-                confFile = appendToConformersFile(confFile, firstConfFile,
-                                                  beginning=True)
-                confDir = splitConformerFile(confFile, outDir=outDir)
-                for molFile in os.listdir(confDir):
-                    molFile = os.path.join(confDir, molFile)
-                    confId = molFile.split('-')[-1].split('.')[0]
-
-                    newSmallMol = SmallMolecule(smallMolFilename=molFile, type='AutoDock')
-                    newSmallMol.setMolName(fnRoot)
-                    newSmallMol._ConformersFile = pwobj.String(confFile)
-                    newSmallMol.setConfId(confId)
-                    outputSmallMolecules.append(newSmallMol)
-            else:
-                newSmallMol = SmallMolecule(smallMolFilename=file, type='AutoDock')
-                newSmallMol.setMolName(fnRoot)
-                outputSmallMolecules.append(newSmallMol)
+            outputSmallMolecules = self.indOutputCreation(file, fnRoot, outputSmallMolecules)
 
         self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
         self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
