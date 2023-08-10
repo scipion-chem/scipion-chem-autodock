@@ -163,10 +163,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
   def dockStep(self, gpuIdxs, pocket=None):
       molFns = self.getInputPDBQTFiles()
-      if self.doFlexRes:
-        flexReceptorFn, receptorFn = self.getFlexFiles()
-      else:
-        flexReceptorFn, receptorFn = None, self.getReceptorPDBQT()
+      flexReceptorFn = self.getFlexFiles()[0] if self.doFlexRes else None
       outDir = self.getOutputPocketDir(pocket)
 
       fldFile = '{}.maps.fld'.format(self.getReceptorName())

@@ -51,7 +51,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
     _scoreNames = ['Vina', 'AD4']
 
     def _defineParams(self, form):
-        inputGroup, dockGroup = super()._defineParams(form)
+        dockGroup = super()._defineParams(form)[1]
         dockGroup.addParam('scoreName', params.EnumParam, label='Score function: ',
                        choices=self._scoreNames, default=0,
                        help='Score function to use for docking')
@@ -84,7 +84,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       for mol in self.inputSmallMolecules.get():
           molFile = mol.getFileName()
           if not molFile.endswith(PDBQText):
-              fnSmall, smallDir = self.convertLigand2PDBQT(mol, self._getTmpPath())
+              fnSmall = self.convertLigand2PDBQT(mol, self._getTmpPath())[0]
           else:
               fnSmall = os.path.abspath(self._getTmpPath(getBaseFileName(molFile + PDBQText)))
               shutil.copy(molFile, fnSmall)
@@ -117,7 +117,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       if self.fromReceptor.get() == 0:
           radius = self.radius.get()
           # Use the original pdb for mass center
-          structure, xCenter, yCenter, zCenter = calculate_centerMass(self.getReceptorPDB())
+          _, xCenter, yCenter, zCenter = calculate_centerMass(self.getReceptorPDB())
           nCPUs = self.numberOfThreads.get()
       else:
           radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()

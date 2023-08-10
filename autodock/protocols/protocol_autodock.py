@@ -129,7 +129,7 @@ class ProtChemAutodockBase(EMProtocol):
 
         if self.fromReceptor.get() == 0:
           pdbFile, radius = self.getReceptorPDB(), self.radius.get()
-          structure, xCenter, yCenter, zCenter = calculate_centerMass(pdbFile)
+          _, xCenter, yCenter, zCenter = calculate_centerMass(pdbFile)
         else:
           radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
           xCenter, yCenter, zCenter = pocket.calculateMassCenter()
@@ -142,7 +142,7 @@ class ProtChemAutodockBase(EMProtocol):
                                 npts=npts, outDir=outDir, ligandFns=self.getInputPDBQTFiles(), znFFfile=znFFfile)
 
         if self.doFlexRes:
-          flexFn, fnReceptor = self.buildFlexReceptor(fnReceptor, cleanZn=self.doZnDock.get())
+          _, fnReceptor = self.buildFlexReceptor(fnReceptor, cleanZn=self.doZnDock.get())
 
         args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
         insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
@@ -175,7 +175,7 @@ class ProtChemAutodockBase(EMProtocol):
         if not os.path.exists(oDir):
           os.mkdir(oDir)
 
-        inName, inExt = os.path.splitext(os.path.basename(inFile))
+        inExt = os.path.splitext(os.path.basename(inFile))[1]
         oFile = os.path.abspath(os.path.join(oDir, smallMol.getUniqueName() + PDBQText))
 
         if inExt != PDBQText:
@@ -239,7 +239,7 @@ class ProtChemAutodockBase(EMProtocol):
         return os.path.abspath(self._getExtraPath('{}.pdb'.format(self.getReceptorName())))
 
     def convertReceptor2PDB(self, proteinFile):
-        inName, inExt = os.path.splitext(os.path.basename(proteinFile))
+        inExt = os.path.splitext(os.path.basename(proteinFile))[1]
         oFile = self.getReceptorPDB()
         if not os.path.exists(oFile):
           args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(proteinFile), oFile)
@@ -268,7 +268,7 @@ class ProtChemAutodockBase(EMProtocol):
         return flexFn, rigFn
 
     def cleanPDBQT(self, pdbqtFile, outFile=None):
-        pdbqtStr, cleaned = '', False
+        pdbqtStr = ''
         with open(pdbqtFile) as f:
             for line in f:
                 if not line.startswith('HETATM'):
