@@ -31,8 +31,10 @@ This wizard will show the structure of the pdb using a matplotlib viewer
 to select the radius of the sphere that contains the protein or a desired zone.
 """
 
-# Imports
+# Scipion chem imports
 from pwchem.wizards import GetRadiusProtein
+
+# Plugin imports
 from ..protocols import AutodockGridGeneration, ProtChemAutodock, ProtChemVinaDocking
 from ..protocols import ProtChemAutoLigand, ProtChemAutodockGPU, ProtChemAutoSite
 from ..protocols import ProtChemAutodockScore
