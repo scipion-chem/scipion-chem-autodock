@@ -200,7 +200,7 @@ class ProtChemAutodockBase(EMProtocol):
         for mol in self.inputSmallMolecules.get():
             molFile = mol.getFileName()
             if not molFile.endswith(PDBQText):
-                fnSmall, smallDir = self.convertLigand2PDBQT(mol.clone(), oDir)
+                self.convertLigand2PDBQT(mol.clone(), oDir)
             else:
                 shutil.copy(molFile, self.getInputLigandsPath(getBaseFileName(molFile+PDBQText)))
 
