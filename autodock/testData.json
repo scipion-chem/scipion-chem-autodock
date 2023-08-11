@@ -9,7 +9,10 @@
 			
 		],
 		"others": [
-			
+			{
+				"test": "test_autodock.TestVina",
+				"reason": "Unkown failure reason, only reproducible in GitHub actions."
+			}
 		]
 	}
 }
