@@ -196,7 +196,6 @@ class Plugin(pwchemPlugin):
 	@classmethod
 	def addAutoSitePackage(cls, env, default=True):
 		""" This function provides the neccessary commands for installing AutoSite. """
-		# TODO: Check how only adtools or adfr needed
 		# Instantiating the install helper
 		installer = InstallHelper(ASITE_DIC['name'], packageHome=cls.getVar(ASITE_DIC['home']), packageVersion=ASITE_DIC['version'])
 
