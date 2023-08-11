@@ -33,12 +33,12 @@ protein structure using the AutoLigand software
 import os, shutil
 
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, EnumParam, FloatParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, EnumParam, FloatParam
 from pyworkflow.utils.path import copyTree, makePath
 from pyworkflow.protocol import params
 
 from pwchem.objects import SetOfStructROIs, StructROI
-from pwchem.constants import *
+from pwchem.constants import MGL_DIC
 from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, insistentRun
 from pwchem import Plugin as pwchem_plugin
 
@@ -47,6 +47,7 @@ from autodock.protocols.protocol_autodock import ProtChemAutodockBase
 
 
 NUMBER, RANGE = 0, 1
+NOTPREVGRID, RANGEFILL = 'not prevGrid', "fillType==1"
 
 class ProtChemAutoLigand(ProtChemAutodockBase):
     """Perform a pocket find experiment with autoLigand. See the help at
@@ -71,14 +72,14 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
                             " of interest")
 
         group.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
-                      label='Input atomic structure:', condition='not prevGrid', allowsNull=False,
+                      label='Input atomic structure:', condition=NOTPREVGRID, allowsNull=False,
                       help="The atom structure to search pockets in")
         group.addParam('radius', FloatParam, label='Grid radius for whole protein: ',
-                       allowsNull=False, condition='not prevGrid',
+                       allowsNull=False, condition=NOTPREVGRID,
                        help='Radius of the Autodock grid for the whole protein.'
                             'The wizard will provide for an approximation')
         group.addParam('spacing', FloatParam, default=1, label='Step size (A)',
-                      condition='not prevGrid',
+                      condition=NOTPREVGRID,
                       help="Distance between each point in the electrostatic grid."
                            " This value is used to adjust the radius as number of "
                            "(x,y,z) points : radius/spacing = number of points along"
@@ -94,18 +95,19 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
                        condition="fillType==0",
                        help="Number of fill points to use. The resulting grids will have this size")
 
-        group.addParam('iniFillPoints', IntParam, default=50, label='Initial fill points',
-                       condition="fillType==1",
-                       help="Number of fill points to use. The resulting grids will have this size")
-        group.addParam('endFillPoints', IntParam, default=100, label='Final fill points',
-                       condition="fillType==1",
-                       help="Number of fill points to use. The resulting grids will have this size")
+        group.addParam('iniFillPoints', IntParam, default=50, label='Initial fill points: ',
+                       condition=RANGEFILL,
+                       help="Number of fill points to use. The resulting grids will have this size minimum")
+        group.addParam('endFillPoints', IntParam, default=100, label='Final fill points: ',
+                       condition=RANGEFILL,
+                       help="Number of fill points to use. The resulting grids will have this size maximum")
         group.addParam('stepFillPoints', IntParam, default=10, label='Step of fill points',
-                       condition="fillType==1",
-                       help="Number of fill points to use. The resulting grids will have this size")
+                       condition=RANGEFILL,
+                       help="When iterating from a initial to a final number of points, number of points step between "
+                            "each iteration")
 
         group.addParam('propShared', FloatParam, default=0.5, label='Proportion of points for overlapping',
-                      condition="fillType==1",
+                      condition=RANGEFILL,
                       help="Min proportion of points (from the smaller) of two pockets to be considered overlapping")
 
         form.addParallelSection(threads=4, mpi=1)
@@ -151,15 +153,15 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
             else:
                 pdbFile = strFile
 
-            structure, x_center, y_center, z_center = calculate_centerMass(pdbFile)
+            _, xCenter, yCenter, zCenter = calculate_centerMass(pdbFile)
             npts = (radius * 2) / self.spacing.get()
 
             makePath(outDir)
-            gpf_file = generate_gpf(self.getReceptorPDBQT(), spacing=self.spacing.get(),
-                                    xc=x_center, yc=y_center, zc=z_center,
+            gpfFile = generate_gpf(self.getReceptorPDBQT(), spacing=self.spacing.get(),
+                                    xc=xCenter, yc=yCenter, zc=zCenter,
                                     npts=npts, outDir=outDir)
 
-            args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())
+            args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
             insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
 
     def predictPocketStep(self, pocketSize):
@@ -203,10 +205,9 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
 
         outPockets = SetOfStructROIs(filename=self._getPath('pockets.sqlite'))
         for oFile in outFiles:
-            pock = StructROI(os.path.abspath(oFile), receptorFile, os.path.abspath(resultsFile),
-                                 pClass='AutoLigand')
+            pock = StructROI(oFile, receptorFile, resultsFile, pClass='AutoLigand')
             outPockets.append(pock)
-        outHETMFile = outPockets.buildPDBhetatmFile()
+        outPockets.buildPDBhetatmFile()
 
         self._defineOutputs(outputStructROIs=outPockets)
 

@@ -32,7 +32,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import *
+from pwchem.utils import getBaseFileName, performBatchThreading
 
 from autodock import Plugin as autodock_plugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
@@ -76,7 +76,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     line.addParam('stopstd', FloatParam, label='Energy tolerance: ', default=0.15)
 
     group = form.addGroup('Global search', condition='not heuristics')
-    group.addParam('gaPop', IntParam, label='Population size', default=150,
+    group.addParam('gaPop', IntParam, label='Population size: ', default=150,
                    help='This is the number of individuals in the population. Each individual is a coupling of a '
                         'genotype and its associated phenotype')
     group.addParam('gaNumEvals', IntParam, label='Number of evaluations: ', default=2500000,
@@ -124,7 +124,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     else:
       args += '-e {} -l {} '.format(self.gaNumEvals.get(), searchKeys[self.lsType.get()])
 
-      args += '-g {} -p {} '. \
+      args += '-g {} -i {} -p {} '. \
         format(self.gaNumGens.get(), self.lsMaxIts.get(), self.gaPop.get())
       args += '--mrat {} --crat {} --trat {} '. \
         format(self.mrat.get(), self.crat.get(), self.trat.get())
@@ -146,10 +146,11 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
   def _insertAllSteps(self):
       cId = self._insertFunctionStep('convertStep', prerequisites=[])
       gpuList = self.getGPU_Ids()
+      self.receptorName = self.getReceptorName()
 
       dockSteps = []
       if self.fromReceptor.get() == 0:
-        gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
+        gridId = self._insertFunctionStep('generateGridsStep', None, prerequisites=[cId])
         dockId = self._insertFunctionStep('dockStep', gpuList, prerequisites=[gridId])
         dockSteps.append(dockId)
       else:
@@ -162,10 +163,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
   def dockStep(self, gpuIdxs, pocket=None):
       molFns = self.getInputPDBQTFiles()
-      if self.doFlexRes:
-        flexReceptorFn, receptorFn = self.getFlexFiles()
-      else:
-        flexReceptorFn, receptorFn = None, self.getReceptorPDBQT()
+      flexReceptorFn = self.getFlexFiles()[0] if self.doFlexRes else None
       outDir = self.getOutputPocketDir(pocket)
 
       fldFile = '{}.maps.fld'.format(self.getReceptorName())
@@ -188,46 +186,65 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       args += self.getADGPUArgs()
       autodock_plugin.runAutodockGPU(self, args, outDir)
 
+  def performOutputParsing(self, dlgFiles, molLists, it, gridId, outDir):
+    pocketDic = {}
+    for dlgFile in dlgFiles:
+      molName = getBaseFileName(dlgFile)
+      pocketDic[molName] = self.parseDockedMolsDLG(dlgFile)
+
+      for modelId in pocketDic[molName]:
+        pdbqtFile = os.path.join(outDir, 'g{}_{}_{}.pdbqt'.format(gridId, molName, modelId))
+        with open(pdbqtFile, 'w') as f:
+          f.write(pocketDic[molName][modelId]['pdb'])
+        pocketDic[molName][modelId]['file'] = pdbqtFile
+
+    molLists[it] = [pocketDic]
+
+  def performOutputCreation(self, mols, molLists, it, pocketDic, gridId):
+    outMols = []
+    for smallMol in mols:
+      molFile = smallMol.getFileName()
+      molName = getBaseFileName(molFile)
+      if molName in pocketDic:
+        molDic = pocketDic[molName]
+
+        for posId in molDic:
+          newSmallMol = SmallMolecule()
+          newSmallMol.copy(smallMol, copyId=False)
+          newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
+          if 'ki' in molDic[posId]:
+            newSmallMol._ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
+          else:
+            newSmallMol._ligandEfficiency = pwobj.Float(None)
+          if os.path.getsize(molDic[posId]['file']) > 0:
+            newSmallMol.poseFile.set(molDic[posId]['file'])
+            newSmallMol.setPoseId(posId)
+            newSmallMol.gridId.set(gridId)
+            newSmallMol.setMolClass('Autodock4')
+            newSmallMol.setDockId(self.getObjId())
+
+            outMols.append(newSmallMol)
+    molLists[it] = outMols
+
   def createOutputStep(self):
+      nt = self.numberOfThreads.get()
       outDir = self._getPath('outputLigands')
       makePath(outDir)
       outputSet = SetOfSmallMolecules().create(outputPath=outDir)
 
       for pocketDir in self.getPocketDirs():
-        pocketDic = {}
+        dlgFiles = self.getDockedLigandsFiles(pocketDir)
         gridId = self.getGridId(pocketDir)
-        for dlgFile in self.getDockedLigandsFiles(pocketDir):
-          molName = getBaseFileName(dlgFile)
-          pocketDic[molName] = self.parseDockedMolsDLG(dlgFile)
+        pocketDics = performBatchThreading(self.performOutputParsing, dlgFiles, nt, cloneItem=False,
+                                           gridId=gridId, outDir=outDir)
+        pocketDic = {k: v for pDic in pocketDics for (k, v) in pDic.items()}
 
-          for modelId in pocketDic[molName]:
-            pdbqtFile = os.path.join(outDir, 'g{}_{}_{}.pdbqt'.format(gridId, molName, modelId))
-            with open(pdbqtFile, 'w') as f:
-              f.write(pocketDic[molName][modelId]['pdb'])
-            pocketDic[molName][modelId]['file'] = pdbqtFile
+        inputMols = self.inputSmallMolecules.get()
+        outputMols = performBatchThreading(self.performOutputCreation, inputMols, nt,
+                                           gridId=gridId, pocketDic=pocketDic)
 
-        for smallMol in self.inputSmallMolecules.get():
-          molFile = smallMol.getFileName()
-          molName = getBaseFileName(molFile)
-          if molName in pocketDic:
-            molDic = pocketDic[molName]
-
-            for posId in molDic:
-              newSmallMol = SmallMolecule()
-              newSmallMol.copy(smallMol, copyId=False)
-              newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
-              if 'ki' in molDic[posId]:
-                newSmallMol._ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
-              else:
-                newSmallMol._ligandEfficiency = pwobj.Float(None)
-              if os.path.getsize(molDic[posId]['file']) > 0:
-                newSmallMol.poseFile.set(molDic[posId]['file'])
-                newSmallMol.setPoseId(posId)
-                newSmallMol.gridId.set(gridId)
-                newSmallMol.setMolClass('Autodock4')
-                newSmallMol.setDockId(self.getObjId())
-
-                outputSet.append(newSmallMol)
+        for smallMol in outputMols:
+          outputSet.append(smallMol)
 
       # todo: manage several receptor conformations when flexible docking
       outputSet.proteinFile.set(self.getOriginalReceptorFile())
@@ -257,10 +274,9 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
   def parseDockedMolsDLG(self, fnDlg):
     molDic = {}
-    i = 1
     with open(fnDlg) as fRes:
       for line in fRes:
-        if line.startswith('DOCKED: MODEL'):
+        if line.startswith('DOCKED: MODEL') and line.split()[-1].strip() != "0":
           posId = line.split()[-1]
           molDic[posId] = {'pdb': ''}
         elif line.startswith('DOCKED: USER    Estimated Free Energy'):
@@ -271,14 +287,13 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
           molDic[posId]['pdb'] += line[8:]
         elif line.startswith('DOCKED: ATOM'):
           molDic[posId]['pdb'] += line[8:]
-          i += 1
     return molDic
 
   def commentFirstLine(self, fn):
     with open(fn) as f:
-      all = '# ' + f.read()
+      allStr = '# ' + f.read()
     with open(fn, 'w') as f:
-      f.write(all)
+      f.write(allStr)
     return fn
 
   def getDockedLigandsFiles(self, outDir):

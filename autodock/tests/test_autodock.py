@@ -33,10 +33,10 @@ from pwchem.protocols import ProtChemImportSmallMolecules, ProtChemOBabelPrepare
 from pwchem.utils import assertHandle
 
 # Plugin imports
-from autodock.protocols import ProtChemADTPrepareReceptor, ProtChemADTPrepareLigands, ProtChemMeekoLigands
-from autodock.protocols import ProtChemAutoLigand, ProtChemAutoSite, ProtChemAutodock
-from autodock.protocols import ProtChemAutodockGPU, ProtChemVinaDocking, ProtChemAutoSiteGenPharmacophore
-from autodock.protocols import Autodock_GridGeneration, ProtChemAutodockScore
+from ..protocols import ProtChemADTPrepareReceptor, ProtChemADTPrepareLigands, ProtChemMeekoLigands
+from ..protocols import ProtChemAutoLigand, ProtChemAutoSite, ProtChemAutodock
+from ..protocols import ProtChemAutodockGPU, ProtChemVinaDocking, ProtChemAutoSiteGenPharmacophore
+from ..protocols import AutodockGridGeneration, ProtChemAutodockScore
 
 # Receptor and ligands preparations
 class TestADPrepareReceptor(BaseTest):
@@ -339,7 +339,7 @@ class TestAutoSitePharmacophore(TestAutoSite):
 class TestGridADT(TestADPrepareReceptor):
 	def _runCreateGrid(self, spacing, radius):
 		protGrid = self.newProtocol(
-			Autodock_GridGeneration,
+			AutodockGridGeneration,
 			inputAtomStruct=self.protImportPDB.outputPdb,
 			radius=radius,
 			spacing=spacing)
