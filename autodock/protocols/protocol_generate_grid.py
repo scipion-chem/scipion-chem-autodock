@@ -46,7 +46,7 @@ from autodock.objects import GridADT
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
 
 
-class Autodock_GridGeneration(ProtChemAutodockBase):
+class AutodockGridGeneration(ProtChemAutodockBase):
     """
     Calls ADT to prepare a grid with an input that is the prepared target protein
     """
@@ -85,19 +85,19 @@ class Autodock_GridGeneration(ProtChemAutodockBase):
         filename = self.getOriginalReceptorFile()
         if filename.endswith('.cif'):
             self.pdbFile = self._getTmpPath("atomStruct.pdb")
-            name_protein = (os.path.basename(filename)).split(".")[0]
+            nameProtein = (os.path.basename(filename)).split(".")[0]
             aStruct1 = AtomicStructHandler(filename)
             aStruct1.write(self.pdbFile)
         elif filename.endswith('.pdbqt'):
             self.pdbFile = self._getTmpPath("atomStruct.pdb")
-            name_protein = (os.path.basename(filename)).split(".")[0]
+            nameProtein = (os.path.basename(filename)).split(".")[0]
             args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(filename), os.path.abspath(self.pdbFile))
             runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getTmpPath()))
         else:
             self.pdbFile = filename
-            name_protein = (os.path.basename(self.pdbFile)).split(".")[0]
+            nameProtein = (os.path.basename(self.pdbFile)).split(".")[0]
 
-        fnOut = self._getExtraPath('%s.pdbqt' % name_protein)
+        fnOut = self._getExtraPath('%s.pdbqt' % nameProtein)
 
         args = ' -v -r %s -o %s' % (self.pdbFile, fnOut)
 
@@ -110,28 +110,28 @@ class Autodock_GridGeneration(ProtChemAutodockBase):
         """
         """
         atomStructFn = os.path.abspath(self.getReceptorPDBQT())
-        name_protein = (os.path.basename(atomStructFn)).split(".")[0]
+        nameProtein = (os.path.basename(atomStructFn)).split(".")[0]
 
         # Center of the molecule (use the pdb file)
-        structure, x_center, y_center, z_center = calculate_centerMass(self.pdbFile)
+        _, xCenter, yCenter, zCenter = calculate_centerMass(self.pdbFile)
 
         # Create the GPF file, required by autogrid to build the grid and glg
         npts = (self.radius.get()*2)/self.spacing.get()  # x,y,z points of the grid
 
-        gpf_file = generate_gpf(atomStructFn, spacing=self.spacing.get(),
-                                     xc=x_center, yc=y_center, zc=z_center,
+        gpfFile = generate_gpf(atomStructFn, spacing=self.spacing.get(),
+                                     xc=xCenter, yc=yCenter, zc=zCenter,
                                      npts=npts, outDir=self._getExtraPath())
 
         # Create GLG file
-        glg_file = os.path.abspath(self._getExtraPath("atomStruct.glg"))
-        open(glg_file, mode='a').close()
+        glgFile = os.path.abspath(self._getExtraPath("atomStruct.glg"))
+        open(glgFile, mode='a').close()
 
-        args = "-p %s -l %s" % (gpf_file, glg_file)
+        args = "-p %s -l %s" % (gpfFile, glgFile)
         insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"),
                      args, cwd=self._getExtraPath())
-        e_map_file = self._getExtraPath("%s.e.map" %name_protein)
-        self.grid = GridADT(e_map_file, atomStructFn, radius=self.radius.get(), spacing=self.spacing.get(),
-                            massCX=x_center, massCY=y_center, massCZ=z_center, npts=npts)
+        eMapFile = self._getExtraPath("%s.e.map" %nameProtein)
+        self.grid = GridADT(eMapFile, os.path.relpath(atomStructFn), radius=self.radius.get(),
+                            spacing=self.spacing.get(), massCX=xCenter, massCY=yCenter, massCZ=zCenter, npts=npts)
 
 
     def createOutput(self):

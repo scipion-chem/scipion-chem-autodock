@@ -29,7 +29,7 @@ from .protocol_preparation_ligands import ProtChemADTPrepareLigands
 from .protocol_autodock import ProtChemAutodock
 from .protocol_autodockGPU import ProtChemAutodockGPU
 from .protocol_autoLigand import ProtChemAutoLigand
-from .protocol_generate_grid import Autodock_GridGeneration
+from .protocol_generate_grid import AutodockGridGeneration
 from .protocol_autoSite import ProtChemAutoSite
 from .protocol_autoSite_pharmacophore import ProtChemAutoSiteGenPharmacophore
 from .protocol_meeko_ligands import ProtChemMeekoLigands

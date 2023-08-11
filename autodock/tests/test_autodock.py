@@ -29,8 +29,10 @@ from pwem.protocols import ProtImportPdb, ProtSetFilter
 
 from pwchem.protocols import ProtChemImportSmallMolecules, ProtChemOBabelPrepareLigands
 
-from ..protocols import *
-
+from ..protocols import ProtChemADTPrepareReceptor, ProtChemADTPrepareLigands, ProtChemMeekoLigands
+from ..protocols import ProtChemAutoLigand, ProtChemAutoSite, ProtChemAutodock
+from ..protocols import ProtChemAutodockGPU, ProtChemVinaDocking, ProtChemAutoSiteGenPharmacophore
+from ..protocols import AutodockGridGeneration, ProtChemAutodockScore
 
 # Receptor and ligands preparations
 class TestADPrepareReceptor(BaseTest):
@@ -342,7 +344,7 @@ class TestGridADT(TestADPrepareReceptor):
 
     def _runCreateGrid(self, spacing, radius):
         protGrid = self.newProtocol(
-            Autodock_GridGeneration,
+            AutodockGridGeneration,
             inputAtomStruct=self.protImportPDB.outputPdb,
             radius=radius,
             spacing=spacing)
