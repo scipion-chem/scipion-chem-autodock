@@ -47,7 +47,7 @@ jobs:
       run: |
         git clone https://github.com/scipion-chem/$REPO_NAME.git
         if [ $(git ls-remote --heads https://github.com/scipion-chem/$REPO_NAME.git $BRANCH_NAME | wc -l) -eq 1 ]; then
-          cd $REPO_NAME && git checkout $BRANCH_NAME
+          cd $REPO_NAME && git checkout $BRANCH_NAME && cd -
         fi
         scipion/scipion3 installp -p $REPO_NAME --devel
     
