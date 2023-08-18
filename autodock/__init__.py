@@ -129,16 +129,18 @@ class Plugin(pwchemPlugin):
 		# Instantiating the install helper
 		installer = InstallHelper(ADGPU_DIC['name'], packageHome=cls.getVar(ADGPU_DIC['home']), packageVersion=ADGPU_DIC['version'])
 
-		# Getting Nvidia card data
-		compCapDic = cls.getNVIDIACompCapDic()
-		nvidiaName = cls.getNVIDIAName()
-		compCap = compCapDic[nvidiaName] if nvidiaName in compCapDic else None
-		targetsFlag = f' TARGETS={compCap}' if compCap else ''
+		# Only install AutoDockGPU on systems with Nvidia GPUs
+		if cls.getGPUPlatform() == 'nvidia':
+			# Getting Nvidia card data
+			compCapDic = cls.getNVIDIACompCapDic()
+			nvidiaName = cls.getNVIDIAName()
+			compCap = compCapDic[nvidiaName] if nvidiaName in compCapDic else None
+			targetsFlag = f' TARGETS={compCap}' if compCap else ''
 
-		# Installing package
-		installer.getCloneCommand(cls.getAutoDockGPUGithub(), binaryFolderName=cls._atdgpuBinary, targeName='ATDGPU_CLONED')\
-			.addCommand(f'cd {cls._atdgpuBinary} && make DEVICE=GPU OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
-			.addPackage(env, dependencies=['git', 'make'], default=default, vars=enVars, updateCuda=True)
+			# Installing package
+			installer.getCloneCommand(cls.getAutoDockGPUGithub(), binaryFolderName=cls._atdgpuBinary, targeName='ATDGPU_CLONED')\
+				.addCommand(f'cd {cls._atdgpuBinary} && make DEVICE=GPU OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
+				.addPackage(env, dependencies=['git', 'make'], default=default, vars=enVars, updateCuda=True)
 
 	@classmethod
 	def addVinaPackage(cls, env, default=True):
@@ -194,7 +196,6 @@ class Plugin(pwchemPlugin):
 	@classmethod
 	def addAutoSitePackage(cls, env, default=True):
 		""" This function provides the neccessary commands for installing AutoSite. """
-		# TODO: Check how only adtools or adfr needed
 		# Instantiating the install helper
 		installer = InstallHelper(ASITE_DIC['name'], packageHome=cls.getVar(ASITE_DIC['home']), packageVersion=ASITE_DIC['version'])
 
@@ -205,9 +206,11 @@ class Plugin(pwchemPlugin):
 		
 		# Generating meeko installation commands
 		installer.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED')
+
+		print(installer.getCommandList())
 		
 		# Adding package
-		installer.addPackage(env, ['wget', 'conda'], default=default)
+		installer.addPackage(env, dependencies=['wget', 'conda'], default=default)
 
 	# ---------------------------------- Protocol functions-----------------------
 	@classmethod
