@@ -117,6 +117,7 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
             fnRoot = os.path.split(file)[1].split('.pdbqt')[0]
             outputSmallMolecules = self.indOutputCreation(file, fnRoot, outputSmallMolecules)
 
+        outputSmallMolecules.updateMolClass()
         self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
         self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
