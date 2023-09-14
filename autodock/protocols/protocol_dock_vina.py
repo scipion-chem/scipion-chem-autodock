@@ -32,7 +32,7 @@ from pyworkflow.utils.path import makePath
 
 from pwchem import Plugin as pwchem_plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import calculate_centerMass, generate_gpf, insistentRun, getBaseFileName
+from pwchem.utils import calculate_centerMass, generate_gpf, insistentRun, getBaseFileName, performBatchThreading
 
 from autodock import Plugin as autodock_plugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
@@ -79,19 +79,10 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
     def convertStep(self):
-      self.ligandFileNames = []
-
-      for mol in self.inputSmallMolecules.get():
-          molFile = mol.getFileName()
-          if not molFile.endswith(PDBQText):
-              fnSmall = self.convertLigand2PDBQT(mol, self._getTmpPath())[0]
-          else:
-              fnSmall = os.path.abspath(self._getTmpPath(getBaseFileName(molFile + PDBQText)))
-              shutil.copy(molFile, fnSmall)
-          self.ligandFileNames.append(fnSmall)
-
+      inputMols, nt = self.inputSmallMolecules.get(), self.numberOfThreads.get()
+      molLists = performBatchThreading(self.performLigConversion, inputMols, nt)
       with open(self.getConvertedLigandsFile(), 'w') as f:
-          f.write('\n'.join(self.ligandFileNames))
+        f.write('\n'.join(molLists))
 
       receptorFile = self.getOriginalReceptorFile()
       if receptorFile.endswith(PDBext):
@@ -195,6 +186,16 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
     ########################### Parameters functions ############################
+
+    def performLigConversion(self, inMols, molLists, it):
+      for mol in inMols:
+        molFile = mol.getFileName()
+        if not molFile.endswith(PDBQText):
+          fnSmall = self.convertLigand2PDBQT(mol, self._getTmpPath(), popen=True)[0]
+        else:
+          fnSmall = os.path.abspath(self._getTmpPath(getBaseFileName(molFile + PDBQText)))
+          shutil.copy(molFile, fnSmall)
+        molLists[it].append(fnSmall)
 
     def writeParamsFile(self, fnReceptor, molFiles, radius, center, gpfFile, outDir, nCPUs, flexFn=None):
         paramsFile = os.path.join(outDir, 'inputParams.txt')

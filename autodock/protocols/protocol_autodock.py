@@ -156,11 +156,14 @@ class ProtChemAutodockBase(EMProtocol):
         ligFns.append(mol.getFileName())
       return ligFns
 
-    def runMGLTool(self, program, args, cwd=None):
-      self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
-                  autodock_plugin.getADTPath(program) + args, cwd=cwd)
+    def runMGLTool(self, program, args, cwd=None, popen=False):
+      fullProgram = pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh')
+      if not popen:
+        self.runJob(fullProgram, autodock_plugin.getADTPath(program) + args, cwd=cwd)
+      else:
+        subprocess.check_call(f'{fullProgram} {autodock_plugin.getADTPath(program)} {args}', cwd=cwd, shell=True)
 
-    def convertLigand2PDBQT(self, smallMol, oDir, pose=False):
+    def convertLigand2PDBQT(self, smallMol, oDir, pose=False, popen=False):
         '''Convert ligand to pdbqt using prepare_ligand4 of ADT'''
         inFile = smallMol.getFileName() if not pose else smallMol.getPoseFile()
         if os.path.splitext(inFile)[1] not in [PDBext, '.mol2', '.pdbq']:
@@ -168,7 +171,7 @@ class ProtChemAutodockBase(EMProtocol):
             outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
             args = ' -i "{}" -of mol2 --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
                                                                                os.path.abspath(outDir), outName)
-            pwchem_plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
+            pwchem_plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=popen)
             inFile = self._getTmpPath(outName + '.mol2')
             inFile = relabelMapAtomsMol2(inFile)
 
@@ -179,12 +182,12 @@ class ProtChemAutodockBase(EMProtocol):
         oFile = os.path.abspath(os.path.join(oDir, smallMol.getUniqueName() + PDBQText))
 
         if inExt != PDBQText:
-          args = ' -l {} -o {}'.format(inFile, oFile)
+          args = '-l {} -o {}'.format(inFile, oFile)
 
           # Neccessary to have a local copy of ligandFile from mgltools 1.5.7
           createLink(inFile, self._getExtraPath(os.path.basename(inFile)))
 
-          self.runMGLTool(program='Utilities24/prepare_ligand4.py', args=args, cwd=self._getExtraPath())
+          self.runMGLTool(program='Utilities24/prepare_ligand4.py', args=args, cwd=self._getExtraPath(), popen=True)
 
         else:
           createLink(inFile, oFile)
