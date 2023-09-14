@@ -172,7 +172,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
               newSmallMol.copy(smallMol, copyId=False)
               newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
               if os.path.getsize(molDic[posId]['file']) > 0:
-                newSmallMol.poseFile.set(molDic[posId]['file'])
+                newSmallMol.poseFile.set(os.path.relpath(molDic[posId]['file']))
                 newSmallMol.setPoseId(posId)
                 newSmallMol.gridId.set(gridId)
                 newSmallMol.setMolClass('AutodockVina')
