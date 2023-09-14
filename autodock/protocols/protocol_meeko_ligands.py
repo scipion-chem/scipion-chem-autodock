@@ -137,3 +137,6 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
         f.write('outDir:: {}\n'.format(os.path.abspath(self._getPath())))
 
         return paramsFile
+
+    def _warnings(self):
+        return []
