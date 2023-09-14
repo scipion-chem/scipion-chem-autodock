@@ -111,41 +111,55 @@ class ProtChemAutodockBase(EMProtocol):
                        help='Whether to use the scripts for preparing the metalloprotein receptor containing Zn')
         return inputGroup, dockGroup
 
-    def convertStep(self):
-        self.convertInputPDBQTFiles()
+    def performLigConversion(self, inMols, molLists, it):
+      for mol in inMols:
+        molFile = mol.getFileName()
+        if not molFile.endswith(PDBQText):
+          fnSmall = self.convertLigand2PDBQT(mol, self.getInputLigandsPath(), popen=True)[0]
+        else:
+          fnSmall = self.getInputLigandsPath(getBaseFileName(molFile + PDBQText))
+          shutil.copy(molFile, fnSmall)
+        molLists[it].append(fnSmall)
 
-        receptorFile = self.getOriginalReceptorFile()
-        if receptorFile.endswith(PDBext):
-          self.convertReceptor2PDBQT(receptorFile)
-          shutil.copy(receptorFile, self.getReceptorPDB())
-        elif receptorFile.endswith(PDBQText):
-          self.convertReceptor2PDB(receptorFile)
-          shutil.copy(receptorFile, self.getReceptorPDBQT())
+    def convertStep(self):
+      inputMols, nt = self.inputSmallMolecules.get(), self.numberOfThreads.get()
+      oDir = self.getInputLigandsPath()
+      if not os.path.exists(oDir):
+        os.mkdir(oDir)
+      molLists = performBatchThreading(self.performLigConversion, inputMols, nt)
+
+      receptorFile = self.getOriginalReceptorFile()
+      if receptorFile.endswith(PDBext):
+        self.convertReceptor2PDBQT(receptorFile)
+        shutil.copy(receptorFile, self.getReceptorPDB())
+      elif receptorFile.endswith(PDBQText):
+        self.convertReceptor2PDB(receptorFile)
+        shutil.copy(receptorFile, self.getReceptorPDBQT())
 
     def generateGridsStep(self, pocket=None, addLigType=True):
-        fnReceptor = self.getReceptorPDBQT()
-        outDir = self.getOutputPocketDir(pocket)
-        makePath(outDir)
+      fnReceptor = self.getReceptorPDBQT()
+      outDir = self.getOutputPocketDir(pocket)
+      makePath(outDir)
 
-        if self.fromReceptor.get() == 0:
-          pdbFile, radius = self.getReceptorPDB(), self.radius.get()
-          _, xCenter, yCenter, zCenter = calculate_centerMass(pdbFile)
-        else:
-          radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
-          xCenter, yCenter, zCenter = pocket.calculateMassCenter()
+      if self.fromReceptor.get() == 0:
+        pdbFile, radius = self.getReceptorPDB(), self.radius.get()
+        _, xCenter, yCenter, zCenter = calculate_centerMass(pdbFile)
+      else:
+        radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
+        xCenter, yCenter, zCenter = pocket.calculateMassCenter()
 
-        npts = (radius * 2) / self.spacing.get()
-        znFFfile = autodock_plugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
-          if self.doZnDock.get() else None
-        gpfFile = generate_gpf(fnReceptor, spacing=self.spacing.get(), addLigTypes=addLigType,
-                                xc=xCenter, yc=yCenter, zc=zCenter,
-                                npts=npts, outDir=outDir, ligandFns=self.getInputPDBQTFiles(), znFFfile=znFFfile)
+      npts = (radius * 2) / self.spacing.get()
+      znFFfile = autodock_plugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
+        if self.doZnDock.get() else None
+      gpfFile = generate_gpf(fnReceptor, spacing=self.spacing.get(), addLigTypes=addLigType,
+                              xc=xCenter, yc=yCenter, zc=zCenter,
+                              npts=npts, outDir=outDir, ligandFns=self.getInputPDBQTFiles(), znFFfile=znFFfile)
 
-        if self.doFlexRes:
-          _, fnReceptor = self.buildFlexReceptor(fnReceptor, cleanZn=self.doZnDock.get())
+      if self.doFlexRes:
+        _, fnReceptor = self.buildFlexReceptor(fnReceptor, cleanZn=self.doZnDock.get())
 
-        args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
-        insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
+      args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
+      insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
 
     def getGridId(self, outDir):
         return outDir.split('_')[-1]
@@ -195,17 +209,6 @@ class ProtChemAutodockBase(EMProtocol):
 
     def getInputLigandsPath(self, path=''):
         return os.path.abspath(self._getExtraPath('inputLigands', path))
-
-    def convertInputPDBQTFiles(self):
-        oDir = self.getInputLigandsPath()
-        if not os.path.exists(oDir):
-          os.mkdir(oDir)
-        for mol in self.inputSmallMolecules.get():
-            molFile = mol.getFileName()
-            if not molFile.endswith(PDBQText):
-                self.convertLigand2PDBQT(mol.clone(), oDir)
-            else:
-                shutil.copy(molFile, self.getInputLigandsPath(getBaseFileName(molFile+PDBQText)))
 
     def getInputPDBQTFiles(self):
         ligandFileNames = []
