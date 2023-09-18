@@ -94,11 +94,6 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
 
     def dockStep(self, pocket=None):
       fnReceptor = self.getReceptorPDBQT()
-
-      mols = self.inputSmallMolecules.get()
-      molFiles = []
-      for mol in mols:
-          molFiles.append(os.path.abspath(mol.getFileName()))
       pdbqtFiles = self.getConvertedLigandsFiles()
 
       outDir = self.getOutputPocketDir(pocket)
@@ -109,11 +104,9 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
           radius = self.radius.get()
           # Use the original pdb for mass center
           _, xCenter, yCenter, zCenter = calculate_centerMass(self.getReceptorPDB())
-          nCPUs = self.numberOfThreads.get()
       else:
           radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
           xCenter, yCenter, zCenter = pocket.calculateMassCenter()
-          nCPUs = self.numberOfThreads.get() // len(self.inputStructROIs.get())
 
       spacing = self.spacing.get()
       npts = (radius * 2) / spacing
@@ -129,11 +122,13 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       else:
           flexFn = None
 
+      nThreads = self.getnThreads()
       scoreFunc = self.getEnumText('scoreName').lower()
       if not self.doZnDock.get() and scoreFunc == 'vina':
-          paramsFile = self.writeParamsFile(fnReceptor, pdbqtFiles, radius, [xCenter, yCenter, zCenter], gpfFile,
-                                            outDir, nCPUs, flexFn)
-          autodock_plugin.runScript(self, scriptName, paramsFile, envDict=VINA_DIC, cwd=outDir)
+        performBatchThreading(self.performScriptDocking, pdbqtFiles, nThreads, cloneItem=False, outDir=outDir,
+                              fnReceptor=fnReceptor, radius=radius, xCenter=xCenter, yCenter=yCenter, zCenter=zCenter,
+                              gpfFile=gpfFile, nThreads=nThreads, flexFn=flexFn)
+
       else:
           scoreFunc = scoreFunc if not self.doZnDock.get() and not flexFn else 'ad4'
           args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
@@ -141,9 +136,18 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
 
           batchDirs = self.getBatchDirs(pdbqtFiles)
           for molDir in batchDirs:
-              paramsFile = self.writeConfigFile(radius, [xCenter, yCenter, zCenter], outDir, nCPUs, scoreFunc, flexFn)
+              paramsFile = self.writeConfigFile(radius, [xCenter, yCenter, zCenter],
+                                                outDir, nThreads, scoreFunc, flexFn)
               args = "--batch {}/*.pdbqt --maps {} --config {}".format(molDir, self.getReceptorName(), paramsFile)  # batch cannot be read from config
               self.runJob(pwchem_plugin.getCondaEnvPath('vina', path='bin/vina'), args, cwd=outDir)
+
+    def performScriptDocking(self, pdbqtFiles, molLists, it, **kwargs):
+      k = kwargs
+      paramsFile = self.writeParamsFile(k['fnReceptor'], pdbqtFiles, k['radius'],
+                                        [k['xCenter'], k['yCenter'], k['zCenter']], k['gpfFile'],
+                                        k['outDir'], k['nThreads'], k['flexFn'])
+      autodock_plugin.runScript(self, scriptName, paramsFile, envDict=VINA_DIC, cwd=k['outDir'], popen=True)
+
 
     def getBatchDirs(self, molFiles):
         ds = []
@@ -186,6 +190,15 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
     ########################### Parameters functions ############################
+
+    def getnThreads(self):
+        '''Get the number of threads available for each pocket execution'''
+        nThreads = self.numberOfThreads.get()
+        if self.fromReceptor.get() != 0:
+            nPockets = len(self.inputStructROIs.get())
+            nThreads = nThreads // nPockets
+        nThreads = 1 if nThreads == 0 else nThreads
+        return nThreads
 
     def performLigConversion(self, inMols, molLists, it):
       for mol in inMols:

@@ -243,7 +243,7 @@ class Plugin(pwchemPlugin):
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 		else:
-			subprocess.check_call(fullProgram + args, cwd=cwd, shell=True)
+			subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
 		
 	# ---------------------------------- Utils functions-----------------------
 	@classmethod

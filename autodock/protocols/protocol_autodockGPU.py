@@ -249,6 +249,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       # todo: manage several receptor conformations when flexible docking
       outputSet.proteinFile.set(self.getOriginalReceptorFile())
       outputSet.setDocked(True)
+      outputSet.saveGroupIndexes()
       self._defineOutputs(outputSmallMolecules=outputSet)
       self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
