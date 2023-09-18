@@ -232,6 +232,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
 
         f.write('nCPUs:: {}\n'.format(nCPUs))
         f.write('outDir:: {}\n'.format(outDir))
+        f.write('it:: {}\n'.format(it))
 
         return paramsFile
 

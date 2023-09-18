@@ -72,7 +72,7 @@ if __name__ == "__main__":
         v.write_poses(pdbqt_filename=outFile)
         outFiles.append(outFile)
 
-    with open(os.path.join(outDir, 'docked_files.txt'), 'w') as f:
+    with open(os.path.join(outDir, f'docked_files_{pDic["it"]}.txt'), 'w') as f:
         f.write('\n'.join(outFiles))
 
 
