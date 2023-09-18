@@ -139,13 +139,13 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
               paramsFile = self.writeConfigFile(radius, [xCenter, yCenter, zCenter],
                                                 outDir, nThreads, scoreFunc, flexFn)
               args = "--batch {}/*.pdbqt --maps {} --config {}".format(molDir, self.getReceptorName(), paramsFile)  # batch cannot be read from config
-              self.runJob(pwchem_plugin.getCondaEnvPath('vina', path='bin/vina'), args, cwd=outDir)
+              self.runJob(pwchem_plugin.getEnvPath(VINA_DIC, 'bin/vina'), args, cwd=outDir)
 
     def performScriptDocking(self, pdbqtFiles, molLists, it, **kwargs):
       k = kwargs
       paramsFile = self.writeParamsFile(k['fnReceptor'], pdbqtFiles, k['radius'],
                                         [k['xCenter'], k['yCenter'], k['zCenter']], k['gpfFile'],
-                                        k['outDir'], k['nThreads'], k['flexFn'])
+                                        k['outDir'], k['nThreads'], it, k['flexFn'])
       autodock_plugin.runScript(self, scriptName, paramsFile, envDict=VINA_DIC, cwd=k['outDir'], popen=True)
 
 
@@ -210,8 +210,8 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
           shutil.copy(molFile, fnSmall)
         molLists[it].append(fnSmall)
 
-    def writeParamsFile(self, fnReceptor, molFiles, radius, center, gpfFile, outDir, nCPUs, flexFn=None):
-        paramsFile = os.path.join(outDir, 'inputParams.txt')
+    def writeParamsFile(self, fnReceptor, molFiles, radius, center, gpfFile, outDir, nCPUs, it, flexFn=None):
+        paramsFile = os.path.join(outDir, f'inputParams_{it}.txt')
 
         f = open(paramsFile, 'w')
         f.write('ligandFiles:: {}\n'.format(' '.join(molFiles)))
