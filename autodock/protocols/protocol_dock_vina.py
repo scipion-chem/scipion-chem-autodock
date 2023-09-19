@@ -127,7 +127,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       if not self.doZnDock.get() and scoreFunc == 'vina':
         performBatchThreading(self.performScriptDocking, pdbqtFiles, nThreads, cloneItem=False, outDir=outDir,
                               fnReceptor=fnReceptor, radius=radius, xCenter=xCenter, yCenter=yCenter, zCenter=zCenter,
-                              gpfFile=gpfFile, nThreads=nThreads, flexFn=flexFn)
+                              gpfFile=gpfFile, flexFn=flexFn)
 
       else:
           scoreFunc = scoreFunc if not self.doZnDock.get() and not flexFn else 'ad4'
@@ -145,7 +145,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       k = kwargs
       paramsFile = self.writeParamsFile(k['fnReceptor'], pdbqtFiles, k['radius'],
                                         [k['xCenter'], k['yCenter'], k['zCenter']], k['gpfFile'],
-                                        k['outDir'], k['nThreads'], it, k['flexFn'])
+                                        k['outDir'], 1, it, k['flexFn'])
       autodock_plugin.runScript(self, scriptName, paramsFile, envDict=VINA_DIC, cwd=k['outDir'], popen=True)
 
 
@@ -163,7 +163,8 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       for pocketDir in self.getPocketDirs():
         pocketDic = {}
         gridId = self.getGridId(pocketDir)
-        for dockFile in self.getDockedLigandsFiles(pocketDir):
+        dockFiles = self.getDockedLigandsFiles(pocketDir)
+        for dockFile in dockFiles:
             molName = os.path.split(dockFile)[1].split(PDBQText)[0]
             pocketDic[molName] = self.parseDockedPDBQT(dockFile)
 
@@ -298,18 +299,13 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
         return a.split('\n')
 
     def getDockedLigandsFiles(self, outDir):
-        dockedFilesFile = os.path.join(outDir, 'docked_files.txt')
-        if os.path.exists(dockedFilesFile):
-            with open(dockedFilesFile) as fIn:
-                files = fIn.read().split()
-        else:
-            files = []
-            for f in os.listdir(outDir):
-                if '_out.pdbqt' in f:
-                    inFile, outFile = os.path.join(outDir, f), os.path.join(outDir, f.replace('_out.pdbqt', PDBQText))
-                    os.rename(inFile, outFile)
-                    files.append(outFile)
-        return files
+        dockFiles = []
+        for file in os.listdir(outDir):
+            if 'docked_files' in file:
+                dockedFilesFile = os.path.join(outDir, file)
+                with open(dockedFilesFile) as fIn:
+                    dockFiles += fIn.read().split()
+        return dockFiles
 
     def _warnings(self):
       ws = []
