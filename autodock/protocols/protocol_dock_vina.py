@@ -190,6 +190,8 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       self._defineOutputs(outputSmallMolecules=outputSet)
       self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
+      self.cleanTmpFiles()
+
     ########################### Parameters functions ############################
 
     def getnThreads(self):

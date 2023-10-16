@@ -161,6 +161,11 @@ class ProtChemAutodockBase(EMProtocol):
       args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
       insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
 
+    def cleanTmpFiles(self):
+      for molFile in os.listdir(self._getExtraPath()):
+        if molFile.endswith('.mol2'):
+          os.remove(self._getExtraPath(molFile))
+
     def getGridId(self, outDir):
         return outDir.split('_')[-1]
 
@@ -513,6 +518,8 @@ class ProtChemAutodock(ProtChemAutodockBase):
     outputSet.setDocked(True)
     self._defineOutputs(outputSmallMolecules=outputSet)
     self._defineSourceRelation(self.inputSmallMolecules, outputSet)
+
+    self.cleanTmpFiles()
 
   ########################### Utils functions ############################
 

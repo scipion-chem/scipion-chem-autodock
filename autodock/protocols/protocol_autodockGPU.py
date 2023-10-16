@@ -253,6 +253,8 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       self._defineOutputs(outputSmallMolecules=outputSet)
       self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
+      self.cleanTmpFiles()
+
   ########################### Utils functions ############################
 
   def fixFldFile(self, fldFile):
