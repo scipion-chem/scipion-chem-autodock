@@ -31,7 +31,7 @@ from pyworkflow.protocol import params
 from pwem.objects.data import AtomStruct
 
 from pwchem import Plugin as pwchem_plugin
-from pwchem.utils import clean_PDB
+from pwchem.utils import cleanPDB
 from pwchem.constants import MGL_DIC, RDKIT_DIC
 from pwchem.protocols import ProtChemPrepareReceptor
 
@@ -163,7 +163,7 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
                 chainIds = [x.split('-')[1] for x in modelChains.split(',')]
 
         het2keep = self.het2keep.get().split(', ')
-        cleanedPDB = clean_PDB(self.inputAtomStruct.get().getFileName(), fnPdb,
+        cleanedPDB = cleanPDB(self.inputAtomStruct.get().getFileName(), fnPdb,
                                False, self.HETATM.get(), chainIds, het2keep)
 
         fnOut = self.getReceptorPDBQT()
