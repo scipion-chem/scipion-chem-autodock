@@ -286,9 +286,9 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
           molDic[posId]['energy'] = line.split('=')[1].split('kcal/mol')[0]
         elif line.startswith('DOCKED: USER    Estimated Inhibition'):
           molDic[posId]['ki'] = line.split()[7]
-        elif line.startswith('DOCKED: REMARK') or line.startswith('TER'):
-          molDic[posId]['pdb'] += line[8:]
-        elif line.startswith('DOCKED: ATOM'):
+
+        elif ' '.join(line.split()[:2]) in ['DOCKED: REMARK', 'DOCKED: BRANCH', 'DOCKED: ROOT', 'DOCKED: ENDROOT',
+                                            'TER', 'DOCKED: ATOM', 'DOCKED: HETATM']:
           molDic[posId]['pdb'] += line[8:]
     return molDic
 
