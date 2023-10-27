@@ -175,7 +175,8 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
         for molFn in molFns:
           molBase = molFn.split('/')[-1]
           molLink = os.path.join(outDir, molBase)
-          os.link(molFn, molLink)
+          if not os.path.exists(molLink):
+            os.link(molFn, molLink)
 
           f.write('{}\n{}\n'.format(molBase, getBaseFileName(molBase)))
 
@@ -213,9 +214,9 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
           newSmallMol.copy(smallMol, copyId=False)
           newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
           if 'ki' in molDic[posId]:
-            newSmallMol._ligandEfficiency = pwobj.Float(molDic[posId]['ki'])
+            newSmallMol._ligandEfficiency = pwobj.String(molDic[posId]['ki'])
           else:
-            newSmallMol._ligandEfficiency = pwobj.Float(None)
+            newSmallMol._ligandEfficiency = pwobj.String(None)
           if os.path.getsize(molDic[posId]['file']) > 0:
             newSmallMol.poseFile.set(molDic[posId]['file'])
             newSmallMol.setPoseId(posId)
