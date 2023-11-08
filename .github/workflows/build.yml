@@ -1,0 +1,71 @@
+# Name of the GitHub Action
+name: Build plugin on Pull Request
+
+# Specify when the Action should be triggered: when a pull request is opened against the 'devel' or 'master' branch
+on:
+  pull_request:
+    branches: [devel, master]
+
+# Define the job that should be run
+jobs:
+  build:
+    # Specify the machine to run the job on
+    runs-on: ubuntu-latest
+
+    # Define the steps to be taken in the job
+    steps:
+    # Installing scipion and miniconda dependencies
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget gcc g++ libopenmpi-dev make
+        
+    # Installing Miniconda
+    - name: Install Miniconda
+      working-directory: ${{ github.workspace }}/../
+      run: |
+        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+        bash Miniconda3-latest-Linux-x86_64.sh -b -p miniconda/
+        source miniconda/etc/profile.d/conda.sh
+        conda update -n base -c defaults conda -y
+    
+    # Installing Scipion
+    - name: Install Scipion
+      working-directory: ${{ github.workspace }}/../
+      run: |
+        eval "$(miniconda/bin/conda shell.bash hook)"
+        pip3 install --user scipion-installer
+        python3 -m scipioninstaller -conda -noXmipp -noAsk scipion
+    
+    # Installing scipion-chem
+    # Checkout to Pull Request branch if exists, by default stays in devel
+    - name: Install scipion-chem (in branch ${{ github.head_ref }} if exists)
+      working-directory: ${{ github.workspace }}/../
+      env:
+        REPO_NAME: scipion-chem
+        BRANCH_NAME: ${{ github.head_ref }}
+      run: |
+        git clone https://github.com/scipion-chem/$REPO_NAME.git
+        if [ $(git ls-remote --heads https://github.com/scipion-chem/$REPO_NAME.git $BRANCH_NAME | wc -l) -eq 1 ]; then
+          cd $REPO_NAME && git checkout $BRANCH_NAME && cd -
+        fi
+        scipion/scipion3 installp -p $REPO_NAME --devel
+    
+    # Check out the repository in the pull request
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ github.head_ref }}
+
+    # Install plugin from the pull request using the Scipion3 installp command
+    - name: Install plugin from pull request
+      working-directory: ${{ github.workspace }}
+      run: ../scipion/scipion3 installp -p . --devel
+    
+    # Run all tests
+    - name: Run tests
+      working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
+      run: |
+        eval "$(${{ github.workspace }}/../miniconda/bin/conda shell.bash hook)"
+        conda activate scipion3
+        python runTests.py ${{ github.workspace }}/../scipion/scipion3 ${{ vars.FOLDER_WITH_VERSION }} -noGPU -testData=testData.json

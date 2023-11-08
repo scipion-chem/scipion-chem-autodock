@@ -23,21 +23,20 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import shutil
 import os
 
-from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, LEVEL_ADVANCED
-import pyworkflow.object as pwobj
 
-from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
+from pwchem.utils import runOpenBabel
+from pwchem.objects import SetOfSmallMolecules
+from pwchem.constants import RDKIT_DIC
 
 from autodock import Plugin
+from autodock.protocols import ProtChemADTPrepareLigands
 
 scriptName = 'meeko_preparation.py'
 
-class ProtChemMeekoLigands(EMProtocol):
+class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
     """Prepare ligands using Meeko from Autodock """
     _label = 'meeko ligand preparation'
     _program = ""
@@ -81,16 +80,16 @@ class ProtChemMeekoLigands(EMProtocol):
         # Insert processing steps
         self._insertFunctionStep('preparationStep')
         if self.doConformers.get() and not self.hydrate.get():
-            self._insertFunctionStep('conformer_generation')
-        self._insertFunctionStep('createOutput')
+            self._insertFunctionStep('conformerGenerationStep')
+        self._insertFunctionStep('createOutputStep')
 
     def preparationStep(self):
         mols = self.inputSmallMolecules.get()
         paramsFile = self.writeParamsFile(mols)
 
-        Plugin.runScript(self, scriptName, paramsFile, env='rdkit', cwd=self._getExtraPath())
+        Plugin.runScript(self, scriptName, paramsFile, envDict=RDKIT_DIC, cwd=self._getExtraPath())
 
-    def conformer_generation(self):
+    def conformerGenerationStep(self):
       """ Generate a number of conformers of the same small molecule in pdbqt format with
           openbabel using two different algorithm
       """
@@ -109,35 +108,16 @@ class ProtChemMeekoLigands(EMProtocol):
 
         runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
 
-    def createOutput(self):
+    def createOutputStep(self):
         with open(self._getPath('meeko_files.txt')) as fIn:
           prepFiles = fIn.read().split()
 
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
         for file in prepFiles:
             fnRoot = os.path.split(file)[1].split('.pdbqt')[0]
-            if self.doConformers.get():
-                outDir = self._getExtraPath(fnRoot)
-                os.mkdir(outDir)
-                firstConfFile = self._getTmpPath('{}-{}.pdbqt'.format(fnRoot, 1))
-                shutil.copy(file, firstConfFile)
-                confFile = self._getExtraPath("{}_conformers.pdbqt".format(fnRoot))
-                confFile = appendToConformersFile(confFile, firstConfFile, beginning=True)
-                confDir = splitConformerFile(confFile, outDir=outDir)
-                for molFile in os.listdir(confDir):
-                    molFile = os.path.abspath(os.path.join(confDir, molFile))
-                    confId = molFile.split('-')[-1].split('.')[0]
+            outputSmallMolecules = self.indOutputCreation(file, fnRoot, outputSmallMolecules)
 
-                    newSmallMol = SmallMolecule(smallMolFilename=molFile, type='AutoDock')
-                    newSmallMol.setMolName(fnRoot)
-                    newSmallMol._ConformersFile = pwobj.String(confFile)
-                    newSmallMol.setConfId(confId)
-                    outputSmallMolecules.append(newSmallMol)
-            else:
-                newSmallMol = SmallMolecule(smallMolFilename=file, type='AutoDock')
-                newSmallMol.setMolName(fnRoot)
-                outputSmallMolecules.append(newSmallMol)
-
+        outputSmallMolecules.updateMolClass()
         self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
         self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
@@ -157,3 +137,6 @@ class ProtChemMeekoLigands(EMProtocol):
         f.write('outDir:: {}\n'.format(os.path.abspath(self._getPath())))
 
         return paramsFile
+
+    def _warnings(self):
+        return []

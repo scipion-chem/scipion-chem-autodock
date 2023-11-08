@@ -25,3 +25,14 @@
 # *
 # **************************************************************************
 
+# Common constants
+DEFAULT_VERSION = '1.0'
+ALPHA_VERSION = '0.1'
+
+# Package dictionaries
+AUTODOCK_DIC =  {'name': 'AutoDock',    'version': '4.2.6',         'home': 'AUTODOCK_HOME'}
+ADGPU_DIC =     {'name': 'AutoDockGPU', 'version': DEFAULT_VERSION, 'home': 'ADGPU_HOME'}
+VINA_DIC =      {'name': 'Vina',        'version': '1.2.3',         'home': 'VINA_HOME'}
+VINAGPU_DIC =   {'name': 'VinaGPU',     'version': DEFAULT_VERSION, 'home': 'VINAGPU_HOME'}
+ASITE_DIC =     {'name': 'AutoSite',    'version': DEFAULT_VERSION, 'home': 'AUTOSITE_HOME'}
+MEEKO_DIC =     {'name': 'meeko',       'version': '0.3.3'}

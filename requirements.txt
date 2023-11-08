@@ -2,3 +2,4 @@ lxml
 scipion-pyworkflow
 scipion-em
 scipion-chem
+scikit-learn

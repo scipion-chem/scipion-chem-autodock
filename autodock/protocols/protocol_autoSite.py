@@ -95,7 +95,7 @@ class ProtChemAutoSite(ProtChemAutodockBase):
         fnReceptor = self.getReceptorPDBQT()
         argsSite = self.getAutoSiteArgs(fnReceptor)
         insistentRun(self, autodock_plugin.getPackagePath(package='AUTOSITE', path='bin/autosite'), argsSite,
-                     nMax=5, cwd=self._getExtraPath())
+                     nMax=5, cwd=self._getExtraPath(), sleepTime=5)
 
     def createOutputStep(self):
         outFiles = self.getOutFiles()
@@ -111,7 +111,7 @@ class ProtChemAutoSite(ProtChemAutodockBase):
             outPockets.append(pock)
 
         if len(outPockets) > 0:
-            outHETMFile = outPockets.buildPDBhetatmFile()
+            outPockets.buildPDBhetatmFile()
             self._defineOutputs(outputStructROIs=outPockets)
 
 
@@ -137,7 +137,7 @@ class ProtChemAutoSite(ProtChemAutodockBase):
         allFiles = os.listdir(self._getExtraPath(pdbName))
         for file in allFiles:
             if key in file:
-                outFiles.append(os.path.abspath(self._getExtraPath(pdbName, file)))
+                outFiles.append(self._getExtraPath(pdbName, file))
         return outFiles
 
     def getScoresDic(self):

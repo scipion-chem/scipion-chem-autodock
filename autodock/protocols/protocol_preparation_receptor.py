@@ -25,12 +25,14 @@
 # **************************************************************************
 import os, json
 
+from subprocess import run
+
 from pyworkflow.protocol import params
 from pwem.objects.data import AtomStruct
 
 from pwchem import Plugin as pwchem_plugin
-from pwchem.utils import clean_PDB
-from pwchem.constants import MGL_DIC
+from pwchem.utils import cleanPDB
+from pwchem.constants import MGL_DIC, RDKIT_DIC
 from pwchem.protocols import ProtChemPrepareReceptor
 
 from autodock import Plugin as autodock_plugin
@@ -70,7 +72,7 @@ class ProtChemADTPrepare(ProtChemPrepareReceptor, ProtChemAutodockBase):
         self._insertFunctionStep('preparationStep')
         self._insertFunctionStep('createOutput')
 
-    def callPrepare(self, prog, args, outDir):
+    def callPrepare(self, prog, args, outDir, popen=False):
         if self.repair.get()==3:
             args+=' -A bonds_hydrogens'
         elif self.repair.get()==1:
@@ -86,35 +88,38 @@ class ProtChemADTPrepare(ProtChemPrepareReceptor, ProtChemAutodockBase):
             for atom in self.chargeAtoms.get().split(','):
                 args+=" -p %s" % atom.strip()
 
-        cleanup=" -U "
-        first=True
+        cleanup = " -U "
+        first = True
         if self.nphs.get():
-            cleanup+=" nphs"
-            first=False
+            cleanup += " nphs"
+            first = False
         if self.lps.get():
             if not first:
-                cleanup+="_"
-            cleanup+="lps"
-            first=False
+                cleanup += "_"
+            cleanup += "lps"
+            first = False
         if self.waters.get():
             if not first:
-                cleanup+="_"
-            cleanup+="waters"
-            first=False
-        if self.typeRL=="target":
-            if self.nonstdres.get():
-                if not first:
-                    cleanup+="_"
-                cleanup+="nonstdres"
-        if cleanup!="-U ":
-            args+=cleanup
+                cleanup += "_"
+            cleanup += "waters"
+            first = False
+        if self.typeRL == "target" and self.nonstdres.get():
+            if not first:
+                cleanup += "_"
+            cleanup += "nonstdres"
+        if cleanup != "-U ":
+            args += cleanup
 
-        if self.typeRL=="target":
-            if self.nonstd.get():
-                args+=" -e"
+        if self.typeRL == "target" and self.nonstd.get():
+            args += " -e"
 
-        self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
-                    autodock_plugin.getADTPath('Utilities24/%s.py'%prog)+args, cwd=outDir)
+        if not popen:
+            self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
+                        autodock_plugin.getADTPath('Utilities24/%s.py'%prog)+args, cwd=outDir)
+        else:
+            fullProgram = pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh ') + \
+                          autodock_plugin.getADTPath('Utilities24/%s.py' % prog)
+            run(fullProgram + args, cwd=outDir, shell=True)
 
     def createOutput(self):
         fnOut = self._getExtraPath('atomStruct.pdbqt')
@@ -135,7 +140,7 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
                       label='Atomic Structure:', allowsNull=False,
                       help='Input Atomic structure to prepare for Autodock docking')
 
-        clean = self.defineCleanParams(form, w=False)
+        self.defineCleanParams(form, w=False)
         ProtChemADTPrepare._defineParamsBasic(self, form)
 
         form.addParam('doZnDock', params.BooleanParam, label='Perform Zn metalloprotein preparation: ', default=False,
@@ -144,25 +149,25 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
 
     def preparationStep(self):
         #Clean PDB
-        pdb_ini = self.inputAtomStruct.get().getFileName()
-        filename = os.path.splitext(os.path.basename(pdb_ini))[0]
+        pdbIni = self.inputAtomStruct.get().getFileName()
+        filename = os.path.splitext(os.path.basename(pdbIni))[0]
         fnPdb = self._getExtraPath('%s_clean.pdb' % filename)
 
-        chain_ids = None
+        chainIds = None
         if self.rchains.get():
             chainJson = json.loads(self.chain_name.get())  # From wizard dictionary
             if 'chain' in chainJson:
-                chain_ids = [chainJson["chain"].upper().strip()]
+                chainIds = [chainJson["chain"].upper().strip()]
             elif 'model-chain' in chainJson:
                 modelChains = chainJson["model-chain"].upper().strip()
-                chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
+                chainIds = [x.split('-')[1] for x in modelChains.split(',')]
 
         het2keep = self.het2keep.get().split(', ')
-        cleanedPDB = clean_PDB(self.inputAtomStruct.get().getFileName(), fnPdb,
-                               False, self.HETATM.get(), chain_ids, het2keep)
+        cleanedPDB = cleanPDB(self.inputAtomStruct.get().getFileName(), fnPdb,
+                               False, self.HETATM.get(), chainIds, het2keep)
 
         fnOut = self.getReceptorPDBQT()
-        args = ' -v -r %s -o %s' % (os.path.abspath(cleanedPDB), fnOut)
+        args = ' -r %s -o %s' % (os.path.abspath(cleanedPDB), fnOut)
         ProtChemADTPrepare.callPrepare(self, "prepare_receptor4", args, outDir=self._getExtraPath())
 
         if self.doZnDock.get():
@@ -170,8 +175,7 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
 
             auxOut = fnOut.replace('.pdbqt', '_tz.pdbqt')
             args = ' -r {} -o {}'.format(fnOut, auxOut)
-            fullProgram = '%s %s && %s %s' % (
-                pwchem_plugin.getCondaActivationCmd(), pwchem_plugin.getEnvActivation('rdkit'), 'python', zincPrepPath)
+            fullProgram = '%s && %s %s' % (pwchem_plugin.getEnvActivationCommand(RDKIT_DIC), 'python', zincPrepPath)
             self.runJob(fullProgram, args, cwd=self._getExtraPath())
 
     def createOutput(self):
@@ -184,7 +188,6 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
 
     def _validate(self):
         errors = []
-        if self.rchains.get():
-            if not self.chain_name.get():
-                errors.append('You must specify the chains to be maintained')
+        if self.rchains.get() and not self.chain_name.get():
+            errors.append('You must specify the chains to be maintained')
         return errors

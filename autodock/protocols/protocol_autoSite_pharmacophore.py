@@ -30,19 +30,12 @@ atomtype information
 
 """
 
-import os
 
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, EnumParam, FloatParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import PointerParam
 from pyworkflow.protocol import params
 
 from pwchem.objects import PharmacophoreChem, PharmFeature
-from pwchem.constants import *
-from pwchem import Plugin as pwchem_plugin
-
-from autodock import Plugin as autodock_plugin
-
-
 
 class ProtChemAutoSiteGenPharmacophore(EMProtocol):
     """Generate a Pharmacophore from a AutoSite structural ROI """
@@ -69,7 +62,7 @@ class ProtChemAutoSiteGenPharmacophore(EMProtocol):
         clusts = self.getClustersInfo(roiObj)
 
         outPharm = PharmacophoreChem().create(outputPath=self._getPath())
-        outPharm.setProteinFile(os.path.abspath(roiObj.getProteinFile()))
+        outPharm.setProteinFile(roiObj.getProteinFile())
         for point in clusts:
             pharmFeat = PharmFeature(type=typeDic[point['type']], radius=point['rad'],
                                      x=point['x'], y=point['y'], z=point['z'])
