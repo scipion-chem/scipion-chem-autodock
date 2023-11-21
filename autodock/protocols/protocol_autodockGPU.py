@@ -201,7 +201,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
     molLists[it] = [pocketDic]
 
-  def performOutputCreation(self, mols, molLists, it, pocketDic, gridId):
+  def performOutputCreation(self, mols, molLists, it, pocketDic, gridId, recFile):
     outMols = []
     for smallMol in mols:
       molFile = smallMol.getFileName()
@@ -217,8 +217,14 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
             newSmallMol._ligandEfficiency = pwobj.String(molDic[posId]['ki'])
           else:
             newSmallMol._ligandEfficiency = pwobj.String(None)
-          if os.path.getsize(molDic[posId]['file']) > 0:
-            newSmallMol.poseFile.set(molDic[posId]['file'])
+
+          poseFile = molDic[posId]['file']
+          if os.path.getsize(poseFile) > 0:
+            if self.doFlexRes:
+              poseFile, curRecFile = self.makeFlexPoseFiles(poseFile, recFile)
+              newSmallMol.setProteinFile(os.path.relpath(curRecFile))
+
+            newSmallMol.poseFile.set(os.path.relpath(poseFile))
             newSmallMol.setPoseId(posId)
             newSmallMol.gridId.set(gridId)
             newSmallMol.setMolClass('Autodock4')
@@ -242,12 +248,11 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
         inputMols = self.inputSmallMolecules.get()
         outputMols = performBatchThreading(self.performOutputCreation, inputMols, nt,
-                                           gridId=gridId, pocketDic=pocketDic)
+                                           gridId=gridId, pocketDic=pocketDic, recFile=self.getOriginalReceptorFile())
 
         for smallMol in outputMols:
           outputSet.append(smallMol)
 
-      # todo: manage several receptor conformations when flexible docking
       outputSet.proteinFile.set(self.getOriginalReceptorFile())
       outputSet.setDocked(True)
       outputSet.saveGroupIndexes()
@@ -275,23 +280,6 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     for gp in getattr(self, GPU_LIST).get().split(','):
       gpus.append(str(int(gp) + 1))
     return gpus
-
-  def parseDockedMolsDLG(self, fnDlg):
-    molDic = {}
-    with open(fnDlg) as fRes:
-      for line in fRes:
-        if line.startswith('DOCKED: MODEL') and line.split()[-1].strip() != "0":
-          posId = line.split()[-1]
-          molDic[posId] = {'pdb': ''}
-        elif line.startswith('DOCKED: USER    Estimated Free Energy'):
-          molDic[posId]['energy'] = line.split('=')[1].split('kcal/mol')[0]
-        elif line.startswith('DOCKED: USER    Estimated Inhibition'):
-          molDic[posId]['ki'] = line.split()[7]
-
-        elif ' '.join(line.split()[:2]) in ['DOCKED: REMARK', 'DOCKED: BRANCH', 'DOCKED: ROOT', 'DOCKED: ENDROOT',
-                                            'TER', 'DOCKED: ATOM', 'DOCKED: HETATM']:
-          molDic[posId]['pdb'] += line[8:]
-    return molDic
 
   def commentFirstLine(self, fn):
     with open(fn) as f:

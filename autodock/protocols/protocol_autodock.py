@@ -291,8 +291,9 @@ class ProtChemAutodockBase(EMProtocol):
         return outFile
 
     def getFlexFiles(self):
-        return os.path.abspath(self._getExtraPath('receptor_flex.pdbqt')), \
-               os.path.abspath(self._getExtraPath('receptor_rig.pdbqt'))
+        recName = self.getReceptorName()
+        return os.path.abspath(self._getExtraPath(f'{recName}_flex.pdbqt')), \
+               os.path.abspath(self._getExtraPath(f'{recName}_rig.pdbqt'))
 
     def parseFlexRes(self, molName):
         allFlexDic = {}
@@ -309,6 +310,55 @@ class ProtChemAutodockBase(EMProtocol):
             allFlexStr += '{}:{}:{},'.format(molName, chain, allFlexDic[chain][:-1])
         return allFlexStr[:-1]
 
+
+    def parsePDBQTLine(self, line):
+      atName, chain, resNum = line[12:16], line[20:21], line[22:26]
+      coords = [line[30:38], line[38:46], line[46:54]]
+      return atName, chain, resNum, coords
+
+    def parseRecepPosFile(self, posFile):
+      recDic, inRec, posStr = {}, False, ''
+      with open(posFile) as f:
+        for line in f:
+          if line.startswith('BEGIN_RES'):
+            inRec = True
+          elif line.startswith('END_RES'):
+            inRec = False
+
+          elif inRec and line.startswith('ATOM'):
+            atName, chain, resNum, coords = self.parsePDBQTLine(line)
+
+            if chain not in recDic:
+              recDic[chain] = {}
+            if resNum not in recDic[chain]:
+              recDic[chain][resNum] = {}
+
+            recDic[chain][resNum][atName] = coords
+          elif not inRec:
+            posStr += line
+
+      newPosFile = posFile.replace('.pdbqt', '_lig.pdbqt')
+      with open(newPosFile, 'w') as f:
+        f.write(posStr)
+
+      return recDic, newPosFile
+
+    def makeFlexPoseFiles(self, posFile, recFile):
+      recDic, nPosFile = self.parseRecepPosFile(posFile)
+
+      nRecFile = posFile.replace('.pdbqt', '_rec.pdbqt')
+      with open(recFile) as fIn:
+        with open(nRecFile, 'w') as fOut:
+          for line in fIn:
+            if line.startswith('ATOM'):
+              atName, chain, resNum, coords = self.parsePDBQTLine(line)
+              if chain in recDic and resNum in recDic[chain] and atName in recDic[chain][resNum]:
+                for cIn, cOut in zip(coords, recDic[chain][resNum][atName]):
+                  line = line.replace(cIn, cOut)
+            fOut.write(line)
+
+      return nPosFile, nRecFile
+
     def getOutputPocketDir(self, pocket=None):
         if pocket == None:
           outDir = os.path.abspath(self._getExtraPath('pocket_1'))
@@ -324,6 +374,24 @@ class ProtChemAutodockBase(EMProtocol):
                 dirs.append(d)
         dirs.sort()
         return dirs
+
+    def parseDockedMolsDLG(self, fnDlg):
+      molDic = {}
+      with open(fnDlg) as fRes:
+        for line in fRes:
+          if line.startswith('DOCKED: MODEL') and line.split()[-1].strip() != "0":
+            posId = line.split()[-1]
+            molDic[posId] = {'pdb': ''}
+          elif line.startswith('DOCKED: USER    Estimated Free Energy'):
+            molDic[posId]['energy'] = line.split('=')[1].split('kcal/mol')[0]
+          elif line.startswith('DOCKED: USER    Estimated Inhibition'):
+            molDic[posId]['ki'] = line.split()[7]
+
+          elif ' '.join(line.split()[:2]) in ['DOCKED: REMARK', 'DOCKED: BRANCH', 'DOCKED: ROOT', 'DOCKED: ENDROOT',
+                                              'TER', 'DOCKED: ATOM', 'DOCKED: HETATM',
+                                              'DOCKED: BEGIN_RES', 'DOCKED: END_RES']:
+            molDic[posId]['pdb'] += line[8:]
+      return molDic
 
     def _validate(self):
       vals = []
@@ -478,6 +546,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
     outDir = self._getPath('outputLigands')
     makePath(outDir)
     outputSet = SetOfSmallMolecules().create(outputPath=outDir)
+    recFile = self.getOriginalReceptorFile()
 
     for pocketDir in self.getPocketDirs():
       pocketDic = {}
@@ -504,8 +573,14 @@ class ProtChemAutodock(ProtChemAutodockBase):
             newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
             ki = molDic[posId]['ki'] if 'ki' in molDic[posId] else None
             newSmallMol._ligandEfficiency = pwobj.String(ki)
-            if os.path.getsize(molDic[posId]['file']) > 0:
-              newSmallMol.poseFile.set(molDic[posId]['file'])
+
+            poseFile = molDic[posId]['file']
+            if os.path.getsize(poseFile) > 0:
+              if self.doFlexRes:
+                poseFile, curRecFile = self.makeFlexPoseFiles(poseFile, recFile)
+                newSmallMol.setProteinFile(os.path.relpath(curRecFile))
+
+              newSmallMol.poseFile.set(poseFile)
               newSmallMol.setPoseId(posId)
               newSmallMol.gridId.set(gridId)
               newSmallMol.setMolClass('Autodock4')
@@ -513,7 +588,6 @@ class ProtChemAutodock(ProtChemAutodockBase):
 
               outputSet.append(newSmallMol)
 
-    # todo: manage several receptor conformations when flexible docking
     outputSet.proteinFile.set(self.getOriginalReceptorFile())
     outputSet.setDocked(True)
     self._defineOutputs(outputSmallMolecules=outputSet)
@@ -564,6 +638,8 @@ class ProtChemAutodock(ProtChemAutodockBase):
             break
           elif line.startswith('torsdof'):
             cont = False
+          elif '.map' in line and '_rig.' in line:
+            line = line.replace('_rig.', '.')
 
           myDPFstr += line
 
@@ -630,23 +706,6 @@ class ProtChemAutodock(ProtChemAutodockBase):
     for ligName in self.ligandFileNames:
       if molName + PDBQText in ligName:
         return ligName
-
-  def parseDockedMolsDLG(self, fnDlg):
-    molDic = {}
-    with open(fnDlg) as fRes:
-      for line in fRes:
-        if line.startswith('DOCKED: MODEL'):
-          posId = line.split()[-1]
-          molDic[posId] = {'pdb': ''}
-        elif line.startswith('DOCKED: USER    Estimated Free Energy'):
-          molDic[posId]['energy'] = line.split('=')[1].split('kcal/mol')[0]
-        elif line.startswith('DOCKED: USER    Estimated Inhibition'):
-          molDic[posId]['ki'] = ' '.join(line.split()[7:9])
-        elif line.startswith('DOCKED: REMARK') or line.startswith('TER'):
-          molDic[posId]['pdb'] += line[8:]
-        elif line.startswith('DOCKED: ATOM'):
-          molDic[posId]['pdb'] += line[8:]
-    return molDic
 
   def commentFirstLine(self, fn):
     with open(fn) as f:

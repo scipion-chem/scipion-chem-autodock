@@ -159,6 +159,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       outDir = self._getPath('outputLigands')
       makePath(outDir)
       outputSet = SetOfSmallMolecules().create(outputPath=outDir)
+      recepFile = self.getOriginalReceptorFile()
 
       for pocketDir in self.getPocketDirs():
         pocketDic = {}
@@ -176,8 +177,14 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
               newSmallMol = SmallMolecule()
               newSmallMol.copy(smallMol, copyId=False)
               newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
-              if os.path.getsize(molDic[posId]['file']) > 0:
-                newSmallMol.poseFile.set(os.path.relpath(molDic[posId]['file']))
+
+              poseFile = molDic[posId]['file']
+              if os.path.getsize(poseFile) > 0:
+                if self.doFlexRes:
+                  poseFile, curRecFile = self.makeFlexPoseFiles(poseFile, recepFile)
+                  newSmallMol.setProteinFile(os.path.relpath(curRecFile))
+
+                newSmallMol.poseFile.set(os.path.relpath(poseFile))
                 newSmallMol.setPoseId(posId)
                 newSmallMol.gridId.set(gridId)
                 newSmallMol.setMolClass('AutodockVina')
@@ -185,7 +192,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
 
                 outputSet.append(newSmallMol)
 
-      outputSet.proteinFile.set(self.getOriginalReceptorFile())
+      outputSet.proteinFile.set(recepFile)
       outputSet.setDocked(True)
       self._defineOutputs(outputSmallMolecules=outputSet)
       self._defineSourceRelation(self.inputSmallMolecules, outputSet)
