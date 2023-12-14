@@ -4,7 +4,9 @@ Autodock scipion plugin
 
 **Documentation under development, sorry for the inconvenience**
 
-Scipion framework plugin for the use of tools provided by Autodock software suite
+Scipion framework plugin for the use of tools provided by Autodock software suite.
+
+Full documentation to this plugin can be found in the `official documentation page <https://scipion-chem.github.io/docs/plugins/autodock/index.html>`_.
 
 ===================
 Install this plugin
