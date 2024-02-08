@@ -106,8 +106,8 @@ class ProtChemAutoSite(ProtChemAutodockBase):
             oId = self.getIdFromFile(oFile)
             featFile = oFile.replace('_cl_', '_fp_')
             pock = StructROI(oFile, self.getOriginalReceptorFile(), pClass='AutoSite', objId=oId, extraFile=featFile,
-                             score=scDic[oId]['score'], energy=scDic[oId]['energy'], nPoints=scDic[oId]['nPoints'],
-                             volume=scDic[oId]['volume'])
+                             score=scDic[oId]['score'], energy=scDic[oId]['energy'], nPoints=scDic[oId]['nPoints'])
+            pock.setVolume(pock.getPocketVolume())
             outPockets.append(pock)
 
         if len(outPockets) > 0:
@@ -152,7 +152,7 @@ class ProtChemAutoSite(ProtChemAutodockBase):
 
                 elif inScores:
                     sline = line.split()
-                    scDic[int(sline[0])] = {'energy': sline[1], 'nPoints': sline[2], 'volume': sline[2],
+                    scDic[int(sline[0])] = {'energy': sline[1], 'nPoints': sline[2],
                                             'score': sline[-4]}
         return scDic
 
