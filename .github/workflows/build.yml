@@ -63,6 +63,8 @@ jobs:
       working-directory: ${{ github.workspace }}
       run: ../scipion/scipion3 installp -p . --devel
     
-    - name: Run tests
-      working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
-      run: python runTests.py ${{ github.workspace }}/../scipion/scipion3 ${{ vars.FOLDER_WITH_VERSION }} -noGPU -testData=testData.json
+    - name: Install test runner
+      working-directory: ${{ github.workspace }}/../
+      run: |
+        git clone https://github.com/gigabit-clowns/scipion-testrunner.git
+        pip install -e ./scipion-testrunner/
