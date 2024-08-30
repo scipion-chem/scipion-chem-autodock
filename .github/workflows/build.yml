@@ -63,14 +63,10 @@ jobs:
       working-directory: ${{ github.workspace }}
       run: ../scipion/scipion3 installp -p . --devel
     
-    - name: Install test runner
-      working-directory: ${{ github.workspace }}/../
-      run: |
-        git clone https://github.com/gigabit-clowns/scipion-testrunner.git
-        pip install -e ./scipion-testrunner/
-    
     - name: Run tests
       working-directory: ${{ github.workspace }}/../
       env:
         TEST_MODULE: ${{ vars.FOLDER_WITH_VERSION }}
-      run: scipion_testrunner ./scipion/scipion3 $TEST_MODULE --noGpu --testData=${{ github.workspace }}/$TEST_MODULE/testData.json
+      run: |
+        pip install scipion_testrunner
+        scipion_testrunner ./scipion/scipion3 $TEST_MODULE --noGpu --testData=${{ github.workspace }}/$TEST_MODULE/testData.json
