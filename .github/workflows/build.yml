@@ -68,5 +68,5 @@ jobs:
       env:
         TEST_MODULE: ${{ vars.FOLDER_WITH_VERSION }}
       run: |
-        pip install scipion_testrunner
+        pip install scipion-testrunner
         scipion_testrunner ./scipion/scipion3 $TEST_MODULE --noGpu --testData=${{ github.workspace }}/$TEST_MODULE/testData.json
