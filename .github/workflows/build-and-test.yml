@@ -8,65 +8,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Free Disk Space (Ubuntu only)
-      uses: jlumbroso/free-disk-space@main
-
-    - name: Set up MPI
-      uses: mpi4py/setup-mpi@master
-      with:
-        mpi: 'openmpi'
+      - name: Setup enviroment
+        uses: scipion-chem/.github/.github/composites/install-scipion@main
       
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wget gcc g++ make
-
-    - name: Install Miniconda
-      uses: conda-incubator/setup-miniconda@main
-      with:
-        miniconda-version: "latest"
-        auto-update-conda: true
-        auto-activate-base: true
-        activate-environment: scipion3
-        python-version: "3.8"
-
-    - name: Install Scipion
-      working-directory: ${{ github.workspace }}/../
-      run: |
-        pip cache purge
-        pip install --user scipion-installer
-        python3 -m scipioninstaller -conda -noAsk scipion
-    
-    - name: Install scipion-chem (in branch ${{ github.head_ref }} if exists, then tries ${{ github.base_ref }}, finally, default branch)
-      working-directory: ${{ github.workspace }}/../
-      env:
-        REPO_NAME: scipion-chem
-        SOURCE_BRANCH_NAME: ${{ github.head_ref }}
-        TARGET_BRANCH_NAME: ${{ github.base_ref }}
-      run: |
-        git clone https://github.com/scipion-chem/$REPO_NAME.git
-        if [ $(git ls-remote --heads https://github.com/scipion-chem/$REPO_NAME.git $SOURCE_BRANCH_NAME | wc -l) -eq 1 ]; then
-          cd $REPO_NAME && git checkout $SOURCE_BRANCH_NAME && cd -
-        else
-          if [ $(git ls-remote --heads https://github.com/scipion-chem/$REPO_NAME.git $TARGET_BRANCH_NAME | wc -l) -eq 1 ]; then
-            cd $REPO_NAME && git checkout $TARGET_BRANCH_NAME && cd -
+      - name: Install scipion-chem (in branch ${{ github.head_ref }} if exists, then tries ${{ github.base_ref }}, finally, default branch)
+        working-directory: ${{ github.workspace }}/../
+        env:
+          REPO_NAME: scipion-chem
+          SOURCE_BRANCH_NAME: ${{ github.head_ref }}
+          TARGET_BRANCH_NAME: ${{ github.base_ref }}
+        run: |
+          git clone https://github.com/scipion-chem/$REPO_NAME.git
+          if [ $(git ls-remote --heads https://github.com/scipion-chem/$REPO_NAME.git $SOURCE_BRANCH_NAME | wc -l) -eq 1 ]; then
+            cd $REPO_NAME && git checkout $SOURCE_BRANCH_NAME && cd -
+          else
+            if [ $(git ls-remote --heads https://github.com/scipion-chem/$REPO_NAME.git $TARGET_BRANCH_NAME | wc -l) -eq 1 ]; then
+              cd $REPO_NAME && git checkout $TARGET_BRANCH_NAME && cd -
+            fi
           fi
-        fi
-        scipion/scipion3 installp -p $REPO_NAME --devel
-    
-    - name: Checkout repository
-      uses: actions/checkout@main
-      with:
-        ref: ${{ github.head_ref }}
-
-    - name: Install plugin from pull request
-      working-directory: ${{ github.workspace }}
-      run: ../scipion/scipion3 installp -p . --devel
-    
-    - name: Run tests
-      working-directory: ${{ github.workspace }}/../
-      env:
-        TEST_MODULE: ${{ vars.FOLDER_WITH_VERSION }}
-      run: |
-        pip install --user scipion-testrunner
-        scipion_testrunner ./scipion/scipion3 $TEST_MODULE --noGpu --testData=${{ github.workspace }}/$TEST_MODULE/testData.json
+          scipion/scipion3 installp -p $REPO_NAME --devel
+      
+      - name: Checkout repository
+        uses: actions/checkout@main
+        with:
+          ref: ${{ github.head_ref }}
+  
+      - name: Install plugin from pull request
+        working-directory: ${{ github.workspace }}
+        run: ../scipion/scipion3 installp -p . --devel
+      
+      - name: Run tests
+        working-directory: ${{ github.workspace }}/../
+        env:
+          TEST_MODULE: ${{ vars.FOLDER_WITH_VERSION }}
+        run: |
+          pip install --user scipion-testrunner
+          scipion_testrunner ./scipion/scipion3 $TEST_MODULE --noGpu --testData=${{ github.workspace }}/$TEST_MODULE/testData.json
