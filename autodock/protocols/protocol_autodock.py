@@ -526,7 +526,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
       else:
         for it, pocket in enumerate(self.inputStructROIs.get()):
           gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
-          dockId = self._insertFunctionStep('dockStep', pocket.clone(), it=it, prerequisites=[gridId])
+          dockId = self._insertFunctionStep('dockStep', pocket.clone(), it, prerequisites=[gridId])
           dockSteps.append(dockId)
 
       self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
