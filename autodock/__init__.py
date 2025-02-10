@@ -61,24 +61,30 @@ class Plugin(pwchemPlugin):
         For example: _atdBinary = "~/Documents/scipion/software/em/autoDock-4.2.6/AutoDock"
     """
 	# AutoDock
-	_atdHome = os.path.join(pwem.Config.EM_ROOT, AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version'])
+	_atdHome = pwchemPlugin.getDefPath(AUTODOCK_DIC)
 	_atdBinary = os.path.join(_atdHome, 'AutoDock')
 
 	# AutoDockGPU
-	_atdgpuHome = os.path.join(pwem.Config.EM_ROOT, ADGPU_DIC['name'] + '-' + ADGPU_DIC['version'])
+	_atdgpuHome = pwchemPlugin.getDefPath(ADGPU_DIC)
 	_atdgpuBinary = os.path.join(_atdgpuHome, 'AutoDockGPU')
 
 	# Vina
-	_vinaHome = os.path.join(pwem.Config.EM_ROOT, VINA_DIC['name'] + '-' + VINA_DIC['version'])
+	_vinaHome = pwchemPlugin.getDefPath(VINA_DIC)
 	_vinaBinary = os.path.join(_vinaHome, 'AutoDock-Vina')
 
 	# VinaGPU
-	_vinagpuHome = os.path.join(pwem.Config.EM_ROOT, VINAGPU_DIC['name'] + '-' + VINAGPU_DIC['version'])
+	_vinagpuHome = pwchemPlugin.getDefPath(VINAGPU_DIC)
 	_vinagpuBinary = os.path.join(_vinagpuHome, 'AutoDock-VinaGPU')
 
 	# AutoSite
-	_asiteHome = os.path.join(pwem.Config.EM_ROOT, ASITE_DIC['name'] + '-' + ASITE_DIC['version'])
+	_asiteHome = pwchemPlugin.getDefPath(ASITE_DIC)
 	_asiteBinary = _asiteHome
+
+	# Ringtail
+	_ringtailHome = pwchemPlugin.getDefPath(RINGTAIL_DIC)
+
+	# Scrubber
+	_scrubberHome = pwchemPlugin.getDefPath(SCRUBBER_DIC)
 
 
 	@classmethod
@@ -88,6 +94,8 @@ class Plugin(pwchemPlugin):
 		cls._defineEmVar(VINA_DIC['home'], cls._vinaHome)
 		cls._defineEmVar(VINAGPU_DIC['home'], cls._vinagpuHome)
 		cls._defineEmVar(ASITE_DIC['home'], cls._asiteHome)
+		cls._defineEmVar(SCRUBBER_DIC['home'], cls._scrubberHome)
+		cls._defineEmVar(RINGTAIL_DIC['home'], cls._ringtailHome)
 	
 	@classmethod
 	def defineBinaries(cls, env):
@@ -99,6 +107,8 @@ class Plugin(pwchemPlugin):
 		cls.addVinaPackage(env)
 		#cls.addVinaGPUPackage(env)
 		cls.addAutoSitePackage(env)
+		cls.addRingtailPackage(env)
+		cls.addScrubberPackage(env)
 
 	@classmethod
 	def getEnviron(cls):
@@ -207,10 +217,33 @@ class Plugin(pwchemPlugin):
 		# Generating meeko installation commands
 		installer.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED')
 
-		print(installer.getCommandList())
-		
 		# Adding package
 		installer.addPackage(env, dependencies=['wget', 'conda'], default=default)
+
+	@classmethod
+	def addRingtailPackage(cls, env, default=True):
+		""" This function provides the necessary commands for installing Ringtail and Meeko. """
+		# Instantiating the install helper
+		installer = InstallHelper(RINGTAIL_DIC['name'], packageHome=cls.getVar(RINGTAIL_DIC['home']),
+															packageVersion=RINGTAIL_DIC['version'])
+
+		# Installing package
+		installer.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && '
+												 f'conda install ringtail={RINGTAIL_DIC["version"]} -y', 'RINGTAIL_INSTALLED').\
+			addPackage(env, dependencies=['conda'], default=default)
+
+	@classmethod
+	def addScrubberPackage(cls, env, default=True):
+		""" This function provides the necessary commands for installing Scrubber. """
+		# Instantiating the install helper
+		installer = InstallHelper(SCRUBBER_DIC['name'], packageHome=cls.getVar(SCRUBBER_DIC['home']),
+															packageVersion=SCRUBBER_DIC['version'])
+
+		# Installing package
+		installer.getCloneCommand(cls.getScrubberGithub(), targeName='SCRUBBER_CLONED'). \
+			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cd scrubber && pip install -e .',
+								 'SCRUBBER_INSTALLED'). \
+			addPackage(env, dependencies=['git', 'conda', 'pip'], default=default)
 
 	# ---------------------------------- Protocol functions-----------------------
 	@classmethod
@@ -234,6 +267,14 @@ class Plugin(pwchemPlugin):
 		if program == 'vina':
 			program = cls.getVinaPath('bin/vina')
 		protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
+
+	@classmethod
+	def runScrubber(cls, protocol, args, cwd=None, popen=False):
+		fullProgram = f'{cls.getEnvActivationCommand(RDKIT_DIC)} && scrubber.py '
+		if not popen:
+			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+		else:
+			subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
 	@classmethod
 	def runScript(cls, protocol, scriptName, args, envDict, cwd=None, popen=False):
@@ -300,6 +341,10 @@ class Plugin(pwchemPlugin):
 	@classmethod
 	def getVinaGithub(cls):
 		return 'https://github.com/ccsb-scripps/AutoDock-Vina.git'
+
+	@classmethod
+	def getScrubberGithub(cls):
+		return 'git@github.com:forlilab/scrubber.git'
 
 	@classmethod
 	def getADTTar(cls):
