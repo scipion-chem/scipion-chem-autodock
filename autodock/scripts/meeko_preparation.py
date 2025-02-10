@@ -78,7 +78,6 @@ if __name__ == "__main__":
     '''
     paramsDic = parseParams(sys.argv[1])
     ligandFiles = paramsDic['ligandFiles']
-    keepHs = eval(paramsDic['keepNonPolar'])
     hydra = eval(paramsDic['hydrate'])
 
     outDir = paramsDic['outDir']
@@ -88,10 +87,9 @@ if __name__ == "__main__":
     molFileDic, mols = readLigands(ligandFiles)
     outFiles = []
     if len(mols) > 0:
-        preparator = MoleculePreparation(keep_nonpolar_hydrogens=keepHs, hydrate=hydra)
+        preparator = MoleculePreparation(hydrate=hydra)
         for mol in mols:
             preparator.prepare(mol)
-            preparator.show_setup()
 
             inFile = molFileDic[mol]
             outFile = os.path.join(outDir, getBaseFileName(inFile)) + '.pdbqt'

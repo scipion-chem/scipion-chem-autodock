@@ -47,10 +47,6 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
                       label='Set of small molecules:', allowsNull=False,
                       help='Input small molecules to be prepared with Meeko')
 
-        form.addParam('keepHs', BooleanParam, default=False,
-                      label='Keep non-polar hydrogens:',
-                      help='Keep non-polar hydrogens:')
-
         form.addParam('hydrate', BooleanParam, default=False,
                       label='Hydrate molecule:', expertLevel=LEVEL_ADVANCED,
                       help='Hydrate molecule for hydrated-docking')
@@ -131,7 +127,6 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
             molFiles.append(os.path.abspath(mol.getFileName()))
 
         f.write('ligandFiles:: {}\n'.format(' '.join(molFiles)))
-        f.write('keepNonPolar:: {}\n'.format(self.keepHs.get()))
         f.write('hydrate:: {}\n'.format(self.hydrate.get()))
 
         f.write('outDir:: {}\n'.format(os.path.abspath(self._getPath())))
