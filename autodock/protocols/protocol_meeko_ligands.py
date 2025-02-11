@@ -81,9 +81,7 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
     def preparationStep(self):
         mols = self.inputSmallMolecules.get()
         molFiles = [mol.getFileName() for mol in mols]
-        inExt = os.path.splitext(molFiles[-1])[-1]
-        mergedFile = os.path.abspath(self._getTmpPath(f'mergedFiles{inExt}'))
-        mergeFiles(molFiles, mergedFile)
+        mergedFile = mergeFiles(molFiles)
 
         oDir = self._getExtraPath()
         args = f'-i {mergedFile} --multimol_outdir {oDir} '
