@@ -269,8 +269,16 @@ class Plugin(pwchemPlugin):
 		protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
 
 	@classmethod
+	def runMeekoLigand(cls, protocol, args, cwd=None, popen=False):
+		fullProgram = f'{cls.getEnvActivationCommand(RDKIT_DIC)} && mk_prepare_ligand.py '
+		if not popen:
+			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+		else:
+			subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+
+	@classmethod
 	def runScrubber(cls, protocol, args, cwd=None, popen=False):
-		fullProgram = f'{cls.getEnvActivationCommand(RDKIT_DIC)} && scrubber.py '
+		fullProgram = f'{cls.getEnvActivationCommand(RDKIT_DIC)} && scrub.py '
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 		else:
