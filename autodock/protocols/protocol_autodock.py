@@ -34,17 +34,19 @@ from pyworkflow.utils.path import makePath, createLink
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseFileName, relabelMapAtomsMol2, \
-  insistentRun, performBatchThreading
-from pwchem import Plugin as pwchem_plugin
+  insistentRun, performBatchThreading, mergeFiles
+from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC, OPENBABEL_DIC
 
-from autodock import Plugin as autodock_plugin
+from autodock import Plugin as autodockPlugin
+
 
 PDBext, PDBQText = '.pdb', '.pdbqt'
 
 LGA, GA, LS, SA = 0, 1, 2, 3
 searchDic = {LGA: 'Lamarckian Genetic Algorithm', GA: 'Genetic Algorithm', LS: 'Local Search',
              SA: 'Simulated annealing'}
+meekoScript = 'meeko_preparation.py'
 
 class ProtChemAutodockBase(EMProtocol):
     """Base class protocol for AutoDock docking protocols"""
@@ -100,6 +102,9 @@ class ProtChemAutodockBase(EMProtocol):
         dockGroup.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
                        label='Input small molecules: ', allowsNull=False,
                        help="Input small molecules to be docked with AutoDock")
+        dockGroup.addParam('convSoft', EnumParam, label='Convert ligands with : ', default=0,
+                            choices=['Meeko', 'MGLTools'], display=EnumParam.DISPLAY_HLIST, expertLevel=LEVEL_ADVANCED,
+                            help='Convert ligands to pdbqt using this software')
         dockGroup.addParam('nRuns', IntParam, label='Number of docking runs: ', default=10,
                        help='Number of independent runs using the selected strategy. \n'
                             'Different docking positions will be found for each of them.')
@@ -112,15 +117,33 @@ class ProtChemAutodockBase(EMProtocol):
         return inputGroup, dockGroup
 
     def performLigConversion(self, inMols, molLists, it):
-      for mol in inMols:
-        molFile = mol.getFileName()
-        if not molFile.endswith(PDBQText):
-          fnSmall = self.convertLigand2PDBQT(mol, self.getInputLigandsPath(), popen=True)[0]
-        else:
-          fnSmall = self.getInputLigandsPath(getBaseFileName(molFile + PDBQText))
-          shutil.copy(molFile, fnSmall)
-        molLists[it].append(fnSmall)
+      if self.getEnumText('convSoft') == 'MGL':
+        for mol in inMols:
+          molFile = mol.getFileName()
+          if not molFile.endswith(PDBQText):
+            fnSmall = self.convertLigand2PDBQT(mol, self.getInputLigandsPath(), popen=True)[0]
+          else:
+            fnSmall = self.getInputLigandsPath(getBaseFileName(molFile + PDBQText))
+            shutil.copy(molFile, fnSmall)
+          molLists[it].append(fnSmall)
+      
+      else:
+        oDir = self.getInputLigandsPath()
+        molFiles = [mol.getFileName() for mol in inMols]
+        molExt = os.path.splitext(molFiles[-1])[-1]
+        if molExt != '.pdbqt':
+          oFile = self._getTmpPath(f'mergedLigands_{it}{molExt}')
+          mergedFile = mergeFiles(molFiles, outFile=oFile)
 
+          args = f'-i {mergedFile} --multimol_outdir {oDir} '
+          autodockPlugin.runMeekoLigand(self, args, popen=True)
+
+        else:
+          for molFile in molFiles:
+            fnSmall = self.getInputLigandsPath(getBaseFileName(molFile + PDBQText))
+            shutil.copy(molFile, fnSmall)
+        
+        
     def convertStep(self):
       inputMols, nt = self.inputSmallMolecules.get(), self.numberOfThreads.get()
       oDir = self.getInputLigandsPath()
@@ -149,7 +172,7 @@ class ProtChemAutodockBase(EMProtocol):
         xCenter, yCenter, zCenter = pocket.calculateMassCenter()
 
       npts = (radius * 2) / self.spacing.get()
-      znFFfile = autodock_plugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
+      znFFfile = autodockPlugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
         if self.doZnDock.get() else None
       gpfFile = generate_gpf(fnReceptor, spacing=self.spacing.get(), addLigTypes=addLigType,
                               xc=xCenter, yc=yCenter, zc=zCenter,
@@ -159,7 +182,7 @@ class ProtChemAutodockBase(EMProtocol):
         _, fnReceptor = self.buildFlexReceptor(fnReceptor, cleanZn=self.doZnDock.get())
 
       args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
-      insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
+      insistentRun(self, autodockPlugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
 
     def cleanTmpFiles(self):
       for molFile in os.listdir(self._getExtraPath()):
@@ -176,11 +199,11 @@ class ProtChemAutodockBase(EMProtocol):
       return ligFns
 
     def runMGLTool(self, program, args, cwd=None, popen=False):
-      fullProgram = pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh')
+      fullProgram = pwchemPlugin.getProgramHome(MGL_DIC, 'bin/pythonsh')
       if not popen:
-        self.runJob(fullProgram, autodock_plugin.getADTPath(program) + args, cwd=cwd)
+        self.runJob(fullProgram, autodockPlugin.getADTPath(program) + args, cwd=cwd)
       else:
-        subprocess.check_call(f'{fullProgram} {autodock_plugin.getADTPath(program)} {args}', cwd=cwd, shell=True)
+        subprocess.check_call(f'{fullProgram} {autodockPlugin.getADTPath(program)} {args}', cwd=cwd, shell=True)
 
     def convertLigand2PDBQT(self, smallMol, oDir, pose=False, popen=False):
         '''Convert ligand to pdbqt using prepare_ligand4 of ADT'''
@@ -190,7 +213,7 @@ class ProtChemAutodockBase(EMProtocol):
             outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
             args = ' -i "{}" -of mol2 --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
                                                                                os.path.abspath(outDir), outName)
-            pwchem_plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=popen)
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=popen)
             inFile = self._getTmpPath(outName + '.mol2')
             inFile = relabelMapAtomsMol2(inFile)
 
@@ -526,7 +549,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
       else:
         for it, pocket in enumerate(self.inputStructROIs.get()):
           gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
-          dockId = self._insertFunctionStep('dockStep', pocket.clone(), it=it, prerequisites=[gridId])
+          dockId = self._insertFunctionStep('dockStep', pocket.clone(), it, prerequisites=[gridId])
           dockSteps.append(dockId)
 
       self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
@@ -603,7 +626,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
 
         fnDLG = dpfFile.replace('.dpf', '.dlg')
         args = " -p %s -l %s" % (dpfFile, fnDLG)
-        progCall = autodock_plugin.getPackagePath('AUTODOCK', "autodock4") + args
+        progCall = autodockPlugin.getPackagePath('AUTODOCK', "autodock4") + args
         subprocess.check_call(progCall, cwd=outDir, shell=True)
 
   def getNTPocket(self, it=None):
@@ -628,8 +651,8 @@ class ProtChemAutodock(ProtChemAutodockBase):
       if flexFn:
           args += ' -x ' + flexFn
 
-      subprocess.check_call(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh ') +
-                  autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py ') + args, cwd=outDir, shell=True)
+      subprocess.check_call(pwchemPlugin.getProgramHome(MGL_DIC, 'bin/pythonsh ') +
+                  autodockPlugin.getADTPath('Utilities24/prepare_dpf42.py ') + args, cwd=outDir, shell=True)
 
       myDPFstr, cont = '', True
       with open(baseDPF) as f:
