@@ -238,8 +238,8 @@ class Plugin(pwchemPlugin):
 
 		# Installing package
 		installer.getCloneCommand(cls.getScrubberGithub(), targeName='SCRUBBER_CLONED'). \
-			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cd scrubber && pip install -e .',
-								 'SCRUBBER_INSTALLED').\
+			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cd scrubber && pip install -e . --no-deps && '
+								 f'pip install rdkit=={RDKIT_DIC["version"]}', 'SCRUBBER_INSTALLED').\
 			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}',
 								 'MEEKO_INSTALLED').\
 			addPackage(env, dependencies=['git', 'conda', 'pip'], default=default)
