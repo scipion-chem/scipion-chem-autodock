@@ -27,7 +27,7 @@ import os
 
 from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, LEVEL_ADVANCED
 
-from pwchem.utils import runOpenBabel, mergeFiles
+from pwchem.utils import runOpenBabel, mergeSDFs
 from pwchem.objects import SetOfSmallMolecules
 
 from autodock import Plugin
@@ -81,9 +81,10 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
     def preparationStep(self):
         mols = self.inputSmallMolecules.get()
         molFiles = [mol.getFileName() for mol in mols]
-        mergedFile = mergeFiles(molFiles)
 
-        oDir = self._getExtraPath()
+        oDir = os.path.abspath(self._getExtraPath())
+        mergedFile = mergeSDFs(molFiles, oDir=oDir)
+
         args = f'-i {mergedFile} --multimol_outdir {oDir} '
         if self.hydrate.get():
           args += '-w '

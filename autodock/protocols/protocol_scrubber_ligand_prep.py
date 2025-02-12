@@ -189,7 +189,7 @@ class ProtScrubberPrepareLigands(EMProtocol):
         for i, molText in enumerate(mols):
           oFiles += [sdfFile.replace('.sdf', f'_{i+1}.sdf')]
           with open(oFiles[-1], 'w') as fo:
-            fo.write(f'{molText.strip()}\n$$$$')
+            fo.write(f'{molText.strip()}\n\n$$$$')
         confFile = sdfFile.replace('.sdf', '_conformers.sdf')
         os.rename(sdfFile, confFile)
       else:

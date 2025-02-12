@@ -214,9 +214,6 @@ class Plugin(pwchemPlugin):
 			.addCommand(f'tar -zxf {cls.getASITETar()} --strip-components 1 && rm {cls.getASITETar()}', 'ASITE_EXTRACTED')\
 			.addCommand('./install.sh -d . -c 0 -l', 'ASITE_INSTALLED')
 		
-		# Generating meeko installation commands
-		installer.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED')
-
 		# Adding package
 		installer.addPackage(env, dependencies=['wget', 'conda'], default=default)
 
@@ -242,7 +239,9 @@ class Plugin(pwchemPlugin):
 		# Installing package
 		installer.getCloneCommand(cls.getScrubberGithub(), targeName='SCRUBBER_CLONED'). \
 			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cd scrubber && pip install -e .',
-								 'SCRUBBER_INSTALLED'). \
+								 'SCRUBBER_INSTALLED').\
+			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}',
+								 'MEEKO_INSTALLED').\
 			addPackage(env, dependencies=['git', 'conda', 'pip'], default=default)
 
 	# ---------------------------------- Protocol functions-----------------------
