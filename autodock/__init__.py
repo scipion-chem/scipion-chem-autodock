@@ -226,7 +226,9 @@ class Plugin(pwchemPlugin):
 
 		# Installing package
 		installer.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && '
-												 f'conda install ringtail={RINGTAIL_DIC["version"]} -y', 'RINGTAIL_INSTALLED').\
+												 f'conda install ringtail={RINGTAIL_DIC["version"]} -y', 'RINGTAIL_INSTALLED'). \
+			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}',
+								 'MEEKO_INSTALLED'). \
 			addPackage(env, dependencies=['conda'], default=default)
 
 	@classmethod
@@ -238,10 +240,9 @@ class Plugin(pwchemPlugin):
 
 		# Installing package
 		installer.getCloneCommand(cls.getScrubberGithub(), targeName='SCRUBBER_CLONED'). \
-			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cd scrubber && pip install -e . --no-deps && '
-								 f'pip install rdkit=={RDKIT_DIC["version"]}', 'SCRUBBER_INSTALLED').\
-			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}',
-								 'MEEKO_INSTALLED').\
+			addCommand(f'conda create --name {cls.getEnvName(SCRUBBER_DIC)} python=3.10 -y'). \
+			addCommand(f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && cd scrubber && pip install -e .',
+								 'SCRUBBER_INSTALLED').\
 			addPackage(env, dependencies=['git', 'conda', 'pip'], default=default)
 
 	# ---------------------------------- Protocol functions-----------------------
@@ -277,7 +278,7 @@ class Plugin(pwchemPlugin):
 
 	@classmethod
 	def runScrubber(cls, protocol, args, cwd=None, popen=False):
-		fullProgram = f'{cls.getEnvActivationCommand(RDKIT_DIC)} && scrub.py '
+		fullProgram = f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && scrub.py '
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 		else:
