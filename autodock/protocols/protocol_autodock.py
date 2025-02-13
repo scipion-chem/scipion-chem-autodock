@@ -132,7 +132,7 @@ class ProtChemAutodockBase(EMProtocol):
         molFiles = [mol.getFileName() for mol in inMols]
         molExt = os.path.splitext(molFiles[-1])[-1]
         if molExt != '.pdbqt':
-          oFile = self._getTmpPath(f'mergedLigands_{it}{molExt}')
+          oFile = os.path.abspath(self._getTmpPath(f'mergedLigands_{it}{molExt}'))
           mergedFile = mergeFiles(molFiles, outFile=oFile)
 
           args = f'-i {mergedFile} --multimol_outdir {oDir} '

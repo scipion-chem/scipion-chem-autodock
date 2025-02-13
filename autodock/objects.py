@@ -92,3 +92,7 @@ class RingtailDatabase(data.EMFile):
         args = f'read --input_db {self.getFileName()} -su'
         ringSum = Plugin.runRingtail(None, args, popen=True, getOutput=True)
         return ringSum.decode("utf-8")
+
+    def createSumFile(self, path):
+        with open(path, 'w') as f:
+            f.write(self.getSummary())

@@ -61,11 +61,6 @@ class ProtRingtailCreation(EMProtocol):
   def getSumPath(self):
     return self._getExtraPath('ringSum.txt')
 
-  def createSum(self, db):
-    sumFile = self.getSumPath()
-    with open(sumFile, 'w') as f:
-      f.write(db.getSummary())
-
   def createOutputStep(self):
     dlgDir = self.getDLGDir()
     args = f'write --file_path {dlgDir} --recursive -o ringtail.db '
@@ -74,7 +69,7 @@ class ProtRingtailCreation(EMProtocol):
     autodockPlugin.runRingtail(self, args, cwd=self._getPath())
 
     outputDB = RingtailDatabase(filename=self._getPath('ringtail.db'))
-    self.createSum(outputDB)
+    outputDB.createSumFile(self.getSumPath())
     self._defineOutputs(outputRingtail=outputDB)
 
 

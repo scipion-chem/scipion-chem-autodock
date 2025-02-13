@@ -34,8 +34,9 @@ from pyworkflow.utils.path import makePath
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import getBaseFileName, performBatchThreading
 
-from autodock import Plugin as autodock_plugin
+from autodock import Plugin as autodockPlugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
+from autodock.objects import RingtailDatabase
 
 SW, SD, FIRE, AD, ADAM = 0, 1, 2, 3, 4
 searchDic = {SW: 'Solis-Wets', SD: 'Steepest-Descent', FIRE: 'FIRE',
@@ -58,6 +59,8 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
                    help="Add a list of GPU devices that can be used")
 
     super()._defineParams(form)
+    form.addParam('ringtailOutput', BooleanParam, label='Create ringtail output: ', default=False,
+                  help='Create a ringtail database as output of the docking execution')
 
     form.addSection(label="Search")
     group = form.addGroup('Heuristics')
@@ -144,39 +147,49 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       fldFile = f'{self.getReceptorName()}.maps.fld'
       self.fixFldFile(os.path.join(outDir, fldFile))
 
+      print(':', molFns)
       batchFile = self.writeBatchFile(fldFile, molFns, outDir)
       args = f"-B {batchFile} -D {','.join(gpuIdxs)} -n {self.nRuns.get()} --rmstol {self.rmsTol.get()} -C 1 " \
              f"--output-cluster-poses auto "
       if self.doFlexRes:
         args += f'-F {flexReceptorFn} '
       args += self.getADGPUArgs()
-      autodock_plugin.runAutodockGPU(self, args, outDir)
+      autodockPlugin.runAutodockGPU(self, args, outDir)
 
   def createOutputStep(self):
-      nt = self.numberOfThreads.get()
-      outDir = self._getPath('outputLigands')
-      makePath(outDir)
+      if self.ringtailOutput.get():
+        outDir = os.path.abspath(self._getExtraPath())
+        args = f'write --file_path {outDir} --recursive -o ringtail.db '
+        autodockPlugin.runRingtail(self, args, cwd=self._getPath())
 
-      outputSet = SetOfSmallMolecules().create(outputPath=outDir)
-      for pocketDir in self.getPocketDirs():
-        dlgFiles = self.getDockedLigandsFiles(pocketDir)
-        gridId = self.getGridId(pocketDir)
-        pocketDics = performBatchThreading(self.performOutputParsing, dlgFiles, nt, cloneItem=False,
-                                           gridId=gridId, outDir=outDir)
-        pocketDic = {k: v for pDic in pocketDics for (k, v) in pDic.items()}
-
-        inputMols = self.inputSmallMolecules.get()
-        outputMols = performBatchThreading(self.performOutputCreation, inputMols, nt,
-                                           gridId=gridId, pocketDic=pocketDic, recFile=self.getOriginalReceptorFile())
-
-        for smallMol in outputMols:
-          outputSet.append(smallMol)
-
-      outputSet.proteinFile.set(self.getOriginalReceptorFile())
-      outputSet.setDocked(True)
-      outputSet.saveGroupIndexes()
-      self._defineOutputs(outputSmallMolecules=outputSet)
-      self._defineSourceRelation(self.inputSmallMolecules, outputSet)
+        outputDB = RingtailDatabase(filename=self._getPath('ringtail.db'))
+        outputDB.createSumFile(self.getSumPath())
+        self._defineOutputs(outputRingtail=outputDB)
+      else:
+        nt = self.numberOfThreads.get()
+        outDir = self._getPath('outputLigands')
+        makePath(outDir)
+  
+        outputSet = SetOfSmallMolecules().create(outputPath=outDir)
+        for pocketDir in self.getPocketDirs():
+          dlgFiles = self.getDockedLigandsFiles(pocketDir)
+          gridId = self.getGridId(pocketDir)
+          pocketDics = performBatchThreading(self.performOutputParsing, dlgFiles, nt, cloneItem=False,
+                                             gridId=gridId, outDir=outDir)
+          pocketDic = {k: v for pDic in pocketDics for (k, v) in pDic.items()}
+  
+          inputMols = self.inputSmallMolecules.get()
+          outputMols = performBatchThreading(self.performOutputCreation, inputMols, nt,
+                                             gridId=gridId, pocketDic=pocketDic, recFile=self.getOriginalReceptorFile())
+  
+          for smallMol in outputMols:
+            outputSet.append(smallMol)
+  
+        outputSet.proteinFile.set(self.getOriginalReceptorFile())
+        outputSet.setDocked(True)
+        outputSet.saveGroupIndexes()
+        self._defineOutputs(outputSmallMolecules=outputSet)
+        self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
       self.cleanTmpFiles()
 
@@ -243,14 +256,14 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
   def writeBatchFile(self, fldFile, molFns, outDir):
     batchFile = os.path.abspath(os.path.join(outDir, 'batchFile.txt'))
     with open(batchFile, 'w') as f:
-      f.write('{}\n'.format(fldFile))
+      f.write(f'{fldFile}\n')
       for molFn in molFns:
         molBase = molFn.split('/')[-1]
         molLink = os.path.join(outDir, molBase)
         if not os.path.exists(molLink):
           os.link(molFn, molLink)
 
-        f.write('{}\n{}\n'.format(molBase, getBaseFileName(molBase)))
+        f.write(f'{molBase}\n{getBaseFileName(molBase)}\n')
     return batchFile
 
   def getADGPUArgs(self):
@@ -293,3 +306,13 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
   def getDockedLigandsFiles(self, outDir):
     return list(glob.glob(os.path.join(outDir, '*.dlg')))
+  
+  def getSumPath(self):
+    return os.path.abspath(self._getExtraPath('ringSum.txt'))
+
+  def _summary(self):
+    s = []
+    if os.path.exists(self.getSumPath()):
+      with open(self.getSumPath()) as f:
+        s.append(f.read())
+    return s
