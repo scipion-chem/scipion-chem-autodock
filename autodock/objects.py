@@ -24,9 +24,9 @@
 # **************************************************************************
 
 import pwem.objects.data as data
-from pyworkflow.object import (Object, Float, Integer, String,
-                               OrderedDict, CsvList, Boolean, Set, Pointer,
-                               Scalar, List)
+from pyworkflow.object import Float, Integer, String
+
+from autodock import Plugin
 
 
 class AutodockGrid(data.EMFile):
@@ -81,3 +81,14 @@ class GridADT(data.EMFile):
 
     def getFilesDirectory(self):
         return '/'.join(self.getProteinFile().split('/')[:-1])
+
+
+class RingtailDatabase(data.EMFile):
+    """A Scipion object to refer to a RingTail virtual screening database"""
+    def __init__(self, **kwargs):
+        data.EMFile.__init__(self, **kwargs)
+
+    def getSummary(self):
+        args = f'read --input_db {self.getFileName()} -su'
+        ringSum = Plugin.runRingtail(None, args, popen=True, getOutput=True)
+        return ringSum.decode("utf-8")

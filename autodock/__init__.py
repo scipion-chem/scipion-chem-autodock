@@ -284,6 +284,17 @@ class Plugin(pwchemPlugin):
 			subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
 	@classmethod
+	def runRingtail(cls, protocol, args, cwd=None, popen=False, getOutput=False):
+		fullProgram = f'{cls.getEnvActivationCommand(RDKIT_DIC)} && rt_process_vs '
+		if not popen:
+			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+		else:
+			if getOutput:
+				return subprocess.check_output(f'{fullProgram} {args}', cwd=cwd, shell=True)
+			else:
+				subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+
+	@classmethod
 	def runScript(cls, protocol, scriptName, args, envDict, cwd=None, popen=False):
 		""" Run rdkit command from a given protocol. """
 		scriptName = cls.getScriptsDir(scriptName)
