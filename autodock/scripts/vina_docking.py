@@ -25,7 +25,7 @@
 import os, sys
 from vina import Vina
 
-from .utils import getBaseName, parseParams
+from utils import getBaseName, parseParams
 
 
 if __name__ == "__main__":

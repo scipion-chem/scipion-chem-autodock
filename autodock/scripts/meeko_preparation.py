@@ -26,7 +26,7 @@ import os, sys
 
 from meeko import MoleculePreparation
 
-from .utils import getMolFilesDic, parseParams, getBaseName
+from utils import getMolFilesDic, parseParams, getBaseName
 
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile> 

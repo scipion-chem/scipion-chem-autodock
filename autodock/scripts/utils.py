@@ -1,6 +1,5 @@
 # Utils for the scripts
 import os
-from rdkit import Chem
 
 def parseParams(paramsFile, listParams=[], sep=':'):
   paramsDic = {}
@@ -14,6 +13,7 @@ def parseParams(paramsFile, listParams=[], sep=':'):
   return paramsDic
 
 def parseMoleculeFile(molFile):
+  from rdkit import Chem
   if molFile.endswith('.mol2'):
     mol = Chem.MolFromMol2File(molFile)
   elif molFile.endswith('.mol'):
@@ -43,6 +43,7 @@ def getMolFilesDic(molFiles):
   return molsDict, mols
 
 def writeMol(mol, outFile, cid=-1, setName=False):
+  from rdkit import Chem
   w = Chem.SDWriter(outFile)
   molName = os.path.split(os.path.splitext(outFile)[0])[-1]
   if setName:
