@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os, glob
+import os, glob, shutil
 
 from pyworkflow.protocol.params import IntParam, FloatParam, BooleanParam, \
   LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam
@@ -157,16 +157,22 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       autodockPlugin.runAutodockGPU(self, args, outDir)
 
   def createOutputStep(self):
+      nt = self.numberOfThreads.get()
+      recFile = self.getOriginalReceptorFile()
       if self.ringtailOutput.get():
+        # Receptor file must be in one of the pocket files for RingTail to find it
+        newRecFile = os.path.join(os.path.abspath(self.getPocketDirs()[0]), os.path.split(recFile)[-1])
+        shutil.copy(recFile, newRecFile)
+
         outDir = os.path.abspath(self._getExtraPath())
-        args = f'write --file_path {outDir} --recursive -o ringtail.db '
+        args = f'write --file_path {outDir} --recursive -o ringtail.db -mpr {nt} --overwrite'
         autodockPlugin.runRingtail(self, args, cwd=self._getPath())
 
         outputDB = RingtailDatabase(filename=self._getPath('ringtail.db'))
+        outputDB.setReceptorFile(recFile)
         outputDB.createSumFile(self.getSumPath())
         self._defineOutputs(outputRingtail=outputDB)
       else:
-        nt = self.numberOfThreads.get()
         outDir = self._getPath('outputLigands')
         makePath(outDir)
   
@@ -185,7 +191,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
           for smallMol in outputMols:
             outputSet.append(smallMol)
   
-        outputSet.proteinFile.set(self.getOriginalReceptorFile())
+        outputSet.proteinFile.set(recFile)
         outputSet.setDocked(True)
         outputSet.saveGroupIndexes()
         self._defineOutputs(outputSmallMolecules=outputSet)

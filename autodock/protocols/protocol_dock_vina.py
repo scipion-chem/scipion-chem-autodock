@@ -160,20 +160,23 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
         return list(set(ds))
 
     def createOutputStep(self):
+      recFile = self.getOriginalReceptorFile()
       if self.ringtailOutput.get():
+        nt = self.numberOfThreads.get()
         outDir = os.path.abspath(self._getExtraPath())
-        args = f'write --file_path {outDir} --recursive -o ringtail.db -m vina '
+        args = f'write --file_path {outDir} --recursive -o ringtail.db -m vina -sr -rf {recFile} -mpr {nt} ' \
+               f'--overwrite'
         autodockPlugin.runRingtail(self, args, cwd=self._getPath())
 
         outputDB = RingtailDatabase(filename=self._getPath('ringtail.db'))
+        outputDB.setReceptorFile(recFile)
         outputDB.createSumFile(self.getSumPath())
         self._defineOutputs(outputRingtail=outputDB)
       else:
         outDir = self._getPath('outputLigands')
         makePath(outDir)
         outputSet = SetOfSmallMolecules().create(outputPath=outDir)
-        recepFile = self.getOriginalReceptorFile()
-  
+
         for pocketDir in self.getPocketDirs():
           pocketDic = {}
           gridId = self.getGridId(pocketDir)
@@ -208,7 +211,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
   
                   outputSet.append(newSmallMol)
   
-        outputSet.proteinFile.set(recepFile)
+        outputSet.proteinFile.set(recFile)
         outputSet.setDocked(True)
         self._defineOutputs(outputSmallMolecules=outputSet)
         self._defineSourceRelation(self.inputSmallMolecules, outputSet)

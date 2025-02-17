@@ -85,8 +85,9 @@ class GridADT(data.EMFile):
 
 class RingtailDatabase(data.EMFile):
     """A Scipion object to refer to a RingTail virtual screening database"""
-    def __init__(self, **kwargs):
+    def __init__(self, receptorFile=None, **kwargs):
         data.EMFile.__init__(self, **kwargs)
+        self._receptorFile = self._radius = String(receptorFile)
 
     def getSummary(self):
         args = f'read --input_db {self.getFileName()} -su'
@@ -96,3 +97,9 @@ class RingtailDatabase(data.EMFile):
     def createSumFile(self, path):
         with open(path, 'w') as f:
             f.write(self.getSummary())
+
+    def getReceptorFile(self):
+        return self._receptorFile
+
+    def setReceptorFile(self, file):
+        self._receptorFile.set(String(file))
