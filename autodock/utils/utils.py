@@ -23,3 +23,25 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
+import os
+
+def splitSDF(sdfFile, oriName='conformers'):
+  '''Split sdf conformer files'''
+  with open(sdfFile) as f:
+    sdfText = f.read()
+
+  mols = sdfText.split('$$$$')[:-1]
+  if len(mols) > 1:
+    oFiles = []
+    for i, molText in enumerate(mols):
+      oFiles += [sdfFile.replace('.sdf', f'_{i + 1}.sdf')]
+      with open(oFiles[-1], 'w') as fo:
+        fo.write(f'{molText.strip()}\n\n$$$$')
+    confFile = sdfFile.replace('.sdf', f'_{oriName}.sdf')
+    os.rename(sdfFile, confFile)
+  else:
+    oFiles = [sdfFile]
+    confFile = None
+
+  return oFiles, confFile

@@ -105,3 +105,46 @@ class AddFlexibleWizard(EmWizard):
                 '{}:{}\n'.format(chainId, '_'.join(allResStr)))
 
 
+class SelectRingtailWizard():
+  @classmethod
+  def getInputFilename(cls, protocol, inputObj, structureHandler):
+    fileName = inputObj.getReceptorFile()
+    inName, inExt = os.path.splitext(os.path.basename(fileName))
+    pdbFile = os.path.abspath(os.path.join(protocol.getProject().getPath(inName + '.pdb')))
+    args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(fileName), pdbFile)
+    runOpenBabel(protocol=protocol, args=args, popen=True)
+    return pdbFile
+
+class SelectRingtailChainWizard(SelectRingtailWizard, SelectChainWizardQT):
+  pass
+
+class SelectRingtailResidueWizard(SelectRingtailWizard, SelectResidueWizardQT):
+  pass
+
+class SelectRingtailAtomWizard(SelectRingtailWizard, SelectAtomWizardQT):
+  pass
+
+SelectRingtailChainWizard().addTarget(protocol=ProtRingtailFilter,
+                                      targets=['selChain'],
+                                      inputs=['inputRingtail'],
+                                      outputs=['selChain'])
+
+SelectRingtailResidueWizard().addTarget(protocol=ProtRingtailFilter,
+                                        targets=['selResidue'],
+                                        inputs=['inputRingtail', 'selChain'],
+                                        outputs=['selResidue'])
+
+SelectRingtailAtomWizard().addTarget(protocol=ProtRingtailFilter,
+                                     targets=['selAtom'],
+                                     inputs=['inputRingtail', 'selChain', 'selResidue'],
+                                     outputs=['selAtom'])
+
+AddElementWizard().addTarget(protocol=ProtRingtailFilter,
+                             targets=['hbInt'],
+                             inputs=[],
+                             outputs=['hbInt'])
+
+AddElementWizard().addTarget(protocol=ProtRingtailFilter,
+                             targets=['vdwInt'],
+                             inputs=[],
+                             outputs=['vdwInt'])

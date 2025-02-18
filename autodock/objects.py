@@ -27,6 +27,7 @@ import pwem.objects.data as data
 from pyworkflow.object import Float, Integer, String
 
 from autodock import Plugin
+from autodock.constants import ADGPU
 
 
 class AutodockGrid(data.EMFile):
@@ -85,9 +86,10 @@ class GridADT(data.EMFile):
 
 class RingtailDatabase(data.EMFile):
     """A Scipion object to refer to a RingTail virtual screening database"""
-    def __init__(self, receptorFile=None, **kwargs):
+    def __init__(self, receptorFile=None, dbType=ADGPU, **kwargs):
         data.EMFile.__init__(self, **kwargs)
         self._receptorFile = self._radius = String(receptorFile)
+        self._type = String(dbType)
 
     def getSummary(self):
         args = f'read --input_db {self.getFileName()} -su'
@@ -99,7 +101,13 @@ class RingtailDatabase(data.EMFile):
             f.write(self.getSummary())
 
     def getReceptorFile(self):
-        return self._receptorFile
+        return self._receptorFile.get()
 
     def setReceptorFile(self, file):
         self._receptorFile.set(String(file))
+
+    def getType(self):
+        return self._type.get()
+
+    def setType(self, value):
+        self._type.set(String(value))

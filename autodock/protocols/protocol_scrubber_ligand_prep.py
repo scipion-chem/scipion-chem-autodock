@@ -32,7 +32,8 @@ from pwem.protocols import EMProtocol
 from pwchem.utils import convertToSdf, makeSubsets, getBaseName
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 
-from .. import Plugin as adPlugin
+from autodock import Plugin as adPlugin
+from autodock.utils import splitSDF
 
 
 class ProtScrubberPrepareLigands(EMProtocol):
@@ -111,7 +112,7 @@ class ProtScrubberPrepareLigands(EMProtocol):
             if sdfFile.endswith('.sdf'):
                 fnRoot = getBaseName(sdfFile)
                 sdfFile = os.path.join(oDir, sdfFile)
-                oFiles, confFile = self.splitConformers(sdfFile)
+                oFiles, confFile = splitSDF(sdfFile)
 
                 for confId, oFile in enumerate(oFiles):
                   newSmallMol = SmallMolecule(smallMolFilename=oFile, type='Scrubber')
@@ -177,24 +178,4 @@ class ProtScrubberPrepareLigands(EMProtocol):
         args += '--skip_gen3d '
 
       return args
-
-    def splitConformers(self, sdfFile):
-      '''Split sdf conformer files'''
-      with open(sdfFile) as f:
-        sdfText = f.read()
-
-      mols = sdfText.split('$$$$')[:-1]
-      if len(mols) > 1:
-        oFiles = []
-        for i, molText in enumerate(mols):
-          oFiles += [sdfFile.replace('.sdf', f'_{i+1}.sdf')]
-          with open(oFiles[-1], 'w') as fo:
-            fo.write(f'{molText.strip()}\n\n$$$$')
-        confFile = sdfFile.replace('.sdf', '_conformers.sdf')
-        os.rename(sdfFile, confFile)
-      else:
-        oFiles = [sdfFile]
-        confFile = None
-
-      return oFiles, confFile
 

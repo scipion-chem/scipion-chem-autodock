@@ -37,4 +37,5 @@ from .protocol_dock_vina import ProtChemVinaDocking
 from .protocol_autodock_score import ProtChemAutodockScore
 from .protocol_scrubber_ligand_prep import ProtScrubberPrepareLigands
 from .protocol_ringtail_create import ProtRingtailCreation
+from .protocol_ringtail_filter import ProtRingtailFilter
 

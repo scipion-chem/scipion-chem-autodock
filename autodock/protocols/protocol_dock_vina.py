@@ -36,7 +36,7 @@ from pwchem.utils import calculate_centerMass, generate_gpf, insistentRun, getBa
 
 from autodock import Plugin as autodockPlugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
-from autodock.constants import VINA_DIC
+from autodock.constants import VINA_DIC, VINA
 from autodock.objects import RingtailDatabase
 
 meekoScript = 'meeko_preparation.py'
@@ -170,6 +170,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
 
         outputDB = RingtailDatabase(filename=self._getPath('ringtail.db'))
         outputDB.setReceptorFile(recFile)
+        outputDB.setType(VINA)
         outputDB.createSumFile(self.getSumPath())
         self._defineOutputs(outputRingtail=outputDB)
       else:
