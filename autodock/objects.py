@@ -23,6 +23,8 @@
 # *
 # **************************************************************************
 
+import os
+
 import pwem.objects.data as data
 from pyworkflow.object import Float, Integer, String
 
@@ -111,3 +113,26 @@ class RingtailDatabase(data.EMFile):
 
     def setType(self, value):
         self._type.set(String(value))
+
+    def getBookmarks(self):
+        from autodock import Plugin
+        from pwchem.constants import RDKIT_DIC
+
+        inFile = os.path.abspath(self.getFileName())
+        oFile = os.path.join(os.path.dirname(inFile), 'bookmarks.txt')
+        Plugin.runScript(None, 'getRTBookmarks.py', f'{inFile} {oFile}', envDict=RDKIT_DIC, popen=True)
+
+        with open(oFile) as f:
+            bookMarks = eval(f.read().strip())
+        return bookMarks
+
+    def displayPlot(self, bookmark=None, pymol=True):
+        from autodock import Plugin
+        inDB = self.getFileName()
+        flag = 'pymol' if pymol else "plot"
+
+        args = f'read -i {inDB} --{flag} '
+        if bookmark:
+            args += f'-s {bookmark} '
+        cwd = os.path.dirname(inDB)
+        Plugin.runRingtail(None, args, popen=True, cwd=cwd)

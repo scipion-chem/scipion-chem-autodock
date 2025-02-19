@@ -36,6 +36,7 @@ from pwchem.wizards import *
 from pwchem.utils import RESIDUES1TO3
 
 from autodock.protocols import *
+from autodock.viewers import ViewerRingtail
 
 SelectChainWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
                               targets=['chain_name'],
@@ -148,3 +149,8 @@ AddElementWizard().addTarget(protocol=ProtRingtailFilter,
                              targets=['vdwInt'],
                              inputs=[],
                              outputs=['vdwInt'])
+
+SelectFromListWizard().addTarget(protocol=ViewerRingtail,
+                                 targets=['bookmark'],
+                                 inputs=['getBookmarks'],
+                                 outputs=['bookmark'])
