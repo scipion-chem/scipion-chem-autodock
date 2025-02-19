@@ -7,9 +7,9 @@ def parseParams(paramsFile, listParams=[], sep=':'):
     for line in f:
       key, value = line.strip().split(sep)
       if key in listParams:
-        paramsDic[key] = value.strip().split()
+        paramsDic[key.strip()] = value.strip().split()
       else:
-        paramsDic[key] = value.strip()
+        paramsDic[key.strip()] = value.strip()
   return paramsDic
 
 def parseMoleculeFile(molFile):
