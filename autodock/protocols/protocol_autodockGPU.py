@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os, glob, shutil
+import os, glob
 
 from pyworkflow.protocol.params import IntParam, FloatParam, BooleanParam, \
   LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam
@@ -32,7 +32,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import getBaseFileName, performBatchThreading
+from pwchem.utils import getBaseFileName, performBatchThreading, replaceInFiles
 
 from autodock import Plugin as autodockPlugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
@@ -160,12 +160,10 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       nt = self.numberOfThreads.get()
       recFile = self.getOriginalReceptorFile()
       if self.ringtailOutput.get():
-        # Receptor file must be in one of the pocket files for RingTail to find it
-        newRecFile = os.path.join(os.path.abspath(self.getPocketDirs()[0]), os.path.split(recFile)[-1])
-        shutil.copy(recFile, newRecFile)
 
+        self.fixDLGReceptor()
         outDir = os.path.abspath(self._getExtraPath())
-        args = f'write --file_path {outDir} --recursive -o ringtail.db -mpr {nt} --overwrite'
+        args = f'write --file_path {outDir} --recursive -o ringtail.db -mpr {nt} --overwrite -sr -rf {recFile}'
         autodockPlugin.runRingtail(self, args, cwd=self._getPath())
 
         outputDB = RingtailDatabase(filename=self._getPath('ringtail.db'))
@@ -315,6 +313,12 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
   
   def getSumPath(self):
     return os.path.abspath(self._getExtraPath('ringSum.txt'))
+
+  def fixDLGReceptor(self):
+    recName = self.getReceptorName()
+    for pocketDir in self.getPocketDirs():
+      replaceInFiles(os.path.abspath(pocketDir), f'..\/{recName}', recName, file_extension='.dlg')
+
 
   def _summary(self):
     s = []
