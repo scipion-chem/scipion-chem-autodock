@@ -52,6 +52,8 @@ class ProtRingtailFilter(EMProtocol):
     group = form.addGroup('Input')
     group.addParam('inputRingtail', params.PointerParam, pointerClass="RingtailDatabase",
                    label='Input Ringtail database: ', help="Input Ringtail database to filter")
+    group.addParam('bookmark', params.StringParam, label='Bookmark name: ', default='passing_results',
+                   help='Bookmark for the group of molecules passing the filter')
 
     group = form.addGroup('Score filter')
     group.addParam('scoreFilt', params.EnumParam, label='Score filtering: ', choices=list(scoreOptions.keys()), default=0,
@@ -112,7 +114,7 @@ class ProtRingtailFilter(EMProtocol):
   def filterStep(self):
     inDB = self.inputRingtail.get()
     dbFile = os.path.abspath(inDB.getFileName())
-    args = f'read -i {dbFile} '
+    args = f'read -i {dbFile} -s {self.bookmark.get()} '
     if inDB.getType() == VINA:
       args += '-m vina '
 
