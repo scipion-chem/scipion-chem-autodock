@@ -242,8 +242,8 @@ class Plugin(pwchemPlugin):
 		# Installing package
 		installer.getCloneCommand(cls.getScrubberGithub(), targeName='SCRUBBER_CLONED'). \
 			addCommand(f'conda create --name {cls.getEnvName(SCRUBBER_DIC)} python=3.10 -y'). \
-			addCommand(f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && cd scrubber && pip install -e .',
-								 'SCRUBBER_INSTALLED').\
+			addCommand(f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && cd {cls.getEnvName(SCRUBBER_DIC)} && '
+								 f'pip install -e .', 'SCRUBBER_INSTALLED').\
 			addPackage(env, dependencies=['git', 'conda', 'pip'], default=default)
 
 	# ---------------------------------- Protocol functions-----------------------
