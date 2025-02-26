@@ -364,7 +364,7 @@ class Plugin(pwchemPlugin):
 
 	@classmethod
 	def getScrubberGithub(cls):
-		return 'git@github.com:forlilab/scrubber.git'
+		return 'https://github.com/forlilab/molscrub.git'
 
 	@classmethod
 	def getADTTar(cls):
