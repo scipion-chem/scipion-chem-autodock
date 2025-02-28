@@ -1,9 +1,8 @@
-# **************************************************************************
-# *
-# * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
-# *
-# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
-# *
+# # -*- coding: utf-8 -*-
+# # # **************************************************************************
+# # # *
+# # # * Authors: Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
+# # # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
 # * the Free Software Foundation; either version 2 of the License, or
@@ -20,28 +19,19 @@
 # * 02111-1307  USA
 # *
 # *  All comments concerning this program package may be sent to the
-# *  e-mail address 'scipion@cnb.csic.es'
+# *  e-mail address 'you@yourinstitution.email'
 # *
 # **************************************************************************
+import sys
 
-import os
+from ringtail import RingtailCore
 
-def splitSDF(sdfFile, oriName='conformers'):
-  '''Split sdf conformer files'''
-  with open(sdfFile) as f:
-    sdfText = f.read()
 
-  mols = sdfText.split('$$$$')[:-1]
-  if len(mols) > 1:
-    oFiles = []
-    for i, molText in enumerate(mols):
-      oFiles += [sdfFile.replace('.sdf', f'_{i + 1}.sdf')]
-      with open(oFiles[-1], 'w') as fo:
-        fo.write(f'{molText.strip()}\n\n$$$$')
-    confFile = sdfFile.replace('.sdf', f'_{oriName}.sdf')
-    os.rename(sdfFile, confFile)
-  else:
-    oFiles = [sdfFile]
-    confFile = None
+if __name__ == "__main__":
+    '''Retrieve the bookmarks of a ringtail database
+    '''
+    dbFile, outFile = sys.argv[1:3]
 
-  return oFiles, confFile
+    rtc = RingtailCore(db_file=dbFile)
+    with open(outFile, 'w') as f:
+        f.write(f'{rtc.get_bookmark_names()}')

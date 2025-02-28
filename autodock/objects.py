@@ -23,10 +23,13 @@
 # *
 # **************************************************************************
 
+import os
+
 import pwem.objects.data as data
-from pyworkflow.object import (Object, Float, Integer, String,
-                               OrderedDict, CsvList, Boolean, Set, Pointer,
-                               Scalar, List)
+from pyworkflow.object import Float, Integer, String
+
+from autodock import Plugin
+from autodock.constants import ADGPU
 
 
 class AutodockGrid(data.EMFile):
@@ -81,3 +84,55 @@ class GridADT(data.EMFile):
 
     def getFilesDirectory(self):
         return '/'.join(self.getProteinFile().split('/')[:-1])
+
+
+class RingtailDatabase(data.EMFile):
+    """A Scipion object to refer to a RingTail virtual screening database"""
+    def __init__(self, receptorFile=None, dbType=ADGPU, **kwargs):
+        data.EMFile.__init__(self, **kwargs)
+        self._receptorFile = self._radius = String(receptorFile)
+        self._type = String(dbType)
+
+    def getSummary(self):
+        args = f'read --input_db {self.getFileName()} -su'
+        ringSum = Plugin.runRingtail(None, args, popen=True, getOutput=True)
+        return ringSum.decode("utf-8")
+
+    def createSumFile(self, path):
+        with open(path, 'w') as f:
+            f.write(self.getSummary())
+
+    def getReceptorFile(self):
+        return self._receptorFile.get()
+
+    def setReceptorFile(self, file):
+        self._receptorFile.set(String(file))
+
+    def getType(self):
+        return self._type.get()
+
+    def setType(self, value):
+        self._type.set(String(value))
+
+    def getBookmarks(self):
+        from autodock import Plugin
+        from pwchem.constants import RDKIT_DIC
+
+        inFile = os.path.abspath(self.getFileName())
+        oFile = os.path.join(os.path.dirname(inFile), 'bookmarks.txt')
+        Plugin.runScript(None, 'getRTBookmarks.py', f'{inFile} {oFile}', envDict=RDKIT_DIC, popen=True)
+
+        with open(oFile) as f:
+            bookMarks = eval(f.read().strip())
+        return bookMarks
+
+    def displayPlot(self, bookmark=None, pymol=True):
+        from autodock import Plugin
+        inDB = self.getFileName()
+        flag = 'pymol' if pymol else "plot"
+
+        args = f'read -i {inDB} --{flag} '
+        if bookmark:
+            args += f'-s {bookmark} '
+        cwd = os.path.dirname(inDB)
+        Plugin.runRingtail(None, args, popen=True, cwd=cwd)

@@ -145,7 +145,6 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
         molName = getBaseFileName(dlgFile)
         scoresDic[molName] = self.parseDockedMolsDLG(dlgFile)
 
-
     for smallMol in self.getInputMols():
       molName = smallMol.getUniqueName()
       if molName in scoresDic:

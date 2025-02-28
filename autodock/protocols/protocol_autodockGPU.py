@@ -32,10 +32,11 @@ import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import getBaseFileName, performBatchThreading
+from pwchem.utils import getBaseFileName, performBatchThreading, replaceInFiles
 
-from autodock import Plugin as autodock_plugin
+from autodock import Plugin as autodockPlugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
+from autodock.objects import RingtailDatabase
 
 SW, SD, FIRE, AD, ADAM = 0, 1, 2, 3, 4
 searchDic = {SW: 'Solis-Wets', SD: 'Steepest-Descent', FIRE: 'FIRE',
@@ -58,6 +59,8 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
                    help="Add a list of GPU devices that can be used")
 
     super()._defineParams(form)
+    form.addParam('ringtailOutput', BooleanParam, label='Create ringtail output: ', default=False,
+                  help='Create a ringtail database as output of the docking execution')
 
     form.addSection(label="Search")
     group = form.addGroup('Heuristics')
@@ -117,31 +120,6 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
     form.addParallelSection(threads=4, mpi=1)
 
-  def getADGPUArgs(self):
-    args = ''
-    if self.heuristics:
-      args += '-H 1 -E {} '.format(self.heurmax.get())
-    else:
-      args += '-e {} -l {} '.format(self.gaNumEvals.get(), searchKeys[self.lsType.get()])
-
-      args += '-g {} -i {} -p {} '. \
-        format(self.gaNumGens.get(), self.lsMaxIts.get(), self.gaPop.get())
-      args += '--mrat {} --crat {} --trat {} '. \
-        format(self.mrat.get(), self.crat.get(), self.trat.get())
-
-      args += '--dmov {} --dang {} '.format(self.dang.get(), self.dang.get())
-      args += '--lsit {} --lsrat {} '.format(self.lsMaxIts.get(), self.lsFreq.get())
-
-      if self.lsType.get() == SW:
-        args += '--rholb {} --lsmov {} --lsang {} --cslim {} '. \
-          format(self.swLbRho.get(), self.swMovD.get(), self.swAngD.get(), self.swMaxSucc.get())
-
-    if self.autostop:
-      args += '-A 1 -a {} --stopstd {} '.format(self.asfreq.get(), self.stopstd.get())
-
-    args += '-s 44 '
-    return args
-
   # --------------------------- INSERT steps functions --------------------
   def _insertAllSteps(self):
       cId = self._insertFunctionStep('convertStep', prerequisites=[])
@@ -166,26 +144,58 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       flexReceptorFn = self.getFlexFiles()[0] if self.doFlexRes else None
       outDir = self.getOutputPocketDir(pocket)
 
-      fldFile = '{}.maps.fld'.format(self.getReceptorName())
+      fldFile = f'{self.getReceptorName()}.maps.fld'
       self.fixFldFile(os.path.join(outDir, fldFile))
 
-      batchFile = os.path.abspath(os.path.join(outDir, 'batchFile.txt'))
-      with open(batchFile, 'w') as f:
-        f.write('{}\n'.format(fldFile))
-        for molFn in molFns:
-          molBase = molFn.split('/')[-1]
-          molLink = os.path.join(outDir, molBase)
-          if not os.path.exists(molLink):
-            os.link(molFn, molLink)
-
-          f.write('{}\n{}\n'.format(molBase, getBaseFileName(molBase)))
-
-      args = '-B {} -D {} -n {} --rmstol {} -C 1 --output-cluster-poses auto '. \
-        format(batchFile, ','.join(gpuIdxs), self.nRuns.get(), self.rmsTol.get())
+      batchFile = self.writeBatchFile(fldFile, molFns, outDir)
+      args = f"-B {batchFile} -D {','.join(gpuIdxs)} -n {self.nRuns.get()} --rmstol {self.rmsTol.get()} -C 1 " \
+             f"--output-cluster-poses auto "
       if self.doFlexRes:
-        args += '-F {} '.format(flexReceptorFn)
+        args += f'-F {flexReceptorFn} '
       args += self.getADGPUArgs()
-      autodock_plugin.runAutodockGPU(self, args, outDir)
+      autodockPlugin.runAutodockGPU(self, args, outDir)
+
+  def createOutputStep(self):
+      nt = self.numberOfThreads.get()
+      recFile = self.getOriginalReceptorFile()
+      if self.ringtailOutput.get():
+
+        self.fixDLGReceptor()
+        outDir = os.path.abspath(self._getExtraPath())
+        args = f'write --file_path {outDir} --recursive -o ringtail.db -mpr {nt} --overwrite -sr -rf {recFile}'
+        autodockPlugin.runRingtail(self, args, cwd=self._getPath())
+
+        outputDB = RingtailDatabase(filename=self._getPath('ringtail.db'))
+        outputDB.setReceptorFile(recFile)
+        outputDB.createSumFile(self.getSumPath())
+        self._defineOutputs(outputRingtail=outputDB)
+      else:
+        outDir = self._getPath('outputLigands')
+        makePath(outDir)
+  
+        outputSet = SetOfSmallMolecules().create(outputPath=outDir)
+        for pocketDir in self.getPocketDirs():
+          dlgFiles = self.getDockedLigandsFiles(pocketDir)
+          gridId = self.getGridId(pocketDir)
+          pocketDics = performBatchThreading(self.performOutputParsing, dlgFiles, nt, cloneItem=False,
+                                             gridId=gridId, outDir=outDir)
+          pocketDic = {k: v for pDic in pocketDics for (k, v) in pDic.items()}
+  
+          inputMols = self.inputSmallMolecules.get()
+          outputMols = performBatchThreading(self.performOutputCreation, inputMols, nt,
+                                             gridId=gridId, pocketDic=pocketDic, recFile=self.getOriginalReceptorFile())
+  
+          for smallMol in outputMols:
+            outputSet.append(smallMol)
+  
+        outputSet.proteinFile.set(recFile)
+        outputSet.setDocked(True)
+        outputSet.saveGroupIndexes()
+        self._defineOutputs(outputSmallMolecules=outputSet)
+        self._defineSourceRelation(self.inputSmallMolecules, outputSet)
+
+      self.cleanTmpFiles()
+
 
   def performOutputParsing(self, dlgFiles, molLists, it, gridId, outDir):
     pocketDic = {}
@@ -233,34 +243,6 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
             outMols.append(newSmallMol)
     molLists[it] = outMols
 
-  def createOutputStep(self):
-      nt = self.numberOfThreads.get()
-      outDir = self._getPath('outputLigands')
-      makePath(outDir)
-      outputSet = SetOfSmallMolecules().create(outputPath=outDir)
-
-      for pocketDir in self.getPocketDirs():
-        dlgFiles = self.getDockedLigandsFiles(pocketDir)
-        gridId = self.getGridId(pocketDir)
-        pocketDics = performBatchThreading(self.performOutputParsing, dlgFiles, nt, cloneItem=False,
-                                           gridId=gridId, outDir=outDir)
-        pocketDic = {k: v for pDic in pocketDics for (k, v) in pDic.items()}
-
-        inputMols = self.inputSmallMolecules.get()
-        outputMols = performBatchThreading(self.performOutputCreation, inputMols, nt,
-                                           gridId=gridId, pocketDic=pocketDic, recFile=self.getOriginalReceptorFile())
-
-        for smallMol in outputMols:
-          outputSet.append(smallMol)
-
-      outputSet.proteinFile.set(self.getOriginalReceptorFile())
-      outputSet.setDocked(True)
-      outputSet.saveGroupIndexes()
-      self._defineOutputs(outputSmallMolecules=outputSet)
-      self._defineSourceRelation(self.inputSmallMolecules, outputSet)
-
-      self.cleanTmpFiles()
-
   ########################### Utils functions ############################
 
   def fixFldFile(self, fldFile):
@@ -274,6 +256,43 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     with open(fldFile, 'w') as f:
       f.write(s)
 
+  def writeBatchFile(self, fldFile, molFns, outDir):
+    batchFile = os.path.abspath(os.path.join(outDir, 'batchFile.txt'))
+    with open(batchFile, 'w') as f:
+      f.write(f'{fldFile}\n')
+      for molFn in molFns:
+        molBase = molFn.split('/')[-1]
+        molLink = os.path.join(outDir, molBase)
+        if not os.path.exists(molLink):
+          os.link(molFn, molLink)
+
+        f.write(f'{molBase}\n{getBaseFileName(molBase)}\n')
+    return batchFile
+
+  def getADGPUArgs(self):
+    args = ''
+    if self.heuristics:
+      args += '-H 1 -E {} '.format(self.heurmax.get())
+    else:
+      args += '-e {} -l {} '.format(self.gaNumEvals.get(), searchKeys[self.lsType.get()])
+
+      args += '-g {} -i {} -p {} '. \
+        format(self.gaNumGens.get(), self.lsMaxIts.get(), self.gaPop.get())
+      args += '--mrat {} --crat {} --trat {} '. \
+        format(self.mrat.get(), self.crat.get(), self.trat.get())
+
+      args += '--dmov {} --dang {} '.format(self.dang.get(), self.dang.get())
+      args += '--lsit {} --lsrat {} '.format(self.lsMaxIts.get(), self.lsFreq.get())
+
+      if self.lsType.get() == SW:
+        args += '--rholb {} --lsmov {} --lsang {} --cslim {} '. \
+          format(self.swLbRho.get(), self.swMovD.get(), self.swAngD.get(), self.swMaxSucc.get())
+
+    if self.autostop:
+      args += '-A 1 -a {} --stopstd {} '.format(self.asfreq.get(), self.stopstd.get())
+
+    args += '-s 44 '
+    return args
 
   def getGPU_Ids(self):
     gpus = []
@@ -290,3 +309,19 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
   def getDockedLigandsFiles(self, outDir):
     return list(glob.glob(os.path.join(outDir, '*.dlg')))
+  
+  def getSumPath(self):
+    return os.path.abspath(self._getExtraPath('ringSum.txt'))
+
+  def fixDLGReceptor(self):
+    recName = self.getReceptorName()
+    for pocketDir in self.getPocketDirs():
+      replaceInFiles(os.path.abspath(pocketDir), f'..\/{recName}', recName, file_extension='.dlg')
+
+
+  def _summary(self):
+    s = []
+    if os.path.exists(self.getSumPath()):
+      with open(self.getSumPath()) as f:
+        s.append(f.read())
+    return s

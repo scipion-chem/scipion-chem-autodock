@@ -34,9 +34,10 @@ from pwchem import Plugin as pwchem_plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import calculate_centerMass, generate_gpf, insistentRun, getBaseFileName, performBatchThreading
 
-from autodock import Plugin as autodock_plugin
+from autodock import Plugin as autodockPlugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
-from autodock.constants import VINA_DIC
+from autodock.constants import VINA_DIC, VINA
+from autodock.objects import RingtailDatabase
 
 meekoScript = 'meeko_preparation.py'
 scriptName = 'vina_docking.py'
@@ -60,6 +61,9 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
                             'The higher, the more the search pace is explored, but also it will be slower')
         dockGroup.addParam('maxEvals', params.IntParam, label='Maximum number of evaluation: ',
                        expertLevel=params.LEVEL_ADVANCED, default=0, help='Maximum number of evaluation')
+
+        form.addParam('ringtailOutput', params.BooleanParam, label='Create ringtail output: ', default=False,
+                      help='Create a ringtail database as output of the docking execution')
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -111,7 +115,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       spacing = self.spacing.get()
       npts = (radius * 2) / spacing
 
-      znFFfile = autodock_plugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
+      znFFfile = autodockPlugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
         if self.doZnDock.get() else None
       gpfFile = generate_gpf(fnReceptor, spacing=spacing,
                               xc=xCenter, yc=yCenter, zc=zCenter,
@@ -132,7 +136,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       else:
           scoreFunc = scoreFunc if not self.doZnDock.get() and not flexFn else 'ad4'
           args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
-          insistentRun(self, autodock_plugin.getPackagePath("AUTOSITE", path='bin/autogrid4'), args, cwd=outDir)
+          insistentRun(self, autodockPlugin.getPackagePath("AUTOSITE", path='bin/autogrid4'), args, cwd=outDir)
 
           batchDirs = self.getBatchDirs(pdbqtFiles)
           for molDir in batchDirs:
@@ -146,7 +150,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       paramsFile = self.writeParamsFile(k['fnReceptor'], pdbqtFiles, k['radius'],
                                         [k['xCenter'], k['yCenter'], k['zCenter']], k['gpfFile'],
                                         k['outDir'], 1, it, k['flexFn'])
-      autodock_plugin.runScript(self, scriptName, paramsFile, envDict=VINA_DIC, cwd=k['outDir'], popen=True)
+      autodockPlugin.runScript(self, scriptName, paramsFile, envDict=VINA_DIC, cwd=k['outDir'], popen=True)
 
 
     def getBatchDirs(self, molFiles):
@@ -156,46 +160,62 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
         return list(set(ds))
 
     def createOutputStep(self):
-      outDir = self._getPath('outputLigands')
-      makePath(outDir)
-      outputSet = SetOfSmallMolecules().create(outputPath=outDir)
-      recepFile = self.getOriginalReceptorFile()
+      recFile = self.getOriginalReceptorFile()
+      if self.ringtailOutput.get():
+        nt = self.numberOfThreads.get()
+        outDir = os.path.abspath(self._getExtraPath())
+        args = f'write --file_path {outDir} --recursive -o ringtail.db -m vina -sr -rf {recFile} -mpr {nt} ' \
+               f'--overwrite'
+        autodockPlugin.runRingtail(self, args, cwd=self._getPath())
 
-      for pocketDir in self.getPocketDirs():
-        pocketDic = {}
-        gridId = self.getGridId(pocketDir)
-        dockFiles = self.getDockedLigandsFiles(pocketDir)
-        for dockFile in dockFiles:
-            molName = os.path.split(dockFile)[1].split(PDBQText)[0]
-            pocketDic[molName] = self.parseDockedPDBQT(dockFile)
+        outputDB = RingtailDatabase(filename=self._getPath('ringtail.db'))
+        outputDB.setReceptorFile(recFile)
+        outputDB.setType(VINA)
+        outputDB.createSumFile(self.getSumPath())
+        self._defineOutputs(outputRingtail=outputDB)
+      else:
+        outDir = self._getPath('outputLigands')
+        makePath(outDir)
+        outputSet = SetOfSmallMolecules().create(outputPath=outDir)
 
-        for smallMol in self.inputSmallMolecules.get():
-            molName = smallMol.getUniqueName(conf=True)
-            molDic = pocketDic[molName]
-
-            for posId in molDic:
-              newSmallMol = SmallMolecule()
-              newSmallMol.copy(smallMol, copyId=False)
-              newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
-
-              poseFile = molDic[posId]['file']
-              if os.path.getsize(poseFile) > 0:
-                if self.doFlexRes:
-                  poseFile, curRecFile = self.makeFlexPoseFiles(poseFile, recepFile)
-                  newSmallMol.setProteinFile(os.path.relpath(curRecFile))
-
-                newSmallMol.poseFile.set(os.path.relpath(poseFile))
-                newSmallMol.setPoseId(posId)
-                newSmallMol.gridId.set(gridId)
-                newSmallMol.setMolClass('AutodockVina')
-                newSmallMol.setDockId(self.getObjId())
-
-                outputSet.append(newSmallMol)
-
-      outputSet.proteinFile.set(recepFile)
-      outputSet.setDocked(True)
-      self._defineOutputs(outputSmallMolecules=outputSet)
-      self._defineSourceRelation(self.inputSmallMolecules, outputSet)
+        for pocketDir in self.getPocketDirs():
+          pocketDic = {}
+          gridId = self.getGridId(pocketDir)
+          dockFiles = self.getDockedLigandsFiles(pocketDir)
+          for dockFile in dockFiles:
+              molName = os.path.split(dockFile)[1].split(PDBQText)[0]
+              pocketDic[molName] = self.parseDockedPDBQT(dockFile)
+  
+          for smallMol in self.inputSmallMolecules.get():
+              molName = smallMol.getUniqueName(conf=True)
+              molDic = pocketDic[molName]
+  
+              for posId in molDic:
+                newSmallMol = SmallMolecule()
+                newSmallMol.copy(smallMol, copyId=False)
+                newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
+  
+                poseFile = molDic[posId]['file']
+                if os.path.getsize(poseFile) > 0:
+                  if self.doFlexRes:
+                    poseFile, curRecFile = self.makeFlexPoseFiles(poseFile, recepFile)
+                    newSmallMol.setProteinFile(os.path.relpath(curRecFile))
+  
+                  newPoseFile = os.path.join(outDir, os.path.split(poseFile)[-1])
+                  os.rename(poseFile, newPoseFile)
+  
+                  newSmallMol.poseFile.set(newPoseFile)
+                  newSmallMol.setPoseId(posId)
+                  newSmallMol.gridId.set(gridId)
+                  newSmallMol.setMolClass('AutodockVina')
+                  newSmallMol.setDockId(self.getObjId())
+  
+                  outputSet.append(newSmallMol)
+  
+        outputSet.proteinFile.set(recFile)
+        outputSet.setDocked(True)
+        self._defineOutputs(outputSmallMolecules=outputSet)
+        self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
       self.cleanTmpFiles()
 
@@ -315,6 +335,16 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
                 with open(dockedFilesFile) as fIn:
                     dockFiles += fIn.read().split()
         return dockFiles
+
+    def getSumPath(self):
+      return os.path.abspath(self._getExtraPath('ringSum.txt'))
+
+    def _summary(self):
+      s = []
+      if os.path.exists(self.getSumPath()):
+        with open(self.getSumPath()) as f:
+          s.append(f.read())
+      return s
 
     def _warnings(self):
       ws = []
