@@ -141,7 +141,7 @@ class ProtScrubberPrepareLigands(EMProtocol):
       failedMols = []
       for fnSmall in molFns:
         fnMol = os.path.split(fnSmall)[1]
-        fnRoot, ext = os.path.splitext(fnMol)
+        fnRoot, _ = os.path.splitext(fnMol)
         fnOut = os.path.join(outDir, fnRoot + ".sdf")
         try:
           convertToSdf(self, fnSmall, fnOut)

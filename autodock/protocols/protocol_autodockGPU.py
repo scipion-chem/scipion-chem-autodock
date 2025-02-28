@@ -147,7 +147,6 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       fldFile = f'{self.getReceptorName()}.maps.fld'
       self.fixFldFile(os.path.join(outDir, fldFile))
 
-      print(':', molFns)
       batchFile = self.writeBatchFile(fldFile, molFns, outDir)
       args = f"-B {batchFile} -D {','.join(gpuIdxs)} -n {self.nRuns.get()} --rmstol {self.rmsTol.get()} -C 1 " \
              f"--output-cluster-poses auto "

@@ -115,7 +115,7 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
     def createOutputStep(self):
       prepFiles = []
       for file in os.listdir(self._getExtraPath()):
-        if file.endswith('.pdbqt') and not 'conformers.pdbqt' in file:
+        if file.endswith('.pdbqt') and 'conformers.pdbqt' not in file:
           prepFiles.append(self._getExtraPath(file))
 
       outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')

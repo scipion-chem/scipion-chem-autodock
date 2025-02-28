@@ -78,7 +78,7 @@ class ViewerRingtail(pwviewer.ProtocolViewer):
 
   def getInputDB(self):
     molDB = None
-    if type(self.protocol) == RingtailDatabase:
+    if isinstance(self.protocol, RingtailDatabase):
       molDB = self.protocol
     elif hasattr(self.protocol, 'outputRingtail'):
       molDB = getattr(self.protocol, 'outputRingtail')
