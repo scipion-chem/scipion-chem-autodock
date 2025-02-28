@@ -36,3 +36,5 @@ from .protocol_meeko_ligands import ProtChemMeekoLigands
 from .protocol_dock_vina import ProtChemVinaDocking
 from .protocol_autodock_score import ProtChemAutodockScore
 
+from .protocol_encoder_dock_scoring import ProtEncoderDockScoring
+

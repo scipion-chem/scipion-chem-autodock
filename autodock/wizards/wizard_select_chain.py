@@ -88,6 +88,11 @@ SelectMultiLigandWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
                                inputs=['inputAtomStruct'],
                                outputs=['het2keep'])
 
+SelectAttributeWizard().addTarget(protocol=ProtEncoderDockScoring,
+                                  targets=['scoreName'],
+                                  inputs=['dockedMols'],
+                                  outputs=['scoreName'])
+
 class AddFlexibleWizard(EmWizard):
   _targets = [(ProtChemAutodock, ['addFlex']), (ProtChemVinaDocking, ['addFlex']), (ProtChemAutodockGPU, ['addFlex'])]
 
