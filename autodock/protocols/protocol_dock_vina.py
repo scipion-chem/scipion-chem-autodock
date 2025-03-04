@@ -188,29 +188,32 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
   
           for smallMol in self.inputSmallMolecules.get():
               molName = smallMol.getUniqueName(conf=True)
-              molDic = pocketDic[molName]
-  
-              for posId in molDic:
-                newSmallMol = SmallMolecule()
-                newSmallMol.copy(smallMol, copyId=False)
-                newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
-  
-                poseFile = molDic[posId]['file']
-                if os.path.getsize(poseFile) > 0:
-                  if self.doFlexRes:
-                    poseFile, curRecFile = self.makeFlexPoseFiles(poseFile, recepFile)
-                    newSmallMol.setProteinFile(os.path.relpath(curRecFile))
-  
-                  newPoseFile = os.path.join(outDir, os.path.split(poseFile)[-1])
-                  os.rename(poseFile, newPoseFile)
-  
-                  newSmallMol.poseFile.set(newPoseFile)
-                  newSmallMol.setPoseId(posId)
-                  newSmallMol.gridId.set(gridId)
-                  newSmallMol.setMolClass('AutodockVina')
-                  newSmallMol.setDockId(self.getObjId())
-  
-                  outputSet.append(newSmallMol)
+              if molName in molDic:
+                molDic = pocketDic[molName]
+
+                for posId in molDic:
+                  newSmallMol = SmallMolecule()
+                  newSmallMol.copy(smallMol, copyId=False)
+                  newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
+
+                  poseFile = molDic[posId]['file']
+                  if os.path.getsize(poseFile) > 0:
+                    if self.doFlexRes:
+                      poseFile, curRecFile = self.makeFlexPoseFiles(poseFile, recFile)
+                      newSmallMol.setProteinFile(os.path.relpath(curRecFile))
+
+                    newPoseFile = os.path.join(outDir, os.path.split(poseFile)[-1])
+                    os.rename(poseFile, newPoseFile)
+
+                    newSmallMol.poseFile.set(newPoseFile)
+                    newSmallMol.setPoseId(posId)
+                    newSmallMol.gridId.set(gridId)
+                    newSmallMol.setMolClass('AutodockVina')
+                    newSmallMol.setDockId(self.getObjId())
+
+                    outputSet.append(newSmallMol)
+              else:
+                print(f'Molecule {molName} was not found in the docking results')
   
         outputSet.proteinFile.set(recFile)
         outputSet.setDocked(True)
