@@ -46,6 +46,7 @@ from .constants import *
 # Pluging variables
 _logo = 'autodock_logo.png'
 __version__ = ALPHA_VERSION
+chemPropFile = 'example_model_v2_regression_mol.ckpt'
 
 # Installation variables
 enVars = {'GPU_INCLUDE_PATH': pwem.Config.CUDA_BIN.replace('bin', 'include'), 'GPU_LIBRARY_PATH': pwem.Config.CUDA_LIB}
@@ -61,24 +62,33 @@ class Plugin(pwchemPlugin):
         For example: _atdBinary = "~/Documents/scipion/software/em/autoDock-4.2.6/AutoDock"
     """
 	# AutoDock
-	_atdHome = os.path.join(pwem.Config.EM_ROOT, AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version'])
+	_atdHome = pwchemPlugin.getDefPath(AUTODOCK_DIC)
 	_atdBinary = os.path.join(_atdHome, 'AutoDock')
 
 	# AutoDockGPU
-	_atdgpuHome = os.path.join(pwem.Config.EM_ROOT, ADGPU_DIC['name'] + '-' + ADGPU_DIC['version'])
+	_atdgpuHome = pwchemPlugin.getDefPath(ADGPU_DIC)
 	_atdgpuBinary = os.path.join(_atdgpuHome, 'AutoDockGPU')
 
 	# Vina
-	_vinaHome = os.path.join(pwem.Config.EM_ROOT, VINA_DIC['name'] + '-' + VINA_DIC['version'])
+	_vinaHome = pwchemPlugin.getDefPath(VINA_DIC)
 	_vinaBinary = os.path.join(_vinaHome, 'AutoDock-Vina')
 
 	# VinaGPU
-	_vinagpuHome = os.path.join(pwem.Config.EM_ROOT, VINAGPU_DIC['name'] + '-' + VINAGPU_DIC['version'])
+	_vinagpuHome = pwchemPlugin.getDefPath(VINAGPU_DIC)
 	_vinagpuBinary = os.path.join(_vinagpuHome, 'AutoDock-VinaGPU')
 
 	# AutoSite
-	_asiteHome = os.path.join(pwem.Config.EM_ROOT, ASITE_DIC['name'] + '-' + ASITE_DIC['version'])
+	_asiteHome = pwchemPlugin.getDefPath(ASITE_DIC)
 	_asiteBinary = _asiteHome
+
+	# Ringtail
+	_ringtailHome = pwchemPlugin.getDefPath(RINGTAIL_DIC)
+
+	# Scrubber
+	_scrubberHome = pwchemPlugin.getDefPath(SCRUBBER_DIC)
+
+	# GCR models
+	_gcrHome = pwchemPlugin.getDefPath(GCR_DIC)
 
 
 	@classmethod
@@ -88,6 +98,9 @@ class Plugin(pwchemPlugin):
 		cls._defineEmVar(VINA_DIC['home'], cls._vinaHome)
 		cls._defineEmVar(VINAGPU_DIC['home'], cls._vinagpuHome)
 		cls._defineEmVar(ASITE_DIC['home'], cls._asiteHome)
+		cls._defineEmVar(SCRUBBER_DIC['home'], cls._scrubberHome)
+		cls._defineEmVar(RINGTAIL_DIC['home'], cls._ringtailHome)
+		cls._defineEmVar(GCR_DIC['home'], cls._gcrHome)
 	
 	@classmethod
 	def defineBinaries(cls, env):
@@ -99,6 +112,9 @@ class Plugin(pwchemPlugin):
 		cls.addVinaPackage(env)
 		#cls.addVinaGPUPackage(env)
 		cls.addAutoSitePackage(env)
+		cls.addRingtailPackage(env)
+		cls.addScrubberPackage(env)
+		cls.addGCRPackage(env)
 
 	@classmethod
 	def getEnviron(cls):
@@ -204,13 +220,52 @@ class Plugin(pwchemPlugin):
 			.addCommand(f'tar -zxf {cls.getASITETar()} --strip-components 1 && rm {cls.getASITETar()}', 'ASITE_EXTRACTED')\
 			.addCommand('./install.sh -d . -c 0 -l', 'ASITE_INSTALLED')
 		
-		# Generating meeko installation commands
-		installer.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED')
-
-		print(installer.getCommandList())
-		
 		# Adding package
 		installer.addPackage(env, dependencies=['wget', 'conda'], default=default)
+
+	@classmethod
+	def addRingtailPackage(cls, env, default=True):
+		""" This function provides the necessary commands for installing Ringtail and Meeko. """
+		# Instantiating the install helper
+		installer = InstallHelper(RINGTAIL_DIC['name'], packageHome=cls.getVar(RINGTAIL_DIC['home']),
+															packageVersion=RINGTAIL_DIC['version'])
+
+		# Installing package
+		installer.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && '
+												 f'conda install ringtail={RINGTAIL_DIC["version"]} pymol-open-source -y',
+												 'RINGTAIL_INSTALLED'). \
+			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}',
+								 'MEEKO_INSTALLED'). \
+			addPackage(env, dependencies=['conda'], default=default)
+
+	@classmethod
+	def addScrubberPackage(cls, env, default=True):
+		""" This function provides the necessary commands for installing Scrubber. """
+		# Instantiating the install helper
+		installer = InstallHelper(SCRUBBER_DIC['name'], packageHome=cls.getVar(SCRUBBER_DIC['home']),
+															packageVersion=SCRUBBER_DIC['version'])
+
+		# Installing package
+		installer.getCloneCommand(cls.getScrubberGithub(), targeName='SCRUBBER_CLONED'). \
+			addCommand(f'conda create --name {cls.getEnvName(SCRUBBER_DIC)} python=3.10 -y'). \
+			addCommand(f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && cd molscrub && pip install -e .',
+								 'SCRUBBER_INSTALLED').\
+			addPackage(env, dependencies=['git', 'conda', 'pip'], default=default)
+
+	@classmethod
+	def addGCRPackage(cls, env, default=True):
+		""" This function provides the necessary commands for installing GEDS. """
+		# Instantiating the install helper
+		installer = InstallHelper(GCR_DIC['name'], packageHome=cls.getVar(GCR_DIC['home']),
+															packageVersion=GCR_DIC['version'])
+
+		# Installing package
+		installer.getCloneCommand(cls.getGCRGithub(), binaryFolderName=cls.getEnvName(GCR_DIC), targeName='GCR_CLONED'). \
+			addCommand(f'cd {cls.getEnvName(GCR_DIC)} && conda env create -f environment.yml', 'GCR_INSTALLED'). \
+			addCommand(f'wget {cls.getChempropModelLink()}', 'CHEMPROP_MODEL'). \
+			addCommand(f'{cls.getEnvActivationCommand(GCR_DIC)} && git clone {cls.getCOATIGithub()} && '
+								 f'cd COATI && pip install .', 'COATI_INSTALLED'). \
+			addPackage(env, dependencies=['git', 'conda', 'pip'], default=default)
 
 	# ---------------------------------- Protocol functions-----------------------
 	@classmethod
@@ -234,6 +289,33 @@ class Plugin(pwchemPlugin):
 		if program == 'vina':
 			program = cls.getVinaPath('bin/vina')
 		protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
+
+	@classmethod
+	def runMeekoLigand(cls, protocol, args, cwd=None, popen=False):
+		fullProgram = f'{cls.getEnvActivationCommand(RDKIT_DIC)} && mk_prepare_ligand.py '
+		if not popen:
+			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+		else:
+			subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+
+	@classmethod
+	def runScrubber(cls, protocol, args, cwd=None, popen=False):
+		fullProgram = f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && scrub.py '
+		if not popen:
+			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+		else:
+			subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+
+	@classmethod
+	def runRingtail(cls, protocol, args, cwd=None, popen=False, getOutput=False):
+		fullProgram = f'{cls.getEnvActivationCommand(RDKIT_DIC)} && rt_process_vs '
+		if not popen:
+			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+		else:
+			if getOutput:
+				return subprocess.check_output(f'{fullProgram} {args}', cwd=cwd, shell=True)
+			else:
+				subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
 	@classmethod
 	def runScript(cls, protocol, scriptName, args, envDict, cwd=None, popen=False):
@@ -268,6 +350,10 @@ class Plugin(pwchemPlugin):
 		return cls.getPluginHome('scripts/%s' % scriptName)
 
 	@classmethod
+	def getModelsDir(cls, modelName=''):
+		return os.path.join(cls.getPluginHome(f'models'), modelName)
+
+	@classmethod
 	def getVinaPath(cls, path=''):
 		return os.path.join(cls.getVar('VINA_HOME'), path)
 
@@ -282,6 +368,10 @@ class Plugin(pwchemPlugin):
 	@classmethod
 	def getADTPath(cls, path=''):
 		return pwchemPlugin.getProgramHome(MGL_DIC, os.path.join('MGLToolsPckgs', 'AutoDockTools', path))
+
+	@classmethod
+	def getGCRPath(cls, path=''):
+		return pwchemPlugin.getProgramHome(GCR_DIC, path)
 
 	@classmethod
 	def getADTSuiteUrl(cls):
@@ -300,6 +390,26 @@ class Plugin(pwchemPlugin):
 	@classmethod
 	def getVinaGithub(cls):
 		return 'https://github.com/ccsb-scripps/AutoDock-Vina.git'
+
+	@classmethod
+	def getScrubberGithub(cls):
+		return 'https://github.com/forlilab/molscrub.git'
+
+	@classmethod
+	def getGCRGithub(cls):
+		return 'https://github.com/DaniDelHoyo/GCR_Regression_ForliLab.git'
+
+	@classmethod
+	def getChempropModelLink(cls, modelFile='example_model_v2_regression_mol.ckpt'):
+		return f'https://github.com/chemprop/chemprop/raw/refs/heads/main/tests/data/{modelFile}'
+
+	@classmethod
+	def getChemPropFile(cls):
+		return os.path.abspath(pwchemPlugin.getProgramHome(GCR_DIC, chemPropFile))
+
+	@classmethod
+	def getCOATIGithub(cls):
+		return 'https://github.com/terraytherapeutics/COATI.git'
 
 	@classmethod
 	def getADTTar(cls):

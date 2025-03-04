@@ -24,17 +24,30 @@
 # *
 # **************************************************************************
 
+# Preparation receptor
 from .protocol_preparation_receptor import ProtChemADTPrepareReceptor
+from .protocol_generate_grid import AutodockGridGeneration
+
+# Preparation ligans
 from .protocol_preparation_ligands import ProtChemADTPrepareLigands
+from .protocol_scrubber_ligand_prep import ProtScrubberPrepareLigands
+from .protocol_meeko_ligands import ProtChemMeekoLigands
+
+# ROI definition
+from .protocol_autoLigand import ProtChemAutoLigand
+from .protocol_autoSite import ProtChemAutoSite
+
+#  Docking
 from .protocol_autodock import ProtChemAutodock
 from .protocol_autodockGPU import ProtChemAutodockGPU
-from .protocol_autoLigand import ProtChemAutoLigand
-from .protocol_generate_grid import AutodockGridGeneration
-from .protocol_autoSite import ProtChemAutoSite
-from .protocol_autoSite_pharmacophore import ProtChemAutoSiteGenPharmacophore
-from .protocol_meeko_ligands import ProtChemMeekoLigands
 from .protocol_dock_vina import ProtChemVinaDocking
-from .protocol_autodock_score import ProtChemAutodockScore
+from .protocol_ringtail_create import ProtRingtailCreation
+from .protocol_ringtail_filter import ProtRingtailFilter
 
+# Pharmacophores
+from .protocol_autoSite_pharmacophore import ProtChemAutoSiteGenPharmacophore
+
+# Scoring
+from .protocol_autodock_score import ProtChemAutodockScore
 from .protocol_encoder_dock_scoring import ProtEncoderDockScoring
 

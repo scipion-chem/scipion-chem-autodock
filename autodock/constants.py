@@ -35,4 +35,9 @@ ADGPU_DIC =     {'name': 'AutoDockGPU', 'version': DEFAULT_VERSION, 'home': 'ADG
 VINA_DIC =      {'name': 'Vina',        'version': '1.2.3',         'home': 'VINA_HOME'}
 VINAGPU_DIC =   {'name': 'VinaGPU',     'version': DEFAULT_VERSION, 'home': 'VINAGPU_HOME'}
 ASITE_DIC =     {'name': 'AutoSite',    'version': DEFAULT_VERSION, 'home': 'AUTOSITE_HOME'}
-MEEKO_DIC =     {'name': 'meeko',       'version': '0.3.3'}
+MEEKO_DIC =     {'name': 'meeko',       'version': '0.6.1'}
+RINGTAIL_DIC =  {'name': 'ringtail',    'version': '2.1.1', 'home': 'RINGTAIL_HOME'}
+SCRUBBER_DIC =  {'name': 'scrubber',     'version': '0.1.1', 'home': 'SCRUBBER_HOME'}
+GCR_DIC =       {'name': 'gcr',     'version': '0.1', 'home': 'GCR_HOME'}
+
+ADGPU, VINA = 'ADGPU', 'Vina'

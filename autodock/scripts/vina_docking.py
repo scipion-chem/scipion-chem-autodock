@@ -23,27 +23,15 @@
 # *
 # **************************************************************************
 import os, sys
-
 from vina import Vina
 
-def getBaseFileName(filename):
-    return os.path.splitext(os.path.basename(filename))[0]
+from utils import getBaseName, parseParams
 
-def parseParams(paramsFile):
-    paramsDic = {}
-    with open(paramsFile) as f:
-        for line in f:
-            key, value = line.strip().split('::')
-            if key == 'ligandFiles' or key == 'moleculesFiles':
-                paramsDic[key] = value.strip().split()
-            else:
-                paramsDic[key] = value.strip()
-    return paramsDic
 
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile> <outputDir>
     '''
-    pDic = parseParams(sys.argv[1])
+    pDic = parseParams(sys.argv[1], listParams=['ligandFiles', 'moleculesFiles'], sep='::')
     ligandFiles = pDic['ligandFiles']
     receptorFile = pDic['receptorFile']
     flexRecFile = pDic['flexRecFile'] if 'flexRecFile' in pDic else None
@@ -68,7 +56,7 @@ if __name__ == "__main__":
         v.dock(exhaustiveness=int(pDic['exhaust']), n_poses=int(pDic['nPoses']),
                min_rmsd=float(pDic['minRMSD']), max_evals=int(pDic['maxEvals']))
 
-        outFile = os.path.join(outDir, getBaseFileName(molFile)) + '.pdbqt'
+        outFile = os.path.join(outDir, getBaseName(molFile)) + '.pdbqt'
         v.write_poses(pdbqt_filename=outFile)
         outFiles.append(outFile)
 

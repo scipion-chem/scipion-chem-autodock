@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os, glob
+import os, glob, shutil
 
 from pyworkflow.protocol import params
 import pyworkflow.object as pwobj
@@ -37,10 +37,12 @@ from pwchem.constants import RDKIT_DIC
 
 from autodock import Plugin as autodockPlugin
 from autodock.protocols import ProtChemAutodockGPU
+from autodock.constants import GCR_DIC
 
-encoderOptions = ['GraphResNet', 'ChemProp', 'COATI']
+encoderOptions = ['ResNet', 'ChemProp', 'COATI']
 preprocOptions = ['None', 'LigEff', 'PowerOf']
 
+gonnaTrain = 'not loadModel or (loadModel and doTrain)'
 
 def average(l):
   return sum(l) / len(l)
@@ -53,6 +55,14 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
   _program = ""
 
   def _defineParams(self, form):
+    form.addHidden(params.USE_GPU, params.BooleanParam, default=True,
+                   label="Use GPU for execution: ",
+                   help="This protocol has both CPU and GPU implementation.\
+                                             Select the one you want to use.")
+
+    form.addHidden(params.GPU_LIST, params.StringParam, default='0', label="Choose GPU IDs",
+                   help="Add a list of GPU devices that can be used")
+
     form.addSection(label="Prediction")
     group = form.addGroup('Input')
     group.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
@@ -66,22 +76,26 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
                    help='Choose the pretrained model from in the scipion framework using the wizard or set the '
                         'path to the model directory if found somewhere else')
 
+    group.addParam('doTrain', params.BooleanParam, label='Train model: ', default=False, condition='loadModel',
+                   help='Whether to load a pretrained model or use some docked molecules to train a new one')
+    group.addParam('modelName', params.StringParam, label='Model name: ', default='', condition='not loadModel',
+                   help='Set a name of the system model')
     group.addParam('dockedMols', params.PointerParam, pointerClass="SetOfSmallMolecules",
-                   label='Input docked molecules for training: ', condition='not loadModel',
+                   label='Input docked molecules for training: ', condition=gonnaTrain,
                    help='Input SetOfSmallMolecules that must be docked to the input receptor and whose scores will be '
                         'used to train the model')
-    group.addParam('scoreName', params.StringParam, label='Docking score: ', default='', condition='not loadModel',
+    group.addParam('scoreName', params.StringParam, label='Docking score: ', default='', condition=gonnaTrain,
                    help='Docking score to use for the model training')
     group.addParam('scoreMerge', params.EnumParam, label='Merge strategy: ', choices=['Min', 'Max', 'Mean'], default=0,
-                   expertLevel=params.LEVEL_ADVANCED, condition='not loadModel',
+                   expertLevel=params.LEVEL_ADVANCED, condition=gonnaTrain,
                    help='How to merge the scores if several values are found for the same molecule (because of '
                         'conformers or poses')
 
     group.addParam('batch', params.IntParam, label='Batch size: ', default=256,
-                   expertLevel=params.LEVEL_ADVANCED, condition='not loadModel',
+                   expertLevel=params.LEVEL_ADVANCED, condition=gonnaTrain,
                    help='Batch size to use for training.')
     group.addParam('seed', params.IntParam, label='Random seed: ', default=44,
-                   expertLevel=params.LEVEL_ADVANCED, condition='not loadModel',
+                   expertLevel=params.LEVEL_ADVANCED, condition=gonnaTrain,
                    help='Random seed.')
 
     group = form.addGroup('Encoder')
@@ -108,38 +122,150 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
                         '[256, 256, 128] defines the default regressor with 3 hidden layers of 256, 256 and 128 '
                         'neurons respectively.')
 
-    form.addParallelSection(threads=4, mpi=1)
-
   # --------------------------- INSERT steps functions --------------------
   def _insertAllSteps(self):
-      if not self.loadModel.get():
+      if not self.loadModel.get() or (self.loadModel.get() and self.doTrain.get()):
         self._insertFunctionStep('trainingStep')
+      self._insertFunctionStep('predictionStep')
       self._insertFunctionStep('createOutputStep')
 
   def trainingStep(self):
+    encoderName = self.getEnumText('encoder').lower()
+    sysName = self.getSystemName()
+    confFile = self.writeConfFile()
+    scriptName = self.getScriptPath()
+
+    # todo: save model in autodock/models or similar (COATI LEFT)
     dMols = self.dockedMols.get()
-    inDockFile = self.writeInputDocksFile(dMols)
+    smisFile = os.path.abspath(self.buildSMIsFile(dMols, writeScores=True))
+    args = f'--config {confFile} -n {sysName} -e {encoderName} -ef {autodockPlugin.getChemPropFile()} ' \
+           f'-p {smisFile} --doTest --testBest 1 --doTrain '
 
-    args = f'{inDockFile} {self.getInputSMIFile()}'
-    autodockPlugin.runScript(self, 'convertToSMIs.py', args, envDict=RDKIT_DIC)
-    self.mergeSMIscores()
+    modelsPath = os.path.abspath(autodockPlugin.getPluginHome('models'))
+    pwchemPlugin.runCondaCommand(self, args, GCR_DIC, f'python {scriptName}', cwd=self._getPath())
 
-    self.runJob('conda activate dockRegressor && ')
+    shutil.copytree(os.path.abspath(self._getPath(sysName)), os.path.join(modelsPath, sysName), dirs_exist_ok=True)
 
+
+  def predictionStep(self):
+    confFile = self.writeConfFile()
+    sysName = self.getSystemName()
+    scriptName = self.getScriptPath()
+
+    inMols = self.inputSmallMolecules.get()
+    # todo: smidic smi: mol
+    smisFile = os.path.abspath(self.buildSMIsFile(inMols, writeScores=False))
+    args = f'--config {confFile} -n {sysName} -d {sysName} -p {smisFile} --doPredict ' \
+           f'-ef {autodockPlugin.getChemPropFile()} '
+
+    modelsPath = os.path.abspath(autodockPlugin.getPluginHome('models'))
+    shutil.copytree(os.path.join(modelsPath, sysName), os.path.abspath(self._getPath(sysName)), dirs_exist_ok=True)
+
+    pwchemPlugin.runCondaCommand(self, args, GCR_DIC, f'python {scriptName}', cwd=self._getPath())
+
+
+  def getScriptPath(self):
+    return '/home/danieldh/trial/GCR_Regression_ForliLab/main.py'
+    # return autodockPlugin.getGCRPath(f'{autodockPlugin.getEnvName(GCR_DIC)}/main.py')
+
+  def getConfFile(self):
+    return os.path.abspath(self._getExtraPath('config.yaml'))
+
+  def writeConfFile(self):
+    confFile = self.getConfFile()
+    gpuIdx = getattr(self, params.GPU_LIST).get().split(',')[0].strip()
+    regLayers = eval(self.regLayers.get().strip()) + [1]
+    with open(confFile, 'w') as f:
+      f.write(f'frozenEncoder: True\n'
+              f'layers: {self.encLayers.get()}\n'
+              f'filtSizes: {self.filtSizes.get()}\n'
+              f'pool: "{self.getEnumText("encPool").lower()}"\n\n'
+              f'prePropFunc: {self.getEnumText("preprocess")}\n'
+              f'regLayers: {regLayers}\n\n'
+              f'seed: {self.seed.get()}\n'
+              f'cuda: "cuda:{gpuIdx}"\n'
+              f'batchSize: {self.batch.get()}\n')
+    return confFile
+
+  def buildSMIsFile(self, dMols, writeScores=True):
+    getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
+    molFile = getattr(dMols.getFirstItem(), getFileFunc)()
+
+    inp = 'train' if writeScores else 'predict'
+    smiFile = self.getInputSMIFile(inp)
+    if not self.checkHasSMI(molFile):
+      inDockFile = self.writeInputDocksFile(dMols, writeScores)
+      args = f'{inDockFile} {smiFile}'
+      autodockPlugin.runScript(self, 'convertToSMIs.py', args, envDict=RDKIT_DIC)
+    else:
+      self.writeMeekoSMIs(dMols, writeScores)
+
+    if writeScores:
+      self.mergeSMIscores()
+    return smiFile
+
+  def getSystemName(self):
+    if self.loadModel.get():
+      sysName = self.pretrainedModel.split('/')[-1]
+    else:
+      if self.modelName.get().strip():
+        sysName = self.modelName.get().strip()
+      else:
+        sysFile = self.dockedMols.get().getProteinFile()
+        sysName = f"{sysFile.split('/')[-1]}_{self.getObjId()}"
+    return sysName
+
+
+
+
+
+
+  def writeMeekoSMIs(self, mols, writeScores=True):
+    getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
+    with open(self.getInputSMIFile(), 'w') as f:
+      for mol in mols:
+        molFile = getattr(mol, getFileFunc)()
+
+        line = f'{self.parseMeekoSMI(molFile)}'
+        if writeScores:
+          score = getattr(mol, self.scoreName.get())
+          line += f',{score}'
+        line += '\n'
+
+        f.write(line)
+
+  def parseMeekoSMI(self, molFile):
+    with open(molFile) as f:
+      for line in f:
+        if 'REMARK SMILES' in line:
+          smi = line.split('REMARK SMILES')[1].strip()
+          return smi
+
+
+  def checkHasSMI(self, molFile):
+    with open(molFile) as f:
+      txt = f.read()
+    return 'REMARK SMILES' in txt
 
 
   def getInputDockFile(self):
     return self._getExtraPath('inputDock.csv')
 
-  def getInputSMIFile(self):
-    return self._getExtraPath('inputSMIs.csv')
+  def getInputSMIFile(self, input='train'):
+    return self._getExtraPath(f'inputSMIs_{input}.csv')
 
-  def writeInputDocksFile(self, mols):
+  def writeInputDocksFile(self, mols, writeScores=True):
+    getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
     inDocksFiles = self.getInputDockFile()
     with open(inDocksFiles, 'w') as f:
       for m in mols:
-        score = getattr(m, self.scoreName.get())
-        f.write(f'{m.getPoseFile()},{score}\n')
+        line = getattr(m, getFileFunc)()
+        if writeScores:
+          score = getattr(m, self.scoreName.get())
+          line += f",{score}"
+        line += '\n'
+
+        f.write(line)
     return inDocksFiles
 
   def getMergeFunction(self):

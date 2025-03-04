@@ -27,9 +27,8 @@ import os
 
 from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, LEVEL_ADVANCED
 
-from pwchem.utils import runOpenBabel
+from pwchem.utils import runOpenBabel, mergeSDFs
 from pwchem.objects import SetOfSmallMolecules
-from pwchem.constants import RDKIT_DIC
 
 from autodock import Plugin
 from autodock.protocols import ProtChemADTPrepareLigands
@@ -46,10 +45,6 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
         form.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
                       label='Set of small molecules:', allowsNull=False,
                       help='Input small molecules to be prepared with Meeko')
-
-        form.addParam('keepHs', BooleanParam, default=False,
-                      label='Keep non-polar hydrogens:',
-                      help='Keep non-polar hydrogens:')
 
         form.addParam('hydrate', BooleanParam, default=False,
                       label='Hydrate molecule:', expertLevel=LEVEL_ADVANCED,
@@ -85,16 +80,25 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
 
     def preparationStep(self):
         mols = self.inputSmallMolecules.get()
-        paramsFile = self.writeParamsFile(mols)
+        molFiles = [mol.getFileName() for mol in mols]
 
-        Plugin.runScript(self, scriptName, paramsFile, envDict=RDKIT_DIC, cwd=self._getExtraPath())
+        oDir = os.path.abspath(self._getExtraPath())
+        mergedFile = mergeSDFs(molFiles, oDir=oDir)
+
+        args = f'-i {mergedFile} --multimol_outdir {oDir} '
+        if self.hydrate.get():
+          args += '-w '
+
+        Plugin.runMeekoLigand(self, args)
 
     def conformerGenerationStep(self):
       """ Generate a number of conformers of the same small molecule in pdbqt format with
           openbabel using two different algorithm
       """
-      with open(self._getPath('meeko_files.txt')) as fIn:
-          prepFiles = fIn.read().split()
+      prepFiles = []
+      for file in os.listdir(self._getExtraPath()):
+        if file.endswith('.pdbqt'):
+          prepFiles.append(self._getExtraPath(file))
 
       for file in prepFiles:
         fnRoot = os.path.split(file)[1].split(".pdbqt")[0]  # ID or filename without _meeko.pdbqt
@@ -109,17 +113,19 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
         runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
 
     def createOutputStep(self):
-        with open(self._getPath('meeko_files.txt')) as fIn:
-          prepFiles = fIn.read().split()
+      prepFiles = []
+      for file in os.listdir(self._getExtraPath()):
+        if file.endswith('.pdbqt') and 'conformers.pdbqt' not in file:
+          prepFiles.append(self._getExtraPath(file))
 
-        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
-        for file in prepFiles:
-            fnRoot = os.path.split(file)[1].split('.pdbqt')[0]
-            outputSmallMolecules = self.indOutputCreation(file, fnRoot, outputSmallMolecules)
+      outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
+      for file in prepFiles:
+          fnRoot = os.path.split(file)[1].split('.pdbqt')[0]
+          outputSmallMolecules = self.indOutputCreation(file, fnRoot, outputSmallMolecules)
 
-        outputSmallMolecules.updateMolClass()
-        self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
-        self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
+      outputSmallMolecules.updateMolClass()
+      self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
+      self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
 
     def writeParamsFile(self, molsScipion):
@@ -131,7 +137,6 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
             molFiles.append(os.path.abspath(mol.getFileName()))
 
         f.write('ligandFiles:: {}\n'.format(' '.join(molFiles)))
-        f.write('keepNonPolar:: {}\n'.format(self.keepHs.get()))
         f.write('hydrate:: {}\n'.format(self.hydrate.get()))
 
         f.write('outDir:: {}\n'.format(os.path.abspath(self._getPath())))

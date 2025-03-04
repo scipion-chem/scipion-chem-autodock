@@ -24,77 +24,30 @@
 # **************************************************************************
 import os, sys
 
-from rdkit import Chem
 from meeko import MoleculePreparation
 
-
-def getBaseFileName(filename):
-    return os.path.splitext(os.path.basename(filename))[0]
-
-def readLigands(ligandsFiles, removeHs=False):
-    mols_dict = {}
-
-    for molFile in ligandsFiles:
-        if molFile.endswith('.mol2'):
-            m = Chem.MolFromMol2File(molFile, removeHs=removeHs)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.mol'):
-            m = Chem.MolFromMolFile(molFile, removeHs=removeHs)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.pdb'):
-            m = Chem.MolFromPDBFile(molFile, removeHs=removeHs)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.smi'):
-            f = open(molFile, "r")
-            firstline = next(f)
-            m = Chem.MolFromSmiles(str(firstline), removeHs=removeHs)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.sdf'):
-            suppl = Chem.SDMolSupplier(molFile, removeHs=removeHs)
-            for mol in suppl:
-                mols_dict[mol] = molFile
-
-    mols = list(mols_dict.keys())
-
-    return mols_dict, mols
-
-def parseParams(paramsFile):
-    paramsDic = {}
-    with open(paramsFile) as f:
-        for line in f:
-            key, value = line.strip().split('::')
-            if key == 'ligandFiles' or key == 'moleculesFiles':
-                paramsDic[key] = value.strip().split()
-            else:
-                paramsDic[key] = value.strip()
-    return paramsDic
+from utils import getMolFilesDic, parseParams, getBaseName
 
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile> 
     '''
-    paramsDic = parseParams(sys.argv[1])
+    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles', 'moleculesFiles'], sep='::')
     ligandFiles = paramsDic['ligandFiles']
-    keepHs = eval(paramsDic['keepNonPolar'])
     hydra = eval(paramsDic['hydrate'])
 
     outDir = paramsDic['outDir']
 
 
 #####################################################################
-    molFileDic, mols = readLigands(ligandFiles)
+    molFileDic, mols = getMolFilesDic(ligandFiles)
     outFiles = []
     if len(mols) > 0:
-        preparator = MoleculePreparation(keep_nonpolar_hydrogens=keepHs, hydrate=hydra)
+        preparator = MoleculePreparation(hydrate=hydra)
         for mol in mols:
             preparator.prepare(mol)
-            preparator.show_setup()
 
             inFile = molFileDic[mol]
-            outFile = os.path.join(outDir, getBaseFileName(inFile)) + '.pdbqt'
+            outFile = os.path.join(outDir, getBaseName(inFile)) + '.pdbqt'
             preparator.write_pdbqt_file(outFile)
             outFiles.append(outFile)
 

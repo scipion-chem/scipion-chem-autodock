@@ -1,9 +1,6 @@
 # Utils for the scripts
 import os
 
-def getBaseName(file):
-  return os.path.splitext(os.path.basename(file.strip()))[0]
-
 def parseParams(paramsFile, listParams=[], evalParams=[], sep=':'):
   paramsDic = {}
   with open(paramsFile) as f:
@@ -77,3 +74,6 @@ def parsePDBQT(pdbqtFile):
     return Chem.MolToSmiles(mol)
   else:
     return "Molecule could not be loaded"
+
+def getBaseName(file):
+  return os.path.splitext(os.path.basename(file.strip()))[0]
