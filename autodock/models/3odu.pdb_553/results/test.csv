@@ -1,0 +1,20 @@
+SMILES,Real value,Model Prediction
+[C]c1[c][c]c(C(=O)N[C][C]c2[c][c]c(F)[c][c]2)s1,-5.42,-1.2535468
+[C]c1[c][c]n2c(=O)c(C(=O)N([C])c3n[c][c][c]c3F)[c]nc2[c]1,-7.05,-2.2319045
+[C]c1[c][c][c]c(O[C][C](O)[C]NC(=O)c2[c]c(-c3[c][c][c][c]n3)no2)[c]1,-5.9,-3.4685483
+O=C(N1[C][C]S(=O)(=O)c2[c][c][c][c]c2[C]1)C1([C](F)F)[C][C]1,-5.77,-3.5395584
+[C]n1n[c][c]c1[C]1[C]N(S(=O)(=O)[C]c2[c][c]c(-n3[c][c][c]n3)[c][c]2)[C][C]1N,-7.02,-2.4532673
+[C]Oc1[c][c]c(-c2nnc3sc(NC([C])=O)nn23)[c]c1O[C],-6.03,-2.8718681
+[C][C][C]c1nnc(NC(=O)[C]2[C]C(=O)N(c3[c][c]c([C])[c][c]3)[C]2)s1,-5.22,-3.0187452
+O=C(Nc1[c][c][c][c]n1)[C]1[C][C]N(C(=O)c2[c][c]c(F)[c]c2F)[C][C]1,-4.48,-3.2031605
+N#Cc1[c][c][c]c(-n2c(=O)[nH]c3[c]c(F)[c][c]c32)[c]1,-5.43,-5.5938935
+[C][C][C][C]NC(=O)c1c(O)c2[c][c][c]nc2n(-c2[c][c][c]c(O[C])[c]2)c1=O,-6.16,-3.4585872
+[C]N([C])c1[c]c(C(=O)Nc2[c][c][c]c(C#[C])[c]2)[c][c]n1,-4.78,-2.9927764
+O=C1N[C]2[C][C]N(C(=O)[C][C]c3n[c]c(-c4[c][c]c(F)[c][c]4)o3)[C][C]2[C]O1,-5.29,-3.1716373
+[C][C][C]([C][C])[C]([C]NC(=O)c1[c]nn([C])c1-n1[c][c][c][c]1)N1[C][C]O[C][C]1,-6.67,-0.80655044
+[C]c1[c][c]c(C(=O)Nc2[c][c][c]n[c]2)[c]c1S(=O)(=O)N1[C][C][C][C][C][C]1,-5.1,-5.6680727
+[C][C]NC(=O)[C]1[C][C][C]N([C]2N=C3N=[C]N([C]C(=O)Nc4[c][c][c]c(F)[c]4)C(=O)[C]3S2)[C]1,-4.91,-3.0459788
+[C]c1[c]c([C])n([C][C]2[C]N([C]c3nc([C])c([C])o3)[C][C]O2)n1,-5.2,-2.1298273
+[C][C]NC(=O)c1[c][c]c2c([c]1)[C][C]N2C(=O)[C]([C])[C],-5.03,-0.9725091
+N#C[C][C][C][C]S(=O)(=O)c1[c][c]c2[c][c][c][c]c2[c]1,-5.54,-4.114207
+[C][C]c1[c]c(=O)oc2c(O[C])c(O[C])[c][c]c12,-4.92,-3.5277393

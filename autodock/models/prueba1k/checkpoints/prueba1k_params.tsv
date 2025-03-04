@@ -1,0 +1,12 @@
+frozenEncoder : True
+layers : [2, 2, 2, 1]
+filtSizes : [64, 128, 256, 256]
+pool : max
+prePropFunc : None
+regLayers : [300, 256, 128, 1]
+seed : 44
+cuda : cuda:0
+batchSize : 256
+encoderName : chemprop
+nWorkers : 4
+device : cuda:0

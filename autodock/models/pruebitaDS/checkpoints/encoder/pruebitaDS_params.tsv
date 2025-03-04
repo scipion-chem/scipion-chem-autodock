@@ -1,0 +1,4 @@
+layers : [2, 2, 2, 1]
+filtSizes : [64, 128, 256, 256]
+pool : max
+encoderName : chemprop
