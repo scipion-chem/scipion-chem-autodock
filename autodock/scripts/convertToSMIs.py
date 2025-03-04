@@ -50,19 +50,22 @@ if __name__ == "__main__":
     '''
     inFile = sys.argv[1]
     outFile = sys.argv[2]
+    mapFile = sys.argv[3]
 
 
 #####################################################################
-    with open(outFile, 'w') as fo:
-        with open(inFile) as f:
-            for line in f:
-                molFile = line.split(',')[0].strip()
-                if molFile.endswith('.pdbqt'):
-                    smi = pdbqt_to_smi(molFile)
-                    mol = Chem.MolFromSmiles(smi)
-                else:
-                    mol = parseMoleculeFile(molFile)
+    with open(mapFile, 'w') as fMap:
+        with open(outFile, 'w') as fo:
+            with open(inFile) as f:
+                for line in f:
+                    molFile = line.split(',')[0].strip()
+                    if molFile.endswith('.pdbqt'):
+                        smi = pdbqt_to_smi(molFile)
+                        mol = Chem.MolFromSmiles(smi)
+                    else:
+                        mol = parseMoleculeFile(molFile)
 
-                canonical_smiles = Chem.MolToSmiles(mol, canonical=True)
-                fo.write(line.replace(molFile, canonical_smiles))
+                    canonical_smiles = Chem.MolToSmiles(mol, canonical=True)
+                    fMap.write(f'{molFile},{canonical_smiles}\n')
+                    fo.write(line.replace(molFile, canonical_smiles))
 

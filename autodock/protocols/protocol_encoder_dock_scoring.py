@@ -153,7 +153,6 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     scriptName = self.getScriptPath()
 
     inMols = self.inputSmallMolecules.get()
-    # todo: smidic smi: mol
     smisFile = os.path.abspath(self.buildSMIsFile(inMols, writeScores=False))
     args = f'--config {confFile} -n {sysName} -d {sysName} -p {smisFile} --doPredict ' \
            f'-ef {autodockPlugin.getChemPropFile()} '
@@ -164,9 +163,44 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     pwchemPlugin.runCondaCommand(self, args, GCR_DIC, f'python {scriptName}', cwd=self._getPath())
 
 
+  def createOutputStep(self):
+    scoreDic = self.getScoreDic()
+    outputSet = self.inputSmallMolecules.get().createCopy(self._getPath(), copyInfo=True)
+    for mol in self.inputSmallMolecules.get():
+      nMol = mol.clone()
+      molFile = nMol.getFileName()
+      setattr(nMol, '_gcrScore', params.Float(scoreDic[molFile]))
+      outputSet.append(nMol)
+
+
+    outputSet.updateMolClass()
+    self._defineOutputs(outputSmallMolecules=outputSet)
+    self._defineSourceRelation(self.inputSmallMolecules, outputSet)
+
+
+
+
+  def getOutputCSV(self):
+    sysName = self.getSystemName()
+    return self._getPath(os.path.join(sysName, 'results/predictions.csv'))
+
+
+  def getScoreDic(self):
+    mapDic = self.parseCSVDic(self.getMapSMIFile())
+    smiScoreDic = self.parseCSVDic(self.getOutputCSV())
+    scoreDic = {molFile: float(eval(smiScoreDic[smi])[0]) for molFile, smi in mapDic.items()}
+    return scoreDic
+
+  def parseCSVDic(self, csvFile):
+    smiDic = {}
+    with open(csvFile) as f:
+      for line in f:
+        sline = line.strip().split(',')
+        smiDic[sline[0]] = sline[1]
+    return smiDic
+
   def getScriptPath(self):
-    return '/home/danieldh/trial/GCR_Regression_ForliLab/main.py'
-    # return autodockPlugin.getGCRPath(f'{autodockPlugin.getEnvName(GCR_DIC)}/main.py')
+    return autodockPlugin.getGCRPath(f'{autodockPlugin.getEnvName(GCR_DIC)}/main.py')
 
   def getConfFile(self):
     return os.path.abspath(self._getExtraPath('config.yaml'))
@@ -195,7 +229,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     smiFile = self.getInputSMIFile(inp)
     if not self.checkHasSMI(molFile):
       inDockFile = self.writeInputDocksFile(dMols, writeScores)
-      args = f'{inDockFile} {smiFile}'
+      args = f'{inDockFile} {smiFile} {self.getMapSMIFile(inp)}'
       autodockPlugin.runScript(self, 'convertToSMIs.py', args, envDict=RDKIT_DIC)
     else:
       self.writeMeekoSMIs(dMols, writeScores)
@@ -215,24 +249,24 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
         sysName = f"{sysFile.split('/')[-1]}_{self.getObjId()}"
     return sysName
 
-
-
-
-
-
   def writeMeekoSMIs(self, mols, writeScores=True):
+    inp = 'train' if writeScores else 'predict'
     getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
-    with open(self.getInputSMIFile(), 'w') as f:
-      for mol in mols:
-        molFile = getattr(mol, getFileFunc)()
+    with open(self.getMapSMIFile(inp), 'w') as fMap:
+      with open(self.getInputSMIFile(), 'w') as f:
+        for mol in mols:
+          molFile = getattr(mol, getFileFunc)()
 
-        line = f'{self.parseMeekoSMI(molFile)}'
-        if writeScores:
-          score = getattr(mol, self.scoreName.get())
-          line += f',{score}'
-        line += '\n'
+          smi = self.parseMeekoSMI(molFile)
+          fMap.write(f'{molFile},{smi}\n')
 
-        f.write(line)
+          line = smi
+          if writeScores:
+            score = getattr(mol, self.scoreName.get())
+            line += f',{score}'
+          line += '\n'
+
+          f.write(line)
 
   def parseMeekoSMI(self, molFile):
     with open(molFile) as f:
@@ -241,18 +275,19 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
           smi = line.split('REMARK SMILES')[1].strip()
           return smi
 
-
   def checkHasSMI(self, molFile):
     with open(molFile) as f:
       txt = f.read()
     return 'REMARK SMILES' in txt
 
-
   def getInputDockFile(self):
     return self._getExtraPath('inputDock.csv')
 
-  def getInputSMIFile(self, input='train'):
-    return self._getExtraPath(f'inputSMIs_{input}.csv')
+  def getInputSMIFile(self, inp='train'):
+    return self._getExtraPath(f'inputSMIs_{inp}.csv')
+
+  def getMapSMIFile(self, inp='predict'):
+    return self._getExtraPath(f'mapSMIs_{inp}.csv')
 
   def writeInputDocksFile(self, mols, writeScores=True):
     getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
@@ -293,44 +328,4 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
         f.write(f'{smi},{score}\n')
 
     return smiDic
-
-
-
-
-
-
-
-  def converToSMI(self, mols):
-    smiDir = self.getInputSMIDir()
-    if not os.path.exists(smiDir):
-      os.makedirs(smiDir)
-
-    molDir = self.copyInputMolsInDir(mols)
-    args = ' --multiFiles -iD "{}" --pattern "{}" -of smi --outputDir "{}"'. \
-      format(molDir, '*', smiDir)
-    pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=smiDir)
-    return smiDir
-
-  def parseSMIs(self, smiDir):
-    smiDic = {}
-    for smiFile in os.listdir(smiDir):
-      smiPath = os.path.join(smiDir, smiFile)
-      with open(smiPath) as f:
-        smi = f.read().strip()
-
-
-
-  def copyInputMolsInDir(self, mols):
-    oDir = os.path.abspath(self._getTmpPath('inMols'))
-    if not os.path.exists(oDir):
-      os.makedirs(oDir)
-
-    for mol in mols:
-      os.link(mol.getFileName(), os.path.join(oDir, os.path.split(mol.getFileName())[-1]))
-    return oDir
-
-  def getInputSMIDir(self):
-    return os.path.abspath(self._getExtraPath('inputSMI'))
-
-
 
