@@ -27,8 +27,9 @@ import os
 
 from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, LEVEL_ADVANCED
 
-from pwchem.utils import runOpenBabel, mergeSDFs
+from pwchem.utils import runOpenBabel
 from pwchem.objects import SetOfSmallMolecules
+from pwchem.constants import RDKIT_DIC
 
 from autodock import Plugin
 from autodock.protocols import ProtChemADTPrepareLigands
@@ -83,13 +84,8 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
         molFiles = [mol.getFileName() for mol in mols]
 
         oDir = os.path.abspath(self._getExtraPath())
-        mergedFile = mergeSDFs(molFiles, oDir=oDir)
-
-        args = f'-i {mergedFile} --multimol_outdir {oDir} '
-        if self.hydrate.get():
-          args += '-w '
-
-        Plugin.runMeekoLigand(self, args)
+        paramsFile = self.writeParamsFile(molFiles, oDir)
+        Plugin.runScript(self, scriptName, paramsFile, RDKIT_DIC)
 
     def conformerGenerationStep(self):
       """ Generate a number of conformers of the same small molecule in pdbqt format with
@@ -128,18 +124,14 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
       self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
 
-    def writeParamsFile(self, molsScipion):
+    def writeParamsFile(self, molFiles, oDir):
         paramsFile = os.path.abspath(self._getExtraPath('inputParams.txt'))
 
-        molFiles = []
-        f = open(paramsFile, 'w')
-        for mol in molsScipion:
-            molFiles.append(os.path.abspath(mol.getFileName()))
+        with open(paramsFile, 'w') as f:
+          f.write(f'ligandFiles:: {" ".join(molFiles)}\n')
+          f.write(f'hydrate:: {self.hydrate.get()}\n')
 
-        f.write('ligandFiles:: {}\n'.format(' '.join(molFiles)))
-        f.write('hydrate:: {}\n'.format(self.hydrate.get()))
-
-        f.write('outDir:: {}\n'.format(os.path.abspath(self._getPath())))
+          f.write(f'outDir:: {oDir}\n')
 
         return paramsFile
 
