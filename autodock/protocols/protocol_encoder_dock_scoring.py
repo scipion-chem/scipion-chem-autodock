@@ -308,7 +308,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
 
   def getInputDockFile(self, it=None):
     csvFile = self._getExtraPath('inputDock.csv')
-    if it:
+    if it is not None:
       csvFile = csvFile.replace('.csv', f'_{it}.csv')
     return os.path.abspath(csvFile)
 
