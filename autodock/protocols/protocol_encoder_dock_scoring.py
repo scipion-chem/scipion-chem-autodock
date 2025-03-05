@@ -24,14 +24,11 @@
 # *
 # **************************************************************************
 
-import os, glob, shutil
+import os, shutil
 
 from pyworkflow.protocol import params
-import pyworkflow.object as pwobj
-from pyworkflow.utils.path import makePath
 
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import getBaseFileName, performBatchThreading, replaceInFiles
+from pwchem.utils import performBatchThreading, findThreadFiles
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import RDKIT_DIC
 
@@ -121,6 +118,8 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
                         '(Fully connected neural network). In list of integers format e.g:\n'
                         '[256, 256, 128] defines the default regressor with 3 hidden layers of 256, 256 and 128 '
                         'neurons respectively.')
+
+    form.addParallelSection(threads=4, mpi=1)
 
   # --------------------------- INSERT steps functions --------------------
   def _insertAllSteps(self):
@@ -222,25 +221,49 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     return confFile
 
   def buildSMIsFile(self, dMols, writeScores=True):
-    getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
-    molFile = getattr(dMols.getFirstItem(), getFileFunc)()
+    nt = self.numberOfThreads.get()
+    performBatchThreading(self.buildSMIsFileThread, dMols, nt, cloneItem=True, writeScores=writeScores)
 
+    smiFile = self.mergeSMIFiles(writeScores)
+    self.mergeSMIFiles(writeScores, map=True)
+    return smiFile
+
+  def mergeSMIFiles(self, writeScores, map=False):
     inp = 'train' if writeScores else 'predict'
-    smiFile = self.getInputSMIFile(inp)
+    getFileFunc = 'getMapSMIFile' if map else 'getInputSMIFile'
+    smiFile = getattr(self, getFileFunc)(inp)
+
+    smiThreadFiles = findThreadFiles(smiFile)
+    with open(smiFile, 'w') as f:
+      for file in smiThreadFiles:
+        file = os.path.join(os.path.dirname(smiFile), file)
+        with open(file) as fIn:
+          f.write(fIn.read())
+        os.remove(file)
+    return smiFile
+
+  def buildSMIsFileThread(self, dMols, outLists, it, writeScores=True):
+    getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
+    molFile = getattr(dMols[0], getFileFunc)()
+    inp = 'train' if writeScores else 'predict'
+
+    smiFile = self.getInputSMIFile(inp, it)
     if not self.checkHasSMI(molFile):
-      inDockFile = self.writeInputDocksFile(dMols, writeScores)
-      args = f'{inDockFile} {smiFile} {self.getMapSMIFile(inp)}'
-      autodockPlugin.runScript(self, 'convertToSMIs.py', args, envDict=RDKIT_DIC)
+      inDockFile = self.writeInputDocksFile(dMols, writeScores, it)
+      args = f'{inDockFile} {smiFile} {self.getMapSMIFile(inp, it)}'
+      autodockPlugin.runScript(self, 'convertToSMIs.py', args, envDict=RDKIT_DIC, popen=True)
     else:
-      self.writeMeekoSMIs(dMols, writeScores)
+      smiFile, mapFile = self.writeMeekoSMIs(dMols, writeScores, it)
 
     if writeScores:
-      self.mergeSMIscores()
-    return smiFile
+      self.mergeSMIscores(smiFile)
+
+
+
 
   def getSystemName(self):
     if self.loadModel.get():
-      sysName = self.pretrainedModel.split('/')[-1]
+      sysName = self.pretrainedModel.get().split('/')[-1]
     else:
       if self.modelName.get().strip():
         sysName = self.modelName.get().strip()
@@ -249,11 +272,13 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
         sysName = f"{sysFile.split('/')[-1]}_{self.getObjId()}"
     return sysName
 
-  def writeMeekoSMIs(self, mols, writeScores=True):
+  def writeMeekoSMIs(self, mols, writeScores=True, it=None):
     inp = 'train' if writeScores else 'predict'
     getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
-    with open(self.getMapSMIFile(inp), 'w') as fMap:
-      with open(self.getInputSMIFile(), 'w') as f:
+
+    smiFile, mapFile = self.getInputSMIFile(inp, it), self.getMapSMIFile(inp, it)
+    with open(mapFile, 'w') as fMap:
+      with open(smiFile, 'w') as f:
         for mol in mols:
           molFile = getattr(mol, getFileFunc)()
 
@@ -267,6 +292,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
           line += '\n'
 
           f.write(line)
+    return smiFile, mapFile
 
   def parseMeekoSMI(self, molFile):
     with open(molFile) as f:
@@ -280,18 +306,27 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
       txt = f.read()
     return 'REMARK SMILES' in txt
 
-  def getInputDockFile(self):
-    return self._getExtraPath('inputDock.csv')
+  def getInputDockFile(self, it=None):
+    csvFile = self._getExtraPath('inputDock.csv')
+    if it:
+      csvFile = csvFile.replace('.csv', f'_{it}.csv')
+    return os.path.abspath(csvFile)
 
-  def getInputSMIFile(self, inp='train'):
-    return self._getExtraPath(f'inputSMIs_{inp}.csv')
+  def getInputSMIFile(self, inp='train', it=None):
+    smiFile = self._getExtraPath(f'inputSMIs_{inp}.csv')
+    if it is not None:
+        smiFile = smiFile.replace('.csv', f'_{it}.csv')
+    return os.path.abspath(smiFile)
 
-  def getMapSMIFile(self, inp='predict'):
-    return self._getExtraPath(f'mapSMIs_{inp}.csv')
+  def getMapSMIFile(self, inp='predict', it=None):
+    smiFile = self._getExtraPath(f'mapSMIs_{inp}.csv')
+    if it is not None:
+        smiFile = smiFile.replace('.csv', f'_{it}.csv')
+    return os.path.abspath(smiFile)
 
-  def writeInputDocksFile(self, mols, writeScores=True):
+  def writeInputDocksFile(self, mols, writeScores=True, it=None):
     getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
-    inDocksFiles = self.getInputDockFile()
+    inDocksFiles = self.getInputDockFile(it)
     with open(inDocksFiles, 'w') as f:
       for m in mols:
         line = getattr(m, getFileFunc)()
@@ -307,9 +342,9 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     mergeDic = {0: min, 1: max, 2: average}
     return mergeDic[self.scoreMerge.get()]
 
-  def mergeSMIscores(self):
+  def mergeSMIscores(self, smiFile):
     # parsing
-    smiDic, smiFile = {}, self.getInputSMIFile()
+    smiDic = {}
     with open(smiFile) as f:
       for line in f:
         smi, score = line.strip().split(',')
@@ -327,5 +362,5 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
       for smi, score in smiDic.items():
         f.write(f'{smi},{score}\n')
 
-    return smiDic
+    return smiFile
 

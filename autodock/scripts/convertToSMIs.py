@@ -52,7 +52,6 @@ if __name__ == "__main__":
     outFile = sys.argv[2]
     mapFile = sys.argv[3]
 
-
 #####################################################################
     with open(mapFile, 'w') as fMap:
         with open(outFile, 'w') as fo:
