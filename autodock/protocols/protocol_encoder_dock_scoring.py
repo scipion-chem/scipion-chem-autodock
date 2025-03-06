@@ -225,21 +225,24 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     performBatchThreading(self.buildSMIsFileThread, dMols, nt, cloneItem=True, writeScores=writeScores)
 
     smiFile = self.mergeSMIFiles(writeScores)
-    self.mergeSMIFiles(writeScores, map=True)
+    self.mergeSMIFiles(writeScores, key='map')
+    self.mergeSMIFiles(writeScores, key='dock')
     return smiFile
 
-  def mergeSMIFiles(self, writeScores, map=False):
+  def mergeSMIFiles(self, writeScores, key='smi'):
+    funcDic = {'smi': 'getInputSMIFile', 'map': 'getMapSMIFile', 'dock': 'getInputDockFile'}
     inp = 'train' if writeScores else 'predict'
-    getFileFunc = 'getMapSMIFile' if map else 'getInputSMIFile'
+    getFileFunc = funcDic[key]
     smiFile = getattr(self, getFileFunc)(inp)
 
     smiThreadFiles = findThreadFiles(smiFile)
-    with open(smiFile, 'w') as f:
-      for file in smiThreadFiles:
-        file = os.path.join(os.path.dirname(smiFile), file)
-        with open(file) as fIn:
-          f.write(fIn.read())
-        os.remove(file)
+    if len(smiThreadFiles) > 0:
+      with open(smiFile, 'w') as f:
+        for file in smiThreadFiles:
+          file = os.path.join(os.path.dirname(smiFile), file)
+          with open(file) as fIn:
+            f.write(fIn.read())
+          os.remove(file)
     return smiFile
 
   def buildSMIsFileThread(self, dMols, outLists, it, writeScores=True):
@@ -249,8 +252,8 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
 
     smiFile = self.getInputSMIFile(inp, it)
     if not self.checkHasSMI(molFile):
-      inDockFile = self.writeInputDocksFile(dMols, writeScores, it)
-      args = f'{inDockFile} {smiFile} {self.getMapSMIFile(inp, it)}'
+      inMolsFile = self.writeInputMolsFile(dMols, writeScores, it)
+      args = f'{inMolsFile} {smiFile} {self.getMapSMIFile(inp, it)}'
       autodockPlugin.runScript(self, 'convertToSMIs.py', args, envDict=RDKIT_DIC, popen=True)
     else:
       smiFile, mapFile = self.writeMeekoSMIs(dMols, writeScores, it)
@@ -306,8 +309,8 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
       txt = f.read()
     return 'REMARK SMILES' in txt
 
-  def getInputDockFile(self, it=None):
-    csvFile = self._getExtraPath('inputDock.csv')
+  def getInputDockFile(self, inp='train', it=None):
+    csvFile = self._getExtraPath(f'inputDock_{inp}.csv')
     if it is not None:
       csvFile = csvFile.replace('.csv', f'_{it}.csv')
     return os.path.abspath(csvFile)
@@ -324,9 +327,10 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
         smiFile = smiFile.replace('.csv', f'_{it}.csv')
     return os.path.abspath(smiFile)
 
-  def writeInputDocksFile(self, mols, writeScores=True, it=None):
+  def writeInputMolsFile(self, mols, writeScores=True, it=None):
     getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
-    inDocksFiles = self.getInputDockFile(it)
+    inp = 'train' if writeScores else 'predict'
+    inDocksFiles = self.getInputDockFile(inp, it)
     with open(inDocksFiles, 'w') as f:
       for m in mols:
         line = getattr(m, getFileFunc)()
