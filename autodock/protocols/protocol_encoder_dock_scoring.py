@@ -237,12 +237,15 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
 
     smiThreadFiles = findThreadFiles(smiFile)
     if len(smiThreadFiles) > 0:
+      smiText = ''
+      for file in smiThreadFiles:
+        file = os.path.join(os.path.dirname(smiFile), file)
+        with open(file) as fIn:
+          smiText += fIn.read()
+        os.remove(file)
+
       with open(smiFile, 'w') as f:
-        for file in smiThreadFiles:
-          file = os.path.join(os.path.dirname(smiFile), file)
-          with open(file) as fIn:
-            f.write(fIn.read())
-          os.remove(file)
+        f.write(smiText)
     return smiFile
 
   def buildSMIsFileThread(self, dMols, outLists, it, writeScores=True):
@@ -279,22 +282,24 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     inp = 'train' if writeScores else 'predict'
     getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
 
+    smiText, mapText = '', ''
     smiFile, mapFile = self.getInputSMIFile(inp, it), self.getMapSMIFile(inp, it)
+    for mol in mols:
+      molFile = getattr(mol, getFileFunc)()
+      smi = self.parseMeekoSMI(molFile)
+      mapText += f'{molFile},{smi}\n'
+
+      line = smi
+      if writeScores:
+        score = getattr(mol, self.scoreName.get())
+        line += f',{score}'
+      smiText += f'{line}\n'
+
     with open(mapFile, 'w') as fMap:
-      with open(smiFile, 'w') as f:
-        for mol in mols:
-          molFile = getattr(mol, getFileFunc)()
+      fMap.write(mapText)
+    with open(smiFile, 'w') as f:
+      f.write(smiText)
 
-          smi = self.parseMeekoSMI(molFile)
-          fMap.write(f'{molFile},{smi}\n')
-
-          line = smi
-          if writeScores:
-            score = getattr(mol, self.scoreName.get())
-            line += f',{score}'
-          line += '\n'
-
-          f.write(line)
     return smiFile, mapFile
 
   def parseMeekoSMI(self, molFile):
@@ -331,15 +336,17 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
     inp = 'train' if writeScores else 'predict'
     inDocksFiles = self.getInputDockFile(inp, it)
-    with open(inDocksFiles, 'w') as f:
-      for m in mols:
-        line = getattr(m, getFileFunc)()
-        if writeScores:
-          score = getattr(m, self.scoreName.get())
-          line += f",{score}"
-        line += '\n'
 
-        f.write(line)
+    text = ''
+    for m in mols:
+      line = getattr(m, getFileFunc)()
+      if writeScores:
+        score = getattr(m, self.scoreName.get())
+        line += f",{score}"
+      text += f'{line}\n'
+
+    with open(inDocksFiles, 'w') as f:
+      f.write(text)
     return inDocksFiles
 
   def getMergeFunction(self):
@@ -362,9 +369,12 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
       smiDic[smi] = mFunc(scores)
 
     # rewritting
+    smiText = ''
+    for smi, score in smiDic.items():
+      smiText += f'{smi},{score}\n'
+
     with open(smiFile, 'w') as f:
-      for smi, score in smiDic.items():
-        f.write(f'{smi},{score}\n')
+      f.write(smiText)
 
     return smiFile
 
