@@ -173,8 +173,9 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     for mol in self.inputSmallMolecules.get():
       nMol = mol.clone()
       molFile = nMol.getFileName()
-      setattr(nMol, '_gcrScore', params.Float(scoreDic[molFile]))
-      outputSet.append(nMol)
+      if molFile in scoreDic:
+        setattr(nMol, '_gcrScore', params.Float(scoreDic[molFile]))
+        outputSet.append(nMol)
 
 
     outputSet.updateMolClass()
