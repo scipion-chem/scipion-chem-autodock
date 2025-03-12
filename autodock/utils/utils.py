@@ -26,22 +26,45 @@
 
 import os
 
-def splitSDF(sdfFile, oriName='conformers'):
-  '''Split sdf conformer files'''
+def splitSDF(sdfFile, oriName=None, oDir=None):
+  '''Split multi molecule sdf files.
+  Takes into account different conformations of the same molecule.
+  '''
+  
+  def getMolName(molText):
+    molName, confId = molText.split('\n')[0].strip(), None
+    if '_i' in molName:
+      molName, confId = molName.split('_i')
+      confId = int(confId)
+    return molName, confId
+
+  molDic, confFile = {}, None
+  oDir = os.path.dirname(sdfFile) if oDir is None else oDir
+
   with open(sdfFile) as f:
-    sdfText = f.read()
+    sdfText = f.read().strip()
+  molTexts = [molText.strip() for molText in sdfText.split('$$$$') if molText.strip()]
 
-  mols = sdfText.split('$$$$')[:-1]
-  if len(mols) > 1:
-    oFiles = []
-    for i, molText in enumerate(mols):
-      oFiles += [sdfFile.replace('.sdf', f'_{i + 1}.sdf')]
-      with open(oFiles[-1], 'w') as fo:
-        fo.write(f'{molText.strip()}\n\n$$$$')
-    confFile = sdfFile.replace('.sdf', f'_{oriName}.sdf')
-    os.rename(sdfFile, confFile)
+  if len(molTexts) > 1:
+    if oriName is not None:
+      confFile = sdfFile.replace('.sdf', f'_{oriName}.sdf')
+      os.rename(sdfFile, confFile)
+
+    for molText in molTexts:
+      molName, confId = getMolName(molText)
+      confId += 1
+      oFile = os.path.join(oDir, f'{molName}.sdf')
+      if confId is not None:
+        oFile = oFile.replace('.sdf', f'-{confId}.sdf')
+
+      if not molName in molDic:
+        molDic[molName] = []
+      with open(oFile, 'w') as fo:
+        fo.write(f'{molText}\n\n$$$$')
+      molDic[molName].append((oFile, confFile))
+
   else:
-    oFiles = [sdfFile]
-    confFile = None
+    molName, confId = getMolName(molTexts[0])
+    molDic = {molName: [(sdfFile, confFile)]}
 
-  return oFiles, confFile
+  return molDic
