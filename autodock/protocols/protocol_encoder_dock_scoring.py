@@ -28,7 +28,7 @@ import os, shutil
 
 from pyworkflow.protocol import params
 
-from pwchem.utils import performBatchThreading, findThreadFiles
+from pwchem.utils import performBatchThreading, findThreadFiles, concatFiles
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import RDKIT_DIC
 
@@ -190,7 +190,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     oFile = os.path.abspath(self._getPath(os.path.join(sysName, 'results/predictions.csv')))
     if not os.path.exists(oFile):
       threadFiles = findThreadFiles(oFile)
-      self.concatFiles(threadFiles, oFile, remove=True)
+      concatFiles(threadFiles, oFile, remove=True)
 
     return oFile
 
@@ -253,14 +253,9 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     smiFile = getattr(self, getFileFunc)(writeScores)
     smiThreadFiles = findThreadFiles(smiFile)
     if len(smiThreadFiles) > 0:
-      self.concatFiles(smiThreadFiles, smiFile, remove=True)
+      concatFiles(smiThreadFiles, smiFile, remove=True)
 
     return smiFile
-
-  def concatFiles(self, inFiles, oFile, remove=False):
-    self.runJob(f'cat {" ".join(inFiles)} > {oFile}', '')
-    if remove:
-      [os.remove(file) for file in inFiles]
 
   def buildSMIsFileThread(self, dMols, outLists, it, writeScores=True):
     getFileFunc = 'getPoseFile' if writeScores else 'getFileName'

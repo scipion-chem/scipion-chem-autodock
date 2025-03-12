@@ -157,7 +157,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
   def createOutputStep(self):
       nt = self.numberOfThreads.get()
-      recFile = self.getOriginalReceptorFile()
+      recFile = self.getReceptorPDBQT()
       if self.ringtailOutput.get():
 
         self.fixDLGReceptor()
