@@ -188,7 +188,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
   
           for smallMol in self.inputSmallMolecules.get():
               molName = smallMol.getUniqueName(conf=True)
-              if molName in molDic:
+              if molName in pocketDic:
                 molDic = pocketDic[molName]
 
                 for posId in molDic:
