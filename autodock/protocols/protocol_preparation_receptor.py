@@ -114,11 +114,11 @@ class ProtChemADTPrepare(ProtChemPrepareReceptor, ProtChemAutodockBase):
             args += " -e"
 
         if not popen:
-            self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
-                        autodock_plugin.getADTPath('Utilities24/%s.py'%prog)+args, cwd=outDir)
+            self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh '),
+                        autodock_plugin.getADTPath(f'Utilities24/{prog}.py ') + args, cwd=outDir)
         else:
             fullProgram = pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh ') + \
-                          autodock_plugin.getADTPath('Utilities24/%s.py' % prog)
+                          autodock_plugin.getADTPath(f'Utilities24/{prog}.py ')
             run(fullProgram + args, cwd=outDir, shell=True)
 
     def createOutput(self):

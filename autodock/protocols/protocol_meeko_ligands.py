@@ -27,7 +27,7 @@ import os
 
 from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, LEVEL_ADVANCED
 
-from pwchem.utils import runOpenBabel, performBatchThreading
+from pwchem.utils import makeSubsets
 from pwchem.constants import RDKIT_DIC
 
 from autodock import Plugin
@@ -74,58 +74,28 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
         form.addParallelSection(threads=4, mpi=1)
 
     def _insertAllSteps(self):
-        # Insert processing steps
-        self._insertFunctionStep('preparationStep')
+      inMols = self.inputSmallMolecules.get()
+      nt = self.numberOfThreads.get()
+      subsets = makeSubsets(inMols, nt-1, cloneItem=True)
+
+      pSteps, cSteps = [], []
+      for it, molSet in enumerate(subsets):
+        pSteps.append(self._insertFunctionStep('preparationStep', molSet, it, prerequisites=[]))
         if self.doConformers.get() and not self.hydrate.get():
-            self._insertFunctionStep('conformerGenerationStep')
-        self._insertFunctionStep('createOutputStep')
+          cSteps.append(self._insertFunctionStep('conformerGenerationStep', it, prerequisites=pSteps[-1]))
 
-    def preparationStep(self):
-        mols = self.inputSmallMolecules.get()
-        molFiles = [mol.getFileName() for mol in mols]
-        nt = self.numberOfThreads.get()
+      self._insertFunctionStep('createOutputStep', prerequisites=pSteps+cSteps)
 
-        performBatchThreading(self.performMeekoPrep, molFiles, nt, cloneItem=False)
+    def preparationStep(self, molSet, it):
+        molFiles = [mol.getFileName() for mol in molSet]
+        self.performMeekoPrep(molFiles, it)
 
-
-    def performMeekoPrep(self, molFiles, oLists, it):
-      oDir = os.path.abspath(self._getExtraPath())
+    def performMeekoPrep(self, molFiles, it):
+      oDir = self.getPreparedDirPath(it)
+      if not os.path.exists(oDir):
+        os.makedirs(oDir)
       paramsFile = self.writeParamsFile(molFiles, oDir, it)
-      Plugin.runScript(self, scriptName, paramsFile, RDKIT_DIC, popen=True)
-
-
-    def conformerGenerationStep(self):
-      """ Generate a number of conformers of the same small molecule in pdbqt format with
-          openbabel using two different algorithm
-      """
-      prepFiles = []
-      for file in os.listdir(self._getExtraPath()):
-        if file.endswith('.pdbqt'):
-          prepFiles.append(self._getExtraPath(file))
-
-      for file in prepFiles:
-        fnRoot = os.path.split(file)[1].split(".pdbqt")[0]  # ID or filename without _meeko.pdbqt
-
-        if self.method_conf.get() == 0:  # Genetic algorithm
-          args = " %s --conformer --nconf %s --score rmsd --writeconformers -O %s_conformers.pdbqt" % \
-                 (os.path.abspath(file), str(self.number_conf.get() - 1), fnRoot)
-        else:  # confab
-          args = " %s --confab --original --verbose --conf %s --rcutoff %s -O %s_conformers.pdbqt" % \
-                 (os.path.abspath(file), str(self.number_conf.get() - 1), str(self.rmsd_cutoff.get()), fnRoot)
-
-        runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
-
-    def createOutputStep(self):
-      outMolDic = {}
-      for file in os.listdir(self._getExtraPath()):
-        if file.endswith('.pdbqt') and 'conformers.pdbqt' not in file:
-          file = self._getExtraPath(file)
-          outMolDic.update(self.indOutputCreation(file))
-
-      outputSmallMolecules = self.createOutputMols(self.inputSmallMolecules.get(), outMolDic)
-      self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
-      self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
-
+      Plugin.runScript(self, scriptName, paramsFile, RDKIT_DIC)
 
     def writeParamsFile(self, molFiles, oDir, it=None):
         paramsFile = os.path.abspath(self._getExtraPath('inputParams.txt'))

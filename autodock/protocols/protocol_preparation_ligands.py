@@ -23,13 +23,13 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import re, shutil, os, glob
+import shutil, os, glob
 
 from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, LEVEL_ADVANCED
 from pyworkflow.utils.path import createLink
 import pyworkflow.object as pwobj
 
-from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile, performBatchThreading, getBaseName
+from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile, makeSubsets, getBaseName
 
 from autodock.protocols.protocol_preparation_receptor import ProtChemADTPrepare
 
@@ -70,59 +70,140 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
         form.addParallelSection(threads=4, mpi=1)
 
     def _insertAllSteps(self):
-        # Insert processing steps
-        self._insertFunctionStep('preparationStep')
-        if self.doConformers.get():
-            self._insertFunctionStep('conformerGenerationStep')
-        self._insertFunctionStep('createOutputStep')
+        inMols = self.inputSmallMolecules.get()
+        nt = self.numberOfThreads.get()
+        subsets = makeSubsets(inMols, nt - 1, cloneItem=True)
 
-    def preparationStep(self):
-        molFns = [os.path.abspath(mol.getFileName()) for mol in self.inputSmallMolecules.get()]
+        pSteps, cSteps = [], []
+        for it, molSet in enumerate(subsets):
+          pSteps.append(self._insertFunctionStep('preparationStep', molSet, it, prerequisites=[]))
+          if self.doConformers.get():
+            cSteps.append(self._insertFunctionStep('conformerGenerationStep', it, prerequisites=pSteps[-1]))
 
-        failedMols = performBatchThreading(self.performPreparation, molFns, self.numberOfThreads.get(), cloneItem=False,
-                                           outDir=os.path.abspath(self._getExtraPath()))
+        self._insertFunctionStep('createOutputStep', prerequisites=pSteps + cSteps)
+
+    def preparationStep(self, molSet, it):
+        molFns = [os.path.abspath(mol.getFileName()) for mol in molSet]
+        failedMols = self.performPreparation(molFns, it)
 
         if len(failedMols) > 0:
-          with open(os.path.abspath(self._getPath('failedPreparations.txt')), 'w') as f:
+          with open(os.path.abspath(self._getExtraPath(f'failedPreparations_{it}.txt')), 'w') as f:
             for molFn in failedMols:
               f.write(molFn + '\n')
 
-    def conformerGenerationStep(self):
+    def conformerGenerationStep(self, it):
       """ Generate a number of conformers of the same small molecule in pdbqt format with
           openbabel using two different algorithm
       """
-      molFns = [molFile for molFile in glob.glob(self._getExtraPath('*-prep.pdbqt'))]
-
-      failedMols = performBatchThreading(self.performConfGeneration, molFns, self.numberOfThreads.get(),
-                                         cloneItem=False, outDir=os.path.abspath(self._getExtraPath()))
+      inDir = self.getPreparedDirPath(it)
+      molFns = [molFile for molFile in glob.glob(os.path.join(inDir, '*.pdbqt'))]
+      failedMols = self.performConfGeneration(molFns, it)
 
       if len(failedMols) > 0:
-        with open(os.path.abspath(self._getPath('failedConfomerGeneration.txt')), 'w') as f:
+        with open(os.path.abspath(self._getExtraPath(f'failedConfomerGeneration_{it}.txt')), 'w') as f:
           for molFn in failedMols:
             f.write(molFn + '\n')
 
-    def indOutputCreation(self, file, molName=None):
-      '''Returns a dict as {molName: [(molFile, confFile), ....]}
+    def createOutputStep(self):
+      outMolDic = {}
+      outDir, outConfDir = self._getPath('outputLigands'), self._getExtraPath()
+      for inDir in self.getPreparedDirs():
+        for file in os.listdir(inDir):
+          if file.endswith('.pdbqt') and 'conformers.pdbqt' not in file:
+            file = os.path.join(inDir, file)
+            outMolDic.update(self.indOutputCreation(file, outDir, outConfDir=outConfDir))
+
+      outputSmallMolecules = self.createOutputMols(self.inputSmallMolecules.get(), outMolDic)
+      self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
+      self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
+
+    #################### MAIN FUNCTIONS ################
+
+    def performPreparation(self, molFns, it):
+      oDir = self.getPreparedDirPath(it)
+      if not os.path.exists(oDir):
+        os.makedirs(oDir)
+
+      failedMols = []
+      for fnSmall in molFns:
+        fnMol = os.path.split(fnSmall)[1]
+        fnRoot, ext = os.path.splitext(fnMol)
+        fnOut = os.path.join(oDir, fnRoot + ".pdbqt")
+        try:
+          if ext == '.sdf' and (self.repair.get() == 3 or self.repair.get() == 1):
+            # AUTODOCK: Cannot handle add hydrogens to files coming from 2D sdf files
+            args = f'-isdf {os.path.abspath(fnSmall)} -h -opdbqt -O {os.path.abspath(fnOut)} '
+            if self.preserveCharges.get() == 0:
+              args += '--partialcharge gasteiger '
+            runOpenBabel(protocol=self, args=args, cwd=oDir)
+          else:
+            if ext == '.sdf':
+              auxPDB = os.path.abspath(self._getTmpPath(os.path.basename(fnOut).replace('.pdbqt', '.pdb')))
+              args = f'-isdf {os.path.abspath(fnSmall)} -h -opdb -O {auxPDB} '
+              runOpenBabel(protocol=self, args=args, cwd=oDir)
+              fnSmall = auxPDB
+
+            # Neccessary to have a local copy of ligandFile from mgltools 1.5.7
+            molLink = os.path.join(oDir, os.path.basename(fnSmall))
+            createLink(fnSmall, molLink)
+            args = f'-l {fnSmall} -o {fnOut} '
+            ProtChemADTPrepare.callPrepare(self, "prepare_ligand4", args, outDir=oDir)
+            os.remove(molLink)
+        except:
+          failedMols.append(fnRoot)
+
+      return failedMols
+
+    def performConfGeneration(self, molFns, it):
+      failedMols, inDir = [], self.getPreparedDirPath(it)
+      for file in molFns:
+        if file.endswith('.pdbqt'):
+          fnRoot = getBaseName(file)
+          if self.method_conf.get() == 0:  # Genetic algorithm
+            args = f" {os.path.abspath(file)} --conformer --nconf {self.number_conf.get() - 1} --score rmsd " \
+                   f"--writeconformers -O {fnRoot}_conformers.pdbqt"
+          else:  # confab
+            args = f" {os.path.abspath(file)} --confab --original --conf {self.number_conf.get() - 1} " \
+                   f"--rcutoff {self.rmsd_cutoff.get()} -O {fnRoot}_conformers.pdbqt"
+
+          try:
+            runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(inDir))
+          except:
+            failedMols.append(fnRoot)
+
+      return failedMols
+
+    def indOutputCreation(self, file, outDir, molName=None, outConfDir=None):
+      '''Returns a dict as {molName: [(molFile, confFile), ....]} from the prepared molecules
       '''
+      if not os.path.exists(outDir):
+        os.mkdir(outDir)
+      if outConfDir is None:
+        outConfDir = outDir
+
+      inDir = os.path.dirname(file)
       molName = getBaseName(file) if not molName else molName
       outMolDic = {molName: []}
       if self.doConformers.get():
-        outDir = self._getExtraPath(molName)
-        if not os.path.exists(outDir):
-          os.mkdir(outDir)
         firstConfFile = self._getTmpPath('{}-{}.pdbqt'.format(molName, 1))
         shutil.copy(file, firstConfFile)
-        confFile = self._getExtraPath("{}_conformers.pdbqt".format(molName))
-        confFile = appendToConformersFile(confFile, firstConfFile, beginning=True)
-        confDir = splitConformerFile(confFile, outDir=outDir)
-        for molFile in os.listdir(confDir):
-          molFile = os.path.join(confDir, molFile)
+        confFile = os.path.join(inDir, "{}_conformers.pdbqt".format(molName))
+        outConfFile = os.path.join(outConfDir, "{}_conformers.pdbqt".format(molName))
+
+        confFile = appendToConformersFile(confFile, firstConfFile, beginning=True, outConfFile=outConfFile)
+        molFiles = splitConformerFile(confFile, outDir=outDir)
+        for molFile in molFiles:
           outMolDic[molName].append((molFile, confFile))
       else:
-        outMolDic[molName].append((file, None))
+        oFile = os.path.join(outDir, os.path.split(file)[-1])
+        os.rename(file, oFile)
+        outMolDic[molName].append((oFile, None))
       return outMolDic
 
     def createOutputMols(self, inMols, outMolDic):
+      '''Creates the output SetOFSmallMolecules from a copy of the input.
+      Original set and mols attributes are kept in the new prepared molecules
+      '''
       objId = 1
       outputSmallMolecules = inMols.createCopy(self._getPath(), copyInfo=True)
       for inMol in inMols:
@@ -142,15 +223,17 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
       outputSmallMolecules.updateMolClass()
       return outputSmallMolecules
 
-    def createOutputStep(self):
-        outMolDic = {}
-        for file in glob.glob(self._getExtraPath('*-prep.pdbqt')):
-            fnRoot = re.split("-prep", os.path.split(file)[1])[0]
-            outMolDic.update(self.indOutputCreation(file, fnRoot))
+    #################### UTILS FUNCTIONS ################
 
-        outputSmallMolecules = self.createOutputMols(self.inputSmallMolecules.get(), outMolDic)
-        self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
-        self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
+    def getPreparedDirs(self):
+      pDir = os.path.dirname(self.getPreparedDirPath(1))
+      return [os.path.join(pDir, d) for d in os.listdir(pDir) if 'thread_' in d]
+
+    def getPreparedDirPath(self, it):
+      return os.path.abspath(self._getTmpPath(f'thread_{it}'))
+
+
+#################### VALIDATION FUNCTIONS ################
 
     def _warnings(self):
       ws = []
@@ -161,56 +244,4 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
                         'similar operation with openBabel? (Note that the resulting molecules might be different)')
               break
       return ws
-
-    def performPreparation(self, molFns, molLists, it, outDir):
-      failedMols = []
-      for fnSmall in molFns:
-        fnMol = os.path.split(fnSmall)[1]
-        fnRoot, ext = os.path.splitext(fnMol)
-        fnOut = os.path.join(outDir, fnRoot + "-prep.pdbqt")
-        try:
-          if ext == '.sdf' and (self.repair.get() == 3 or self.repair.get() == 1):
-            # AUTODOCK: Cannot handle add hydrogens to files coming from 2D sdf files
-            args = ' -isdf {} -h -opdbqt -O {}'.format(os.path.abspath(fnSmall), os.path.abspath(fnOut))
-            if self.preserveCharges.get() == 0:
-              args += ' --partialcharge gasteiger'
-            runOpenBabel(protocol=self, args=args, cwd=outDir, popen=True)
-          else:
-            if ext == '.sdf':
-              auxPDB = os.path.abspath(self._getTmpPath(os.path.basename(fnOut).replace('.pdbqt', '.pdb')))
-              args = ' -isdf {} -h -opdb -O {}'.format(os.path.abspath(fnSmall), auxPDB)
-              runOpenBabel(protocol=self, args=args, cwd=outDir, popen=True)
-              fnSmall = auxPDB
-
-            # Neccessary to have a local copy of ligandFile from mgltools 1.5.7
-            molLink = os.path.join(outDir, os.path.basename(fnSmall))
-            createLink(fnSmall, molLink)
-            args = ' -l %s -o %s' % (fnSmall, fnOut)
-            ProtChemADTPrepare.callPrepare(self, "prepare_ligand4", args, outDir=self._getExtraPath(), popen=True)
-            os.remove(molLink)
-        except:
-          failedMols.append(fnRoot)
-
-      molLists[it] = failedMols
-      return molLists[it]
-
-    def performConfGeneration(self, molFns, molLists, it, outDir):
-      failedMols = []
-      for fnSmall in molFns:
-        fnRoot = re.split("-prep", os.path.split(fnSmall)[1])[0]  # ID or filename without -prep.mol2
-
-        if self.method_conf.get() == 0:  # Genetic algorithm
-          args = " %s --conformer --nconf %s --score rmsd --writeconformers -O %s_conformers.pdbqt" % \
-                 (os.path.abspath(fnSmall), str(self.number_conf.get() - 1), fnRoot)
-        else:  # confab
-          args = " %s --confab --original --conf %s --rcutoff %s -O %s_conformers.pdbqt" % \
-                 (os.path.abspath(fnSmall), str(self.number_conf.get() - 1), str(self.rmsd_cutoff.get()), fnRoot)
-
-        try:
-          runOpenBabel(protocol=self, args=args, cwd=outDir, popen=True)
-        except:
-          failedMols.append(fnRoot)
-
-      molLists[it] = failedMols
-      return molLists[it]
 
