@@ -29,8 +29,7 @@ from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, In
 from pyworkflow.utils.path import createLink
 import pyworkflow.object as pwobj
 
-from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile, performBatchThreading
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
+from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile, performBatchThreading, getBaseName
 
 from autodock.protocols.protocol_preparation_receptor import ProtChemADTPrepare
 
@@ -75,7 +74,7 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
         self._insertFunctionStep('preparationStep')
         if self.doConformers.get():
             self._insertFunctionStep('conformerGenerationStep')
-        self._insertFunctionStep('createOutput')
+        self._insertFunctionStep('createOutputStep')
 
     def preparationStep(self):
         molFns = [os.path.abspath(mol.getFileName()) for mol in self.inputSmallMolecules.get()]
@@ -102,37 +101,54 @@ class ProtChemADTPrepareLigands(ProtChemADTPrepare):
           for molFn in failedMols:
             f.write(molFn + '\n')
 
-    def indOutputCreation(self, file, fnRoot, outputSmallMolecules):
+    def indOutputCreation(self, file, molName=None):
+      '''Returns a dict as {molName: [(molFile, confFile), ....]}
+      '''
+      molName = getBaseName(file) if not molName else molName
+      outMolDic = {molName: []}
       if self.doConformers.get():
-        outDir = self._getExtraPath(fnRoot)
+        outDir = self._getExtraPath(molName)
         if not os.path.exists(outDir):
           os.mkdir(outDir)
-        firstConfFile = self._getTmpPath('{}-{}.pdbqt'.format(fnRoot, 1))
+        firstConfFile = self._getTmpPath('{}-{}.pdbqt'.format(molName, 1))
         shutil.copy(file, firstConfFile)
-        confFile = self._getExtraPath("{}_conformers.pdbqt".format(fnRoot))
+        confFile = self._getExtraPath("{}_conformers.pdbqt".format(molName))
         confFile = appendToConformersFile(confFile, firstConfFile, beginning=True)
         confDir = splitConformerFile(confFile, outDir=outDir)
         for molFile in os.listdir(confDir):
           molFile = os.path.join(confDir, molFile)
-          confId = molFile.split('-')[-1].split('.')[0]
-
-          newSmallMol = SmallMolecule(smallMolFilename=molFile, type='AutoDock')
-          newSmallMol.setMolName(fnRoot)
-          newSmallMol._ConformersFile = pwobj.String(confFile)
-          newSmallMol.setConfId(confId)
-          outputSmallMolecules.append(newSmallMol)
+          outMolDic[molName].append((molFile, confFile))
       else:
-        newSmallMol = SmallMolecule(smallMolFilename=file, type='AutoDock')
-        newSmallMol.setMolName(fnRoot)
-        outputSmallMolecules.append(newSmallMol)
+        outMolDic[molName].append((file, None))
+      return outMolDic
+
+    def createOutputMols(self, inMols, outMolDic):
+      objId = 1
+      outputSmallMolecules = inMols.createCopy(self._getPath(), copyInfo=True)
+      for inMol in inMols:
+        nMol = inMol.clone()
+        molName = nMol.getMolName()
+        if molName in outMolDic:
+          for molFile, confFile in outMolDic[molName]:
+            nMol.setFileName(molFile)
+            nMol.setMolClass('AutoDock')
+            nMol._ConformersFile = pwobj.String(confFile)
+            if confFile:
+              nMol.setConfId(molFile.split('-')[-1].split('.')[0])
+            nMol.setObjId(objId)
+            objId += 1
+            outputSmallMolecules.append(nMol)
+
+      outputSmallMolecules.updateMolClass()
       return outputSmallMolecules
 
-    def createOutput(self):
-        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
+    def createOutputStep(self):
+        outMolDic = {}
         for file in glob.glob(self._getExtraPath('*-prep.pdbqt')):
             fnRoot = re.split("-prep", os.path.split(file)[1])[0]
-            outputSmallMolecules = self.indOutputCreation(file, fnRoot, outputSmallMolecules)
+            outMolDic.update(self.indOutputCreation(file, fnRoot))
 
+        outputSmallMolecules = self.createOutputMols(self.inputSmallMolecules.get(), outMolDic)
         self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
         self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 

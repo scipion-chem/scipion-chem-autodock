@@ -29,14 +29,14 @@ from pyworkflow.protocol import params
 
 from pwem.protocols import EMProtocol
 
-from pwchem.utils import convertToSdf, makeSubsets, getBaseName
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
+from pwchem.utils import convertToSdf, makeSubsets, concatFiles
 
+from autodock.protocols import ProtChemADTPrepareLigands
 from autodock import Plugin as adPlugin
 from autodock.utils import splitSDF
 
 
-class ProtScrubberPrepareLigands(EMProtocol):
+class ProtScrubberPrepareLigands(ProtChemADTPrepareLigands):
     """Prepare ligands using Scrubber from ForliLab"""
     _label = 'ligand preparation Scrubber'
 
@@ -95,31 +95,24 @@ class ProtScrubberPrepareLigands(EMProtocol):
     def preparationStep(self, molSet, it):
         cDir = os.path.abspath(self._getTmpPath(f'inputLigands_{it}'))
         os.mkdir(cDir)
-        self.prepareInputFiles(molSet, cDir, it)
+        mergedFile = self.prepareInputFiles(molSet, cDir, it)
 
-        oDir = os.path.abspath(self._getPath())
-        for file in os.listdir(cDir):
-          inFile = os.path.join(cDir, file)
-          oFile = os.path.join(oDir, file)
+        oDir = os.path.abspath(self._getExtraPath())
+        oFile = os.path.join(oDir, f'outputFile_{it}.sdf')
 
-          args = self.getScrubArgs(inFile, oFile)
-          adPlugin.runScrubber(self, args, cwd=oDir)
+        args = self.getScrubArgs(mergedFile, oFile)
+        adPlugin.runScrubber(self, args, cwd=oDir)
 
     def createOutputStep(self):
-        oDir = self._getPath()
-        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
-        for sdfFile in os.listdir(oDir):
+        molDic = {}
+        inDir, oDir = self._getExtraPath(), self._getPath()
+        for sdfFile in os.listdir(inDir):
             if sdfFile.endswith('.sdf'):
-                fnRoot = getBaseName(sdfFile)
-                sdfFile = os.path.join(oDir, sdfFile)
-                oFiles, confFile = splitSDF(sdfFile)
+                sdfFile = os.path.join(inDir, sdfFile)
+                molDic.update(splitSDF(sdfFile, oDir=oDir, oriName='conformers'))
 
-                for confId, oFile in enumerate(oFiles):
-                  newSmallMol = SmallMolecule(smallMolFilename=oFile, type='Scrubber')
-                  newSmallMol.setMolName(fnRoot)
-                  newSmallMol._ConformersFile = params.String(confFile)
-                  newSmallMol.setConfId(confId+1)
-                  outputSmallMolecules.append(newSmallMol)
+        inSet = self.inputSmallMolecules.get()
+        outputSmallMolecules = self.createOutputMols(inSet, molDic)
 
         self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
         self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
@@ -138,25 +131,29 @@ class ProtScrubberPrepareLigands(EMProtocol):
       return oFiles
 
     def performPreparation(self, molFns, outDir):
-      failedMols = []
+      prepFiles, failedMols = [], []
       for fnSmall in molFns:
         fnMol = os.path.split(fnSmall)[1]
         fnRoot, _ = os.path.splitext(fnMol)
         fnOut = os.path.join(outDir, fnRoot + ".sdf")
         try:
           convertToSdf(self, fnSmall, fnOut)
+          prepFiles.append(fnOut)
         except:
           failedMols.append(fnSmall)
 
-      return failedMols
+      return prepFiles, failedMols
 
     def prepareInputFiles(self, molSet, oDir, it):
       molFns = [os.path.abspath(mol.getFileName()) for mol in molSet]
-      failedMols = self.performPreparation(molFns, oDir)
+      prepFiles, failedMols = self.performPreparation(molFns, oDir)
+      mergedFile = os.path.join(oDir, f'mergedInput_{it}.sdf')
+      concatFiles(prepFiles, mergedFile, remove=True)
       if len(failedMols) > 0:
         with open(self._getExtraPath(f'failedPreparations_{it}.txt'), 'w') as f:
           for molFn in failedMols:
             f.write(molFn + '\n')
+      return mergedFile
 
     def getScrubArgs(self, inFile, oFile):
       args = f'{inFile} -o {oFile} --cpu 1 '

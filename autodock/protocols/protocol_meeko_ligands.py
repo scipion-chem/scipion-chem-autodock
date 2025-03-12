@@ -28,7 +28,6 @@ import os
 from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, IntParam, FloatParam, LEVEL_ADVANCED
 
 from pwchem.utils import runOpenBabel, performBatchThreading
-from pwchem.objects import SetOfSmallMolecules
 from pwchem.constants import RDKIT_DIC
 
 from autodock import Plugin
@@ -117,17 +116,13 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
         runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
 
     def createOutputStep(self):
-      prepFiles = []
+      outMolDic = {}
       for file in os.listdir(self._getExtraPath()):
         if file.endswith('.pdbqt') and 'conformers.pdbqt' not in file:
-          prepFiles.append(self._getExtraPath(file))
+          file = self._getExtraPath(file)
+          outMolDic.update(self.indOutputCreation(file))
 
-      outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
-      for file in prepFiles:
-          fnRoot = os.path.split(file)[1].split('.pdbqt')[0]
-          outputSmallMolecules = self.indOutputCreation(file, fnRoot, outputSmallMolecules)
-
-      outputSmallMolecules.updateMolClass()
+      outputSmallMolecules = self.createOutputMols(self.inputSmallMolecules.get(), outMolDic)
       self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
       self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
