@@ -43,7 +43,7 @@ def chimeraInstalled():
 class ProtAutodockDockingViewer(SmallMoleculesViewer):
     """ Visualize the output of protocol autodock """
     _label = 'Viewer autodock docking'
-    _targets = [ProtChemAutodock, ProtChemAutodockGPU]
+    # _targets = [ProtChemAutodock, ProtChemAutodockGPU]
 
     def __init__(self, **args):
         super().__init__(**args)
@@ -54,6 +54,14 @@ class ProtVinaDockingViewer(SmallMoleculesViewer):
     _targets = [ProtChemVinaDocking]
     _viewerOptions = ['PyMol', 'ChimeraX', 'ViewDockX']
 
+    def getDockFile(self, mol):
+        poseFile = os.path.abspath(mol.getPoseFile())
+        molName, gridId = mol.getMolName(), mol.getGridId()
+
+        dockDir = os.path.dirname(poseFile).replace('outputLigands', f'extra/pocket_{gridId}')
+        return os.path.join(dockDir, f'{molName}.pdbqt')
+
+
     def viewDockChimeraXMols(self, mols, ligandLabel, disable=True, e=None):
         if not chimeraInstalled():
             print(CHIMERA_ERROR)
@@ -62,10 +70,10 @@ class ProtVinaDockingViewer(SmallMoleculesViewer):
             pmlsDir = self.getPmlsDir()
             chimScript = os.path.join(pmlsDir, '{}_chimeraX.py'.format(ligandLabel))
 
-            molADFiles = set([])
+            molADFiles = {}
             for mol in mols:
-                poseFile = mol.getPoseFile()
-                molADFiles.add(re.sub("_[1-9]*.pdbqt", ".pdbqt", poseFile))
+                molName = mol.getUniqueName(pose=False, dock=False)
+                molADFiles[molName] = self.getDockFile(mol)
 
             with open(chimScript, "w") as f:
                 f.write("from chimerax.core.commands import run\n")
@@ -77,10 +85,10 @@ class ProtVinaDockingViewer(SmallMoleculesViewer):
                 f.write("run(session, 'open %s')\n" % _inputStruct)
 
                 i=2
-                for mol in molADFiles:
-                    f.write("run(session, 'open %s')\n" % mol)
+                for molName, dockFile in molADFiles.items():
+                    f.write(f"run(session, 'open {dockFile} name {molName}')\n")
                     if disable:
-                        f.write("run(session, 'hide #%s models')\n" % i)
+                        f.write(f"run(session, 'hide #{i} models')\n")
                     i += 1
                 f.write("run(session, 'viewdockx')\n")
 

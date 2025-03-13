@@ -202,7 +202,8 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
                       poseFile, curRecFile = self.makeFlexPoseFiles(poseFile, recFile)
                       newSmallMol.setProteinFile(os.path.relpath(curRecFile))
 
-                    newPoseFile = os.path.join(outDir, os.path.split(poseFile)[-1])
+                    filename = f'g{gridId}_{os.path.split(poseFile)[-1]}'
+                    newPoseFile = os.path.join(outDir, filename)
                     os.rename(poseFile, newPoseFile)
 
                     newSmallMol.poseFile.set(newPoseFile)
