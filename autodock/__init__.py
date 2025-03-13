@@ -315,7 +315,7 @@ class Plugin(pwchemPlugin):
 			if getOutput:
 				return subprocess.check_output(f'{fullProgram} {args}', cwd=cwd, shell=True)
 			else:
-				subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+				subprocess.Popen(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
 	@classmethod
 	def runScript(cls, protocol, scriptName, args, envDict, cwd=None, popen=False):

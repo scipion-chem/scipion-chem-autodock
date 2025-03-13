@@ -164,8 +164,8 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       if self.ringtailOutput.get():
         nt = self.numberOfThreads.get()
         outDir = os.path.abspath(self._getExtraPath())
-        args = f'write --file_path {outDir} --recursive -o ringtail.db -m vina -sr -rf {recFile} -mpr {nt} ' \
-               f'--overwrite'
+        args = f'write --file_path {outDir} --recursive -o ringtail.db -m vina -sr -rf {os.path.abspath(recFile)} ' \
+               f'-mpr {nt} --overwrite'
         autodockPlugin.runRingtail(self, args, cwd=self._getPath())
 
         outputDB = RingtailDatabase(filename=self._getPath('ringtail.db'))
