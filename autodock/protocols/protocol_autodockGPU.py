@@ -32,7 +32,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import getBaseFileName, performBatchThreading, replaceInFiles
+from pwchem.utils import getBaseName, performBatchThreading, replaceInFiles, makeSubsets
 
 from autodock import Plugin as autodockPlugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
@@ -122,38 +122,51 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
   # --------------------------- INSERT steps functions --------------------
   def _insertAllSteps(self):
-      cId = self._insertFunctionStep('convertStep', prerequisites=[])
+      inMols = self.inputSmallMolecules.get()
+      nt = self.numberOfThreads.get()
       gpuList = self.getGPU_Ids()
-      self.receptorName = self.getReceptorName()
+      subsets = makeSubsets(inMols, nt - 1, cloneItem=True)
+
+      cRStep = self._insertFunctionStep('convertReceptorStep', prerequisites=[], needsGPU=False)
+
+      cSteps = []
+      for it, molSet in enumerate(subsets):
+        cSteps.append(self._insertFunctionStep('convertLigandsStep', molSet, it, prerequisites=[], needsGPU=False))
 
       dockSteps = []
+      gridReqs = [cRStep] + cSteps
       if self.fromReceptor.get() == 0:
-        gridId = self._insertFunctionStep('generateGridsStep', None, prerequisites=[cId])
-        dockId = self._insertFunctionStep('dockStep', gpuList, prerequisites=[gridId])
-        dockSteps.append(dockId)
+        gridId = self._insertFunctionStep('generateGridsStep', prerequisites=gridReqs, needsGPU=False)
+        for it, _ in enumerate(subsets):
+          dockId = self._insertFunctionStep('dockStep', it, gpuList, prerequisites=[gridId])
+          dockSteps.append(dockId)
       else:
         for pocket in self.inputStructROIs.get():
-          gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
-          dockId = self._insertFunctionStep('dockStep', gpuList, pocket.clone(), prerequisites=[gridId])
-          dockSteps.append(dockId)
+          gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=gridReqs, needsGPU=False)
+          for it, _ in enumerate(subsets):
+            dockId = self._insertFunctionStep('dockStep', it, gpuList, pocket.clone(), prerequisites=[gridId])
+            dockSteps.append(dockId)
 
-      self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
+      self._insertFunctionStep('createOutputStep', prerequisites=dockSteps, needsGPU=False)
 
-  def dockStep(self, gpuIdxs, pocket=None):
-      molFns = self.getInputPDBQTFiles()
+  def dockStep(self, it, gpuIdxs, pocket=None):
+      molFns = self.getConvertedLigandsFiles(it)
       flexReceptorFn = self.getFlexFiles()[0] if self.doFlexRes else None
       outDir = self.getOutputPocketDir(pocket)
 
       fldFile = f'{self.getReceptorName()}.maps.fld'
       self.fixFldFile(os.path.join(outDir, fldFile))
 
-      batchFile = self.writeBatchFile(fldFile, molFns, outDir)
+      batchFile = self.writeBatchFile(fldFile, molFns, outDir, it)
       args = f"-B {batchFile} -D {','.join(gpuIdxs)} -n {self.nRuns.get()} --rmstol {self.rmsTol.get()} -C 1 " \
              f"--output-cluster-poses auto "
       if self.doFlexRes:
         args += f'-F {flexReceptorFn} '
       args += self.getADGPUArgs()
       autodockPlugin.runAutodockGPU(self, args, outDir)
+
+  def getBatchFile(self, outDir, it):
+    return os.path.abspath(os.path.join(outDir, f'batchFile_{it}.txt'))
 
   def createOutputStep(self):
       nt = self.numberOfThreads.get()
@@ -200,7 +213,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
   def performOutputParsing(self, dlgFiles, molLists, it, gridId, outDir):
     pocketDic = {}
     for dlgFile in dlgFiles:
-      molName = getBaseFileName(dlgFile)
+      molName = getBaseName(dlgFile)
       pocketDic[molName] = self.parseDockedMolsDLG(dlgFile)
 
       for modelId in pocketDic[molName]:
@@ -215,7 +228,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     outMols = []
     for smallMol in mols:
       molFile = smallMol.getFileName()
-      molName = getBaseFileName(molFile)
+      molName = getBaseName(molFile)
       if molName in pocketDic:
         molDic = pocketDic[molName]
 
@@ -251,13 +264,13 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       for line in f:
         if line.startswith('#MACROMOLECULE'):
           sline = line.split()
-          line = '{} ../{}\n'.format(sline[0], getBaseFileName(sline[1]).strip()+'.pdbqt')
+          line = '{} ../{}\n'.format(sline[0], getBaseName(sline[1]).strip()+'.pdbqt')
         s += line
     with open(fldFile, 'w') as f:
       f.write(s)
 
-  def writeBatchFile(self, fldFile, molFns, outDir):
-    batchFile = os.path.abspath(os.path.join(outDir, 'batchFile.txt'))
+  def writeBatchFile(self, fldFile, molFns, outDir, it):
+    batchFile = self.getBatchFile(outDir, it)
     with open(batchFile, 'w') as f:
       f.write(f'{fldFile}\n')
       for molFn in molFns:
@@ -266,7 +279,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
         if not os.path.exists(molLink):
           os.link(molFn, molLink)
 
-        f.write(f'{molBase}\n{getBaseFileName(molBase)}\n')
+        f.write(f'{molBase}\n{getBaseName(molBase)}\n')
     return batchFile
 
   def getADGPUArgs(self):
