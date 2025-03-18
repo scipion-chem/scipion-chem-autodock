@@ -351,7 +351,7 @@ class Plugin(pwchemPlugin):
 
 	@classmethod
 	def getModelsDir(cls, modelName=''):
-		return os.path.join(cls.getPluginHome(f'models'), modelName)
+		return os.path.join(cls.getPluginHome('models'), modelName)
 
 	@classmethod
 	def getVinaPath(cls, path=''):
