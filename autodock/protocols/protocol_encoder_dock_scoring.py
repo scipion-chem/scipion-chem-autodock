@@ -198,7 +198,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
   def getScoreDic(self):
     mapDic = self.parseCSVDic(self.getMapSMIFile(writeScores=False))
     smiScoreDic = self.parseCSVDic(self.getOutputCSV())
-    scoreDic = {molFile: float(eval(smiScoreDic[smi])[0]) for molFile, smi in mapDic.items()}
+    scoreDic = {molFile: float(eval(smiScoreDic[smi])[0]) for molFile, smi in mapDic.items() if smi in smiScoreDic}
     return scoreDic
 
   def parseCSVDic(self, csvFile):
@@ -258,16 +258,24 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     return smiFile
 
   def buildSMIsFileThread(self, dMols, outLists, it, writeScores=True):
-    getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
-    molFile = getattr(dMols[0], getFileFunc)()
-
     smiFile = self.getInputSMIFile(writeScores, it)
-    if not self.checkHasSMI(molFile):
-      inMolsFile = self.writeInputMolsFile(dMols, writeScores, it)
-      args = f'{inMolsFile} {smiFile} {self.getMapSMIFile(writeScores, it)}'
-      autodockPlugin.runScript(self, 'convertToSMIs.py', args, envDict=RDKIT_DIC, popen=True)
+
+    fMol = dMols[0]
+    molFile = fMol.getFileName()
+    if molFile.endswith('.smi'):
+      self.writeSMIs(dMols, writeScores, it, origin='file')
     else:
-      smiFile, mapFile = self.writeMeekoSMIs(dMols, writeScores, it)
+      getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
+      molFile = getattr(dMols[0], getFileFunc)()
+
+      if self.checkHasSMI(molFile):
+        smiFile, mapFile = self.writeSMIs(dMols, writeScores, it, origin='Meeko')
+      else:
+        inMolsFile = self.writeInputMolsFile(dMols, writeScores, it)
+        mapFile = self.getMapSMIFile(writeScores, it)
+        args = f'{inMolsFile} {smiFile} {mapFile}'
+        autodockPlugin.runScript(self, 'convertToSMIs.py', args, envDict=RDKIT_DIC, popen=True)
+
 
     if writeScores:
       self.mergeSMIscores(smiFile)
@@ -286,14 +294,14 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
         sysName = f"{sysFile.split('/')[-1]}_{self.getObjId()}"
     return sysName
 
-  def writeMeekoSMIs(self, mols, writeScores=True, it=None):
-    getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
+  def writeSMIs(self, mols, writeScores=True, it=None, origin='Meeko'):
+    getFileFunc = 'getPoseFile' if (writeScores and origin == 'Meeko') else 'getFileName'
 
     smiText, mapText = '', ''
     smiFile, mapFile = self.getInputSMIFile(writeScores, it), self.getMapSMIFile(writeScores, it)
     for mol in mols:
       molFile = getattr(mol, getFileFunc)()
-      smi = self.parseMeekoSMI(molFile)
+      smi = self.parseMeekoSMI(molFile) if origin == 'Meeko' else self.parseFileSMI(molFile)
       mapText += f'{molFile},{smi}\n'
 
       line = smi
@@ -309,12 +317,19 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
 
     return smiFile, mapFile
 
+  def parseFileSMI(self, molFile):
+    with open(molFile) as f:
+      lines = f.read().strip().split('\n')
+      smi = lines[-1].split()[0].strip()
+    return smi
+
   def parseMeekoSMI(self, molFile):
     with open(molFile) as f:
       for line in f:
         if 'REMARK SMILES' in line:
           smi = line.split('REMARK SMILES')[1].strip()
-          return smi
+          break
+    return smi
 
   def checkHasSMI(self, molFile):
     with open(molFile) as f:
