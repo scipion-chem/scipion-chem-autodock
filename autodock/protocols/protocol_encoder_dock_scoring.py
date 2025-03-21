@@ -28,9 +28,10 @@ import os, shutil
 
 from pyworkflow.protocol import params
 
-from pwchem.utils import performBatchThreading, findThreadFiles, concatFiles
+from pwchem.utils import performBatchThreading, findThreadFiles, concatFiles, splitFile
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import RDKIT_DIC
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
 from autodock import Plugin as autodockPlugin
 from autodock.protocols import ProtChemAutodockGPU
@@ -62,8 +63,15 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
 
     form.addSection(label="Prediction")
     group = form.addGroup('Input')
+    group.addParam('useLibrary', params.BooleanParam, label='Use library as input : ', default=False,
+                   expertLevel=params.LEVEL_ADVANCED,
+                   help='Whether to use a SMI library SmallMoleculesLibrary object as input')
+
+    group.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
+                   label='Input library: ', condition='useLibrary',
+                   help="Input Small molecules library to predict")
     group.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
-                   label='Input small molecules: ', allowsNull=False,
+                   label='Input small molecules: ', allowsNull=False, condition='not useLibrary',
                    help="Input small molecules to be scored with the model")
 
     group = form.addGroup('Training')
@@ -154,8 +162,15 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     sysName = self.getSystemName()
     scriptName = self.getScriptPath()
 
-    inMols = self.inputSmallMolecules.get()
-    smisFiles = self.buildSMIsFile(inMols, writeScores=False)
+    if not self.useLibrary.get():
+      inMols = self.inputSmallMolecules.get()
+      smisFiles = self.buildSMIsFile(inMols, writeScores=False)
+    else:
+      nt = self.numberOfThreads.get()
+      inSMIFile = self.inputLibrary.get().getFileName()
+      smiFile = self.getInputSMIFile(writeScores=False)
+      os.link(inSMIFile, smiFile)
+      smisFiles = splitFile(smiFile, n=nt, remove=True, pref='inputSMIs_predict')
 
     modelsPath = os.path.abspath(autodockPlugin.getPluginHome('models'))
     shutil.copytree(os.path.join(modelsPath, sysName), os.path.abspath(self._getPath(sysName)), dirs_exist_ok=True)
@@ -166,23 +181,47 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
 
       pwchemPlugin.runCondaCommand(self, args, GCR_DIC, f'python {scriptName}', cwd=self._getPath())
 
+  def writeSMIOutput(self, smi, smiName, oDir):
+    oFile = os.path.join(oDir, f'{smiName}.smi')
+    with open(oFile, 'w') as f:
+      f.write(f'{smi} {smiName}\n')
+    return oFile
 
   def createOutputStep(self):
-    scoreDic = self.getScoreDic()
-    outputSet = self.inputSmallMolecules.get().createCopy(self._getPath(), copyInfo=True)
-    for mol in self.inputSmallMolecules.get():
-      nMol = mol.clone()
-      molFile = nMol.getFileName()
-      if molFile in scoreDic:
-        setattr(nMol, '_gcrScore', params.Float(scoreDic[molFile]))
-        outputSet.append(nMol)
+    smiScoreDic = self.getScoreDic()
 
+    if self.useLibrary.get():
+        oDir = self._getPath('outputMolecules')
+        if not os.path.exists(oDir):
+          os.mkdir(oDir)
 
-    outputSet.updateMolClass()
+        inLib = self.inputLibrary.get()
+        mapDic = inLib.getLibraryMap()
+
+        outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
+        for smi, score in smiScoreDic.items():
+          smiName = mapDic[smi]
+          oFile = self.writeSMIOutput(smi, smiName, oDir)
+
+          smallMolecule = SmallMolecule(smallMolFilename=oFile)
+          smallMolecule.setMolName(smiName)
+          setattr(smallMolecule, '_gcrScore', params.Float(score))
+
+          outputSet.append(smallMolecule)
+
+    else:
+        scoreDic = self.mapMolScoreDic(smiScoreDic)
+        outputSet = self.inputSmallMolecules.get().createCopy(self._getPath(), copyInfo=True)
+        for mol in self.inputSmallMolecules.get():
+          nMol = mol.clone()
+          molFile = nMol.getFileName()
+          if molFile in scoreDic:
+            setattr(nMol, '_gcrScore', params.Float(scoreDic[molFile]))
+            outputSet.append(nMol)
+        outputSet.updateMolClass()
+        self._defineSourceRelation(self.inputSmallMolecules, outputSet)
+
     self._defineOutputs(outputSmallMolecules=outputSet)
-    self._defineSourceRelation(self.inputSmallMolecules, outputSet)
-
-
 
 
   def getOutputCSV(self):
@@ -190,23 +229,26 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     oFile = os.path.abspath(self._getPath(os.path.join(sysName, 'results/predictions.csv')))
     if not os.path.exists(oFile):
       threadFiles = findThreadFiles(oFile)
-      concatFiles(threadFiles, oFile, remove=True)
+      concatFiles(threadFiles, oFile, remove=True, skipHead=1)
 
     return oFile
 
+  def mapMolScoreDic(self, smiScoreDic):
+    '''Maps the smi to the roiginal files and retuns: {molFile: score}'''
+    mapDic = self.parseCSVDic(self.getMapSMIFile(writeScores=False))
+    scoreDic = {molFile: float(smiScoreDic[smi]) for molFile, smi in mapDic.items() if smi in smiScoreDic}
+    return scoreDic
 
   def getScoreDic(self):
-    mapDic = self.parseCSVDic(self.getMapSMIFile(writeScores=False))
-    smiScoreDic = self.parseCSVDic(self.getOutputCSV())
-    scoreDic = {molFile: float(eval(smiScoreDic[smi])[0]) for molFile, smi in mapDic.items() if smi in smiScoreDic}
-    return scoreDic
+    '''Return a dic as {smi: score}'''
+    return self.parseCSVDic(self.getOutputCSV())
 
   def parseCSVDic(self, csvFile):
     smiDic = {}
     with open(csvFile) as f:
       for line in f:
         sline = line.strip().split(',')
-        smiDic[sline[0]] = sline[1]
+        smiDic[sline[0]] = eval(sline[1])[0]
     return smiDic
 
   def getScriptPath(self):
