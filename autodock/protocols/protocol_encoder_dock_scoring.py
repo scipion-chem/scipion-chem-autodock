@@ -151,15 +151,18 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     return inMols, inSMIFiles
 
   def _insertAllSteps(self):
+      tSteps = []
       if not self.loadModel.get() or (self.loadModel.get() and self.doTrain.get()):
-        self._insertFunctionStep('trainingStep')
+        tSteps.append(self._insertFunctionStep('trainingStep'))
 
       gpuIdxs = getattr(self, params.GPU_LIST).get().split(',')
       inMols, inSMIFiles = self.getGPUInputs(len(gpuIdxs))
-      for i, gId in enumerate(gpuIdxs):
-        self._insertFunctionStep('predictionStep', gId, inMols[i], inSMIFiles[i])
 
-      self._insertFunctionStep('createOutputStep')
+      pSteps = []
+      for i, gId in enumerate(gpuIdxs):
+        pSteps.append(self._insertFunctionStep('predictionStep', gId, inMols[i], inSMIFiles[i], prerequisites=tSteps))
+
+      self._insertFunctionStep('createOutputStep', prerequisites=pSteps)
 
   def trainingStep(self):
     encoderName = self.getEnumText('encoder').lower()
@@ -289,7 +292,6 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     return os.path.abspath(self._getExtraPath(f'config_{gpuIdx}.yaml'))
 
   def writeConfFile(self, gpuIdx):
-    # todo: paralellize in n GPUs
     confFile = self.getConfFile(gpuIdx)
     regLayers = eval(self.regLayers.get().strip()) + [1]
     with open(confFile, 'w') as f:
@@ -300,7 +302,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
               f'prePropFunc: {self.getEnumText("preprocess")}\n'
               f'regLayers: {regLayers}\n\n'
               f'seed: {self.seed.get()}\n'
-              f'cuda: "cuda:{gpuIdx}"\n'
+              f'device: "cuda:{gpuIdx}"\n'
               f'batchSize: {self.batch.get()}\n')
     return confFile
 
@@ -331,7 +333,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     return smiFile
 
   def buildSMIsFileThread(self, dMols, outLists, it, writeScores=True, gpuIdx=0):
-    smiFile = self.getInputSMIFile(writeScores, it, gpuIdx=0)
+    smiFile = self.getInputSMIFile(writeScores, it, gpuIdx=gpuIdx)
 
     fMol = dMols[0]
     molFile = fMol.getFileName()
