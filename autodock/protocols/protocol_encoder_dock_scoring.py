@@ -31,7 +31,7 @@ from pyworkflow.protocol import params
 from pwchem.utils import performBatchThreading, findThreadFiles, concatFiles, splitFile, makeSubsets
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import RDKIT_DIC
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule
+from pwchem.objects import SmallMoleculesLibrary
 
 from autodock import Plugin as autodockPlugin
 from autodock.protocols import ProtChemAutodockGPU
@@ -146,7 +146,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
       inMols = makeSubsets(self.inputSmallMolecules.get(), nGPUs, cloneItem=True)
     else:
       oDir = os.path.abspath(self._getTmpPath())
-      libFile = self.inputLibrary.get().getFileName()
+      libFile = os.path.abspath(self.inputLibrary.get().getFileName())
       inSMIFiles = splitFile(libFile, n=nGPUs, oDir=oDir, remove=False)
     return inMols, inSMIFiles
 
@@ -214,25 +214,17 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     smiScoreDic = self.getScoreDic()
 
     if self.useLibrary.get():
-        # todo: parallelize the output generation
-        oDir = self._getPath('outputMolecules')
-        if not os.path.exists(oDir):
-          os.mkdir(oDir)
-
-        inLib = self.inputLibrary.get()
+        inLib, oLibFile = self.inputLibrary.get(), self._getPath('outputLibrary.smi')
         mapDic = inLib.getLibraryMap()
 
-        outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
-        for smi, score in smiScoreDic.items():
-          if score < self.outThres.get():
-            smiName = mapDic[smi]
-            oFile = self.writeSMIOutput(smi, smiName, oDir)
+        with open(oLibFile, 'w') as f:
+          for smi, score in smiScoreDic.items():
+            if score < self.outThres.get():
+              smiName = mapDic[smi]
+              f.write(f'{smi}\t{smiName}\t{score}\n')
 
-            smallMolecule = SmallMolecule(smallMolFilename=oFile)
-            smallMolecule.setMolName(smiName)
-            setattr(smallMolecule, '_gcrScore', params.Float(score))
-
-            outputSet.append(smallMolecule)
+        outputLib = SmallMoleculesLibrary(libraryFilename=oLibFile, origin='GCR')
+        self._defineOutputs(outputLibrary=outputLib)
 
     else:
         scoreDic = self.mapMolScoreDic(smiScoreDic)
@@ -246,8 +238,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
               setattr(nMol, '_gcrScore', params.Float(score))
               outputSet.append(nMol)
         outputSet.updateMolClass()
-
-    self._defineOutputs(outputSmallMolecules=outputSet)
+        self._defineOutputs(outputSmallMolecules=outputSet)
 
   ############# UTILS FUNCTIONS ###################
 
