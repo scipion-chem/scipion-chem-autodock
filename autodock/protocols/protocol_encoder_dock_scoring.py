@@ -73,6 +73,9 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     group.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
                    label='Input small molecules: ', allowsNull=False, condition='not useLibrary',
                    help="Input small molecules to be scored with the model")
+    group.addParam('outThres', params.FloatParam, label='Score threshold: ', default=-7.0,
+                   help='Score threshold to use. Molecules with scores over this threshold will not be registered '
+                        'in the output')
 
     group = form.addGroup('Training')
     group.addParam('loadModel', params.BooleanParam, label='Load pretrained model: ', default=False,
@@ -89,6 +92,8 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
                    label='Input docked molecules for training: ', condition=gonnaTrain,
                    help='Input SetOfSmallMolecules that must be docked to the input receptor and whose scores will be '
                         'used to train the model')
+    group.addParam('nTrain', params.IntParam, label='Number of epochs: ', default=20, condition=gonnaTrain,
+                   help='Number of epochs for training.')
     group.addParam('scoreName', params.StringParam, label='Docking score: ', default='', condition=gonnaTrain,
                    help='Docking score to use for the model training')
     group.addParam('scoreMerge', params.EnumParam, label='Merge strategy: ', choices=['Min', 'Max', 'Mean'], default=0,
@@ -96,7 +101,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
                    help='How to merge the scores if several values are found for the same molecule (because of '
                         'conformers or poses')
 
-    group.addParam('predictInParts', params.BooleanParam, label='Predict in batches: ', default=False,
+    group.addParam('predictInParts', params.BooleanParam, label='Predict in batches: ', default=True,
                    expertLevel=params.LEVEL_ADVANCED,
                    help='Whether to perform the predictions in input batches to avoid overloading the memory')
     group.addParam('batch', params.IntParam, label='Batch size: ', default=256,
@@ -148,8 +153,9 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     # todo: save model in autodock/models or similar (COATI LEFT)
     dMols = self.dockedMols.get()
     smisFile = self.buildSMIsFile(dMols, writeScores=True)[0]
+    # todo: check when ef is needed
     args = f'--config {confFile} -n {sysName} -e {encoderName} -ef {autodockPlugin.getChemPropFile()} ' \
-           f'-p {smisFile} --doTest --testBest 1 --doTrain '
+           f'-p {smisFile} --doTest --testBest 1 --doTrain --trainN {self.nTrain.get()}'
 
     modelsPath = os.path.abspath(autodockPlugin.getPluginHome('models'))
     pwchemPlugin.runCondaCommand(self, args, GCR_DIC, f'python {scriptName}', cwd=self._getPath())
@@ -181,16 +187,11 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
 
       pwchemPlugin.runCondaCommand(self, args, GCR_DIC, f'python {scriptName}', cwd=self._getPath())
 
-  def writeSMIOutput(self, smi, smiName, oDir):
-    oFile = os.path.join(oDir, f'{smiName}.smi')
-    with open(oFile, 'w') as f:
-      f.write(f'{smi} {smiName}\n')
-    return oFile
-
   def createOutputStep(self):
     smiScoreDic = self.getScoreDic()
 
     if self.useLibrary.get():
+        # todo: parallelize the output generation
         oDir = self._getPath('outputMolecules')
         if not os.path.exists(oDir):
           os.mkdir(oDir)
@@ -200,14 +201,15 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
 
         outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
         for smi, score in smiScoreDic.items():
-          smiName = mapDic[smi]
-          oFile = self.writeSMIOutput(smi, smiName, oDir)
+          if score < self.outThres.get():
+            smiName = mapDic[smi]
+            oFile = self.writeSMIOutput(smi, smiName, oDir)
 
-          smallMolecule = SmallMolecule(smallMolFilename=oFile)
-          smallMolecule.setMolName(smiName)
-          setattr(smallMolecule, '_gcrScore', params.Float(score))
+            smallMolecule = SmallMolecule(smallMolFilename=oFile)
+            smallMolecule.setMolName(smiName)
+            setattr(smallMolecule, '_gcrScore', params.Float(score))
 
-          outputSet.append(smallMolecule)
+            outputSet.append(smallMolecule)
 
     else:
         scoreDic = self.mapMolScoreDic(smiScoreDic)
@@ -216,13 +218,15 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
           nMol = mol.clone()
           molFile = nMol.getFileName()
           if molFile in scoreDic:
-            setattr(nMol, '_gcrScore', params.Float(scoreDic[molFile]))
-            outputSet.append(nMol)
+            score = scoreDic[molFile]
+            if score < self.outThres.get():
+              setattr(nMol, '_gcrScore', params.Float(score))
+              outputSet.append(nMol)
         outputSet.updateMolClass()
-        self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
     self._defineOutputs(outputSmallMolecules=outputSet)
 
+  ############# UTILS FUNCTIONS ###################
 
   def getOutputCSV(self):
     sysName = self.getSystemName()
@@ -239,16 +243,23 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     scoreDic = {molFile: float(smiScoreDic[smi]) for molFile, smi in mapDic.items() if smi in smiScoreDic}
     return scoreDic
 
+  def writeSMIOutput(self, smi, smiName, oDir):
+    oFile = os.path.join(oDir, f'{smiName}.smi')
+    with open(oFile, 'w') as f:
+      f.write(f'{smi} {smiName}\n')
+    return oFile
+
   def getScoreDic(self):
     '''Return a dic as {smi: score}'''
-    return self.parseCSVDic(self.getOutputCSV())
+    return self.parseCSVDic(self.getOutputCSV(), isScore=True)
 
-  def parseCSVDic(self, csvFile):
+  def parseCSVDic(self, csvFile, isScore=False):
+    '''Returns a dic: {molFile: smi}'''
     smiDic = {}
     with open(csvFile) as f:
       for line in f:
         sline = line.strip().split(',')
-        smiDic[sline[0]] = eval(sline[1])[0]
+        smiDic[sline[0]] = eval(sline[1])[0] if isScore else sline[1]
     return smiDic
 
   def getScriptPath(self):
@@ -258,6 +269,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     return os.path.abspath(self._getExtraPath('config.yaml'))
 
   def writeConfFile(self):
+    # todo: paralellize in n GPUs
     confFile = self.getConfFile()
     gpuIdx = getattr(self, params.GPU_LIST).get().split(',')[0].strip()
     regLayers = eval(self.regLayers.get().strip()) + [1]
