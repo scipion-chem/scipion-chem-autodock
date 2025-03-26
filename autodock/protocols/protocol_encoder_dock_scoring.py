@@ -75,7 +75,9 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     group.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
                    label='Input small molecules: ', allowsNull=False, condition='not useLibrary',
                    help="Input small molecules to be scored with the model")
-    group.addParam('outThres', params.FloatParam, label='Score threshold: ', default=-7.0,
+    group.addParam('applyFilter', params.BooleanParam, label='Filter results: ', default=False,
+                   help='Whether to filter the results by score')
+    group.addParam('outThres', params.FloatParam, label='Score threshold: ', default=-7.0, condition='applyFilter',
                    help='Score threshold to use. Molecules with scores over this threshold will not be registered '
                         'in the output')
 
@@ -219,7 +221,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
 
         with open(oLibFile, 'w') as f:
           for smi, score in smiScoreDic.items():
-            if score < self.outThres.get():
+            if not self.applyFilter.get() or score < self.outThres.get():
               smiName = mapDic[smi]
               f.write(f'{smi}\t{smiName}\t{score}\n')
 
@@ -234,7 +236,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
           molFile = nMol.getFileName()
           if molFile in scoreDic:
             score = scoreDic[molFile]
-            if score < self.outThres.get():
+            if not self.applyFilter.get() or score < self.outThres.get():
               setattr(nMol, '_gcrScore', params.Float(score))
               outputSet.append(nMol)
         outputSet.updateMolClass()
