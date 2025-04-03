@@ -217,15 +217,16 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
 
     if self.useLibrary.get():
         inLib, oLibFile = self.inputLibrary.get(), self._getPath('outputLibrary.smi')
-        mapDic = inLib.getLibraryMap()
+        outLib = inLib.clone()
 
+        mapDic = outLib.getLibraryMap(fullLine=True)
         with open(oLibFile, 'w') as f:
-          for smi, score in smiScoreDic.items():
+          for smiName, score in smiScoreDic.items():
             if not self.applyFilter.get() or score < self.outThres.get():
-              smiName = mapDic[smi]
-              f.write(f'{smi}\t{smiName}\t{score}\n')
+              f.write(f'{mapDic[smiName]}\t{score}\n')
 
-        outputLib = SmallMoleculesLibrary(libraryFilename=oLibFile, origin='GCR')
+        prevHeaders = inLib.getHeaders()
+        outputLib = SmallMoleculesLibrary(libraryFilename=oLibFile, headers=prevHeaders + ['GCR_score'])
         self._defineOutputs(outputLibrary=outputLib)
 
     else:
