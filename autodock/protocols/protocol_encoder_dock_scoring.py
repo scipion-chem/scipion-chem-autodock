@@ -73,7 +73,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
                    label='Input library: ', condition='useLibrary',
                    help="Input Small molecules library to predict")
     group.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
-                   label='Input small molecules: ', allowsNull=False, condition='not useLibrary',
+                   label='Input small molecules: ', condition='not useLibrary',
                    help="Input small molecules to be scored with the model")
     group.addParam('applyFilter', params.BooleanParam, label='Filter results: ', default=False,
                    help='Whether to filter the results by score')
