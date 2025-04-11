@@ -105,9 +105,10 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
                    help='How to merge the scores if several values are found for the same molecule (because of '
                         'conformers or poses')
 
-    group.addParam('predictInParts', params.BooleanParam, label='Predict in batches: ', default=True,
+    # todo: define number of batches per gpu
+    group.addParam('predictBatches', params.IntParam, label='Predict in batches: ', default=4,
                    expertLevel=params.LEVEL_ADVANCED,
-                   help='Whether to perform the predictions in input batches to avoid overloading the memory')
+                   help='Number of batches to perform the predictions in per GPU to avoid overloading the memory')
     group.addParam('batch', params.IntParam, label='Batch size: ', default=256,
                    expertLevel=params.LEVEL_ADVANCED, condition=gonnaTrain,
                    help='Batch size to use for training.')
@@ -142,39 +143,37 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     form.addParallelSection(threads=4, mpi=1)
 
   # --------------------------- INSERT steps functions --------------------
-  def getGPUInputs(self, nGPUs):
-    inMols, inSMIFiles = [None for i in range(nGPUs)], [None for i in range(nGPUs)]
-    if not self.useLibrary.get():
-      inMols = makeSubsets(self.inputSmallMolecules.get(), nGPUs, cloneItem=True)
-    else:
-      oDir = os.path.abspath(self._getTmpPath())
-      libFile = os.path.abspath(self.inputLibrary.get().getFileName())
-      inSMIFiles = splitFile(libFile, n=nGPUs, oDir=oDir, remove=False)
-    return inMols, inSMIFiles
 
   def _insertAllSteps(self):
       tSteps = []
       if not self.loadModel.get() or (self.loadModel.get() and self.doTrain.get()):
-        tSteps.append(self._insertFunctionStep('trainingStep'))
+        tSteps.append(self._insertFunctionStep(self.trainingStep))
 
-      gpuIdxs = getattr(self, params.GPU_LIST).get().split(',')
-      inMols, inSMIFiles = self.getGPUInputs(len(gpuIdxs))
+      gpuIdxs = self.getInputGpuIdxs()
+      inMols, inSMIFiles = self.getGPUBatches()
+      print(len(inMols), len(inSMIFiles))
 
       pSteps = []
-      for i, gId in enumerate(gpuIdxs):
-        pSteps.append(self._insertFunctionStep('predictionStep', gId, inMols[i], inSMIFiles[i], prerequisites=tSteps))
+      for i in range(max(len(inMols), len(inSMIFiles))):
+        gId = gpuIdxs[i % len(gpuIdxs)]
+        pSteps.append(self._insertFunctionStep(self.predictionStep, i, gId, inMols[i], inSMIFiles[i],
+                                               prerequisites=tSteps, needsGPU=False))
 
-      self._insertFunctionStep('createOutputStep', prerequisites=pSteps)
+      self._insertFunctionStep(self.createOutputStep, prerequisites=pSteps)
 
   def trainingStep(self):
+    gpuIdx = getattr(self, params.GPU_LIST).get().split(',')[0].strip()
+    oDir = self._getExtraPath(f'gpu_{gpuIdx}')
+    if not os.path.exists(oDir):
+      os.mkdir(oDir)
+
     encoderName = self.getEnumText('encoder').lower()
     sysName = self.getSystemName()
-    gpuIdx = getattr(self, params.GPU_LIST).get().split(',')[0].strip()
     confFile = self.writeConfFile(gpuIdx)
     scriptName = self.getScriptPath()
 
-    dMols = self.dockedMols.get()
-    smisFile = self.buildSMIsFile(dMols, writeScores=True)[0]
+    dMols = [mol.clone() for mol in self.dockedMols.get()]
+    smisFile = self.buildSMIsFile(dMols, writeScores=True)
     args = f'--config {confFile} -n {sysName} -e {encoderName} ' \
            f'-p {smisFile} --doTest --testBest 1 --doTrain --trainN {self.nTrain.get()} '
 
@@ -185,36 +184,38 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     pwchemPlugin.runCondaCommand(self, args, GCR_DIC, f'python {scriptName}', cwd=self._getPath())
 
     shutil.copytree(os.path.abspath(self._getPath(sysName)), os.path.join(modelsPath, sysName), dirs_exist_ok=True)
+    self.mergeAllSMIFiles(True, gpuIdx)
 
-
-  def predictionStep(self, gpuIdx, inMols=None, inSMIFile=None):
-    os.mkdir(self._getExtraPath(f'gpu_{gpuIdx}'))
-    confFile = self.writeConfFile(gpuIdx)
+  def predictionStep(self, i, gpuIdx, inMols=None, inSMIFile=None):
+    oDir = self._getExtraPath(f'gpu_{gpuIdx}')
+    if not os.path.exists(oDir):
+      os.mkdir(oDir)
+    confFile = self.writeConfFile(gpuIdx, i)
     sysName = self.getSystemName()
     scriptName = self.getScriptPath()
 
     if inMols:
-      smisFiles = self.buildSMIsFile(inMols, writeScores=False, gpuIdx=gpuIdx)
+      smisFile = self.buildSMIsFile(inMols, writeScores=False, gpuIdx=gpuIdx, it=i)
     elif inSMIFile:
-      nt = self.numberOfThreads.get()
-      smiFile = self.getInputSMIFile(writeScores=False, gpuIdx=gpuIdx)
-      os.link(inSMIFile, smiFile)
-      smisFiles = splitFile(smiFile, n=nt, remove=True, pref='inputSMIs_predict')
+      smisFile = self.getInputSMIFile(writeScores=False, gpuIdx=gpuIdx, it=i)
+      os.link(inSMIFile, smisFile)
 
+    # todo: make local file to avoid concurrence
     modelsPath = os.path.abspath(autodockPlugin.getPluginHome('models'))
     shutil.copytree(os.path.join(modelsPath, sysName), os.path.abspath(self._getPath(sysName)), dirs_exist_ok=True)
 
-    for i, smisFile in enumerate(smisFiles):
-      it = f'{gpuIdx}{i}'
-      args = f'--config {confFile} -n {sysName} -d {sysName} -p {smisFile} --doPredict -it {it} '
-      if self.getEnumText('encoder') == CHEMPROP:
-        args += f'-ef {autodockPlugin.getChemPropFile()} '
+    it = f'{gpuIdx}{i}'
+    args = f'--config {confFile} -n {sysName} -d {sysName} -p {smisFile} --doPredict -it {it} '
+    if self.getEnumText('encoder') == CHEMPROP:
+      args += f'-ef {autodockPlugin.getChemPropFile()} '
 
-      pwchemPlugin.runCondaCommand(self, args, GCR_DIC, f'python {scriptName}', cwd=self._getPath())
+    pwchemPlugin.runCondaCommand(self, args, GCR_DIC, f'python {scriptName}', cwd=self._getPath())
 
   def createOutputStep(self):
-    smiScoreDic = self.getScoreDic()
+    for gpuIdx in self.getInputGpuIdxs():
+      self.mergeAllSMIFiles(False, gpuIdx)
 
+    smiScoreDic = self.getScoreDic()
     if self.useLibrary.get():
         inLib, oLibFile = self.inputLibrary.get(), self._getPath('outputLibrary.smi')
 
@@ -227,7 +228,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
         prevHeaders = inLib.getHeaders()
         outputLib = inLib.clone()
         outputLib.setFileName(oLibFile)
-        outputLib.setHeaders(prevHeaders + ['Conplex_score'])
+        outputLib.setHeaders(prevHeaders + ['GCR_score'])
         self._defineOutputs(outputLibrary=outputLib)
 
     else:
@@ -245,6 +246,28 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
         self._defineOutputs(outputSmallMolecules=outputSet)
 
   ############# UTILS FUNCTIONS ###################
+
+  def mergeAllSMIFiles(self, writeScores=True, gpuIdx=0):
+    self.mergeSMIFiles(writeScores, gpuIdx=gpuIdx)
+    self.mergeSMIFiles(writeScores, key='map', gpuIdx=gpuIdx)
+    self.mergeSMIFiles(writeScores, key='dock', gpuIdx=gpuIdx)
+
+  def getInputGpuIdxs(self):
+    return getattr(self, params.GPU_LIST).get().split(',')
+
+  def getGPUBatches(self):
+    nGPUs = len(self.getInputGpuIdxs())
+    nBatches = self.predictBatches.get()
+    nTotal = nGPUs * nBatches
+
+    inMols, inSMIFiles = [None for i in range(nTotal)], [None for i in range(nTotal)]
+    if not self.useLibrary.get():
+      inMols = makeSubsets(self.inputSmallMolecules.get(), nTotal, cloneItem=True)
+    else:
+      oDir = os.path.abspath(self._getTmpPath())
+      libFile = os.path.abspath(self.inputLibrary.get().getFileName())
+      inSMIFiles = splitFile(libFile, n=nTotal, oDir=oDir, remove=False)
+    return inMols, inSMIFiles
 
   def getOutputCSV(self):
     sysName = self.getSystemName()
@@ -283,11 +306,11 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
   def getScriptPath(self):
     return autodockPlugin.getGCRPath(f'{autodockPlugin.getEnvName(GCR_DIC)}/main.py')
 
-  def getConfFile(self, gpuIdx):
-    return os.path.abspath(self._getExtraPath(f'config_{gpuIdx}.yaml'))
+  def getConfFile(self, gpuIdx, it=0):
+    return os.path.abspath(self._getExtraPath(f'config_{gpuIdx}_{it}.yaml'))
 
-  def writeConfFile(self, gpuIdx):
-    confFile = self.getConfFile(gpuIdx)
+  def writeConfFile(self, gpuIdx, it=0):
+    confFile = self.getConfFile(gpuIdx, it)
     regLayers = eval(self.regLayers.get().strip()) + [1]
     with open(confFile, 'w') as f:
       f.write(f'frozenEncoder: True\n'
@@ -301,33 +324,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
               f'batchSize: {self.batch.get()}\n')
     return confFile
 
-  def buildSMIsFile(self, dMols, writeScores=True, gpuIdx=0):
-    nt = self.numberOfThreads.get()
-    performBatchThreading(self.buildSMIsFileThread, dMols, nt, cloneItem=True, writeScores=writeScores, gpuIdx=gpuIdx)
-
-    if not self.predictInParts.get() or writeScores:
-      smiFiles = [self.mergeSMIFiles(writeScores, gpuIdx=gpuIdx)]
-    else:
-      smiFile = self.getInputSMIFile(writeScores, gpuIdx=gpuIdx)
-      smiFiles = findThreadFiles(smiFile)
-
-    self.mergeSMIFiles(writeScores, key='map', gpuIdx=gpuIdx)
-    self.mergeSMIFiles(writeScores, key='dock', gpuIdx=gpuIdx)
-
-    smiFiles = [os.path.abspath(smiFile) for smiFile in smiFiles]
-    return smiFiles
-
-  def mergeSMIFiles(self, writeScores, key='smi', gpuIdx=0):
-    funcDic = {'smi': 'getInputSMIFile', 'map': 'getMapSMIFile', 'dock': 'getInputDockFile'}
-    getFileFunc = funcDic[key]
-    smiFile = getattr(self, getFileFunc)(writeScores, gpuIdx=gpuIdx)
-    smiThreadFiles = findThreadFiles(smiFile)
-    if len(smiThreadFiles) > 0:
-      concatFiles(smiThreadFiles, smiFile, remove=True)
-
-    return smiFile
-
-  def buildSMIsFileThread(self, dMols, outLists, it, writeScores=True, gpuIdx=0):
+  def buildSMIsFile(self, dMols, writeScores=True, gpuIdx=0, it=0):
     smiFile = self.getInputSMIFile(writeScores, it, gpuIdx=gpuIdx)
 
     fMol = dMols[0]
@@ -346,11 +343,17 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
         args = f'{inMolsFile} {smiFile} {mapFile}'
         autodockPlugin.runScript(self, 'convertToSMIs.py', args, envDict=RDKIT_DIC, popen=True)
 
-    if writeScores:
-      self.mergeSMIscores(smiFile)
+    return smiFile
 
+  def mergeSMIFiles(self, writeScores, key='smi', gpuIdx=0):
+    funcDic = {'smi': 'getInputSMIFile', 'map': 'getMapSMIFile', 'dock': 'getInputDockFile'}
+    getFileFunc = funcDic[key]
+    smiFile = getattr(self, getFileFunc)(writeScores, gpuIdx=gpuIdx)
+    smiThreadFiles = findThreadFiles(smiFile)
+    if len(smiThreadFiles) > 0:
+      concatFiles(smiThreadFiles, smiFile, remove=True)
 
-
+    return smiFile
 
   def getSystemName(self):
     if self.loadModel.get():
