@@ -105,10 +105,6 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
                    help='How to merge the scores if several values are found for the same molecule (because of '
                         'conformers or poses')
 
-    # todo: define number of batches per gpu
-    group.addParam('predictBatches', params.IntParam, label='Predict in batches: ', default=4,
-                   expertLevel=params.LEVEL_ADVANCED,
-                   help='Number of batches to perform the predictions in per GPU to avoid overloading the memory')
     group.addParam('batch', params.IntParam, label='Batch size: ', default=256,
                    expertLevel=params.LEVEL_ADVANCED, condition=gonnaTrain,
                    help='Batch size to use for training.')
@@ -200,7 +196,6 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
       smisFile = self.getInputSMIFile(writeScores=False, gpuIdx=gpuIdx, it=i)
       os.link(inSMIFile, smisFile)
 
-    # todo: make local file to avoid concurrence
     modelsPath = os.path.abspath(autodockPlugin.getPluginHome('models'))
     shutil.copytree(os.path.join(modelsPath, sysName), os.path.abspath(self._getPath(sysName)), dirs_exist_ok=True)
 
@@ -256,17 +251,15 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     return getattr(self, params.GPU_LIST).get().split(',')
 
   def getGPUBatches(self):
-    nGPUs = len(self.getInputGpuIdxs())
-    nBatches = self.predictBatches.get()
-    nTotal = nGPUs * nBatches
+    nThreads = self.numberOfThreads.get() - 1
 
-    inMols, inSMIFiles = [None for i in range(nTotal)], [None for i in range(nTotal)]
+    inMols, inSMIFiles = [None for i in range(nThreads)], [None for i in range(nThreads)]
     if not self.useLibrary.get():
-      inMols = makeSubsets(self.inputSmallMolecules.get(), nTotal, cloneItem=True)
+      inMols = makeSubsets(self.inputSmallMolecules.get(), nThreads, cloneItem=True)
     else:
       oDir = os.path.abspath(self._getTmpPath())
       libFile = os.path.abspath(self.inputLibrary.get().getFileName())
-      inSMIFiles = splitFile(libFile, n=nTotal, oDir=oDir, remove=False)
+      inSMIFiles = splitFile(libFile, n=nThreads, oDir=oDir, remove=False)
     return inMols, inSMIFiles
 
   def getOutputCSV(self):
