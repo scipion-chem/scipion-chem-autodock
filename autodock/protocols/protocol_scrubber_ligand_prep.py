@@ -40,9 +40,7 @@ class ProtScrubberPrepareLigands(ProtChemADTPrepareLigands):
     """Prepare ligands using Scrubber from ForliLab"""
     _label = 'ligand preparation Scrubber'
 
-    def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
-        self.stepsExecutionMode = params.STEPS_PARALLEL
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     def _defineParams(self, form):
         self.typeRL = "ligand"
