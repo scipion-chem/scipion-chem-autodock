@@ -123,13 +123,13 @@ class SelectRingtailWizard():
     return pdbFile
 
 class SelectRingtailChainWizard(SelectRingtailWizard, SelectChainWizardQT):
-  pass
+  _targets, _inputs, _outputs = [], {}, {}
 
 class SelectRingtailResidueWizard(SelectRingtailWizard, SelectResidueWizardQT):
-  pass
+  _targets, _inputs, _outputs = [], {}, {}
 
 class SelectRingtailAtomWizard(SelectRingtailWizard, SelectAtomWizardQT):
-  pass
+  _targets, _inputs, _outputs = [], {}, {}
 
 SelectRingtailChainWizard().addTarget(protocol=ProtRingtailFilter,
                                       targets=['selChain'],
