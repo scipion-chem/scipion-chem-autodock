@@ -186,7 +186,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
         outDir = self._getPath('outputLigands')
         makePath(outDir)
   
-        outputSet = SetOfSmallMolecules().create(outputPath=outDir)
+        outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
         for pocketDir in self.getPocketDirs():
           dlgFiles = self.getDockedLigandsFiles(pocketDir)
           gridId = self.getGridId(pocketDir)
@@ -201,7 +201,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
           for smallMol in outputMols:
             outputSet.append(smallMol)
   
-        outputSet.proteinFile.set(recFile)
+        outputSet.setProteinFile(recFile)
         outputSet.setDocked(True)
         outputSet.saveGroupIndexes()
         self._defineOutputs(outputSmallMolecules=outputSet)

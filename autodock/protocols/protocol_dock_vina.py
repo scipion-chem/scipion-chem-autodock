@@ -138,22 +138,8 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
               args = "--batch {}/*.pdbqt --maps {} --config {}".format(molDir, self.getReceptorName(), paramsFile)  # batch cannot be read from config
               self.runJob(pwchem_plugin.getEnvPath(VINA_DIC, 'bin/vina'), args, cwd=outDir)
 
-    def performScriptDocking(self, pdbqtFiles, it, outDir, **kwargs):
-      k = kwargs
-      paramsFile = self.writeParamsFile(k['fnReceptor'], pdbqtFiles, k['radius'],
-                                        [k['xCenter'], k['yCenter'], k['zCenter']], k['gpfFile'],
-                                        outDir, 1, it, k['flexFn'])
-      autodockPlugin.runScript(self, scriptName, paramsFile, envDict=VINA_DIC, cwd=outDir)
-
-
-    def getBatchDirs(self, molFiles):
-        ds = []
-        for mf in molFiles:
-            ds.append(os.path.dirname(mf))
-        return list(set(ds))
-
     def createOutputStep(self):
-      recFile = self.getOriginalReceptorFile()
+      recFile = self.getReceptorPDBQT()
       if self.ringtailOutput.get():
         nt = self.numberOfThreads.get()
         outDir = os.path.abspath(self._getExtraPath())
@@ -169,7 +155,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       else:
         outDir = self._getPath('outputLigands')
         makePath(outDir)
-        outputSet = SetOfSmallMolecules().create(outputPath=outDir)
+        outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
 
         for pocketDir in self.getPocketDirs():
           pocketDic = {}
@@ -209,7 +195,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
               else:
                 print(f'Molecule {molName} was not found in the docking results')
 
-        outputSet.proteinFile.set(recFile)
+        outputSet.setProteinFile(recFile)
         outputSet.setDocked(True)
         self._defineOutputs(outputSmallMolecules=outputSet)
         self._defineSourceRelation(self.inputSmallMolecules, outputSet)
@@ -276,6 +262,20 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
         return paramsFile
 
 ########################### Utils functions ############################
+
+    def performScriptDocking(self, pdbqtFiles, it, outDir, **kwargs):
+      k = kwargs
+      paramsFile = self.writeParamsFile(k['fnReceptor'], pdbqtFiles, k['radius'],
+                                        [k['xCenter'], k['yCenter'], k['zCenter']], k['gpfFile'],
+                                        outDir, 1, it, k['flexFn'])
+      autodockPlugin.runScript(self, scriptName, paramsFile, envDict=VINA_DIC, cwd=outDir)
+
+
+    def getBatchDirs(self, molFiles):
+        ds = []
+        for mf in molFiles:
+            ds.append(os.path.dirname(mf))
+        return list(set(ds))
 
     def parseDockedPDBQT(self, pdbqtFile):
         dockedDic = {}
