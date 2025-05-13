@@ -57,7 +57,7 @@ def splitSDF(sdfFile, oriName=None, oDir=None):
       if confId is not None:
         oFile = oFile.replace('.sdf', f'-{confId}.sdf')
 
-      if not molName in molDic:
+      if molName not in molDic:
         molDic[molName] = []
       with open(oFile, 'w') as fo:
         fo.write(f'{molText}\n\n$$$$')

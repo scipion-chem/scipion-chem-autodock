@@ -60,15 +60,15 @@ def getMolFilesDic(molFiles):
 def parsePDBQT(pdbqtFile):
   from rdkit import Chem
   with open(pdbqtFile, "r") as f:
-    pdb_lines = [line for line in f if not line.startswith(("REMARK", "TORSDO"))]  # Filtra líneas no estándar
+    pdbLines = [line for line in f if not line.startswith(("REMARK", "TORSDO"))]  # Filtra líneas no estándar
 
   # Guardamos el PDB temporalmente
-  temp_pdb = pdbqtFile.replace('.pdb', '.pdbqt')
-  with open(temp_pdb, "w") as f:
-    f.writelines(pdb_lines)
+  tempPDB = pdbqtFile.replace('.pdb', '.pdbqt')
+  with open(tempPDB, "w") as f:
+    f.writelines(pdbLines)
 
   # Leer la molécula desde el PDB
-  mol = Chem.MolFromPDBFile(temp_pdb, removeHs=False)
+  mol = Chem.MolFromPDBFile(tempPDB, removeHs=False)
 
   if mol:
     return Chem.MolToSmiles(mol)

@@ -31,11 +31,15 @@ order to select it in the protocol.
 Then, it will load the structure and will take all chain related
 information such as name and number of residues.
 """
+import os, json
+
+from pwchem.utils import runOpenBabel
 
 from pwchem.wizards import *
 from pwchem.utils import RESIDUES1TO3
 
-from autodock.protocols import *
+from autodock.protocols import ProtChemADTPrepareReceptor, ProtChemAutodock, ProtChemVinaDocking, ProtChemAutodockGPU, \
+  ProtEncoderDockScoring, ProtRingtailFilter, ProtChemAutoSiteGenPharmacophore
 from autodock.viewers import ViewerRingtail
 from autodock import Plugin as autodockPlugin
 
@@ -173,7 +177,7 @@ class SelectEncoderModel(VariableWizard):
     return models
 
   def show(self, form, *params):
-    inputParams, outputParam = self.getInputOutput(form)
+    _, outputParam = self.getInputOutput(form)
     try:
       models = self.getModels()
     except Exception as e:

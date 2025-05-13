@@ -53,7 +53,7 @@ def getBiggestFrag(mol):
     for mol in frags:
         if mol.GetNumAtoms() > maxi:
             maxi, bMol = mol.GetNumAtoms(), mol
-    return mol
+    return bMol
 
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile> 

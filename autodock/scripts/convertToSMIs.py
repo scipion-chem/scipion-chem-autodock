@@ -29,12 +29,12 @@ import openbabel
 
 from utils import parseMoleculeFile
 
-def pdbqt_to_smi(pdbqt_file):
+def pdbqtToSMI(pdbqtFile):
     obConversion = openbabel.OBConversion()
     obConversion.SetInAndOutFormats("pdbqt", "can")
 
     mol = openbabel.OBMol()
-    success = obConversion.ReadFile(mol, pdbqt_file)
+    success = obConversion.ReadFile(mol, pdbqtFile)
 
     if success:
         smiles = obConversion.WriteString(mol).strip()
@@ -59,12 +59,12 @@ if __name__ == "__main__":
                 for line in f:
                     molFile = line.split(',')[0].strip()
                     if molFile.endswith('.pdbqt'):
-                        smi = pdbqt_to_smi(molFile)
+                        smi = pdbqtToSMI(molFile)
                         mol = Chem.MolFromSmiles(smi)
                     else:
                         mol = parseMoleculeFile(molFile)
 
-                    canonical_smiles = Chem.MolToSmiles(mol, canonical=True)
-                    fMap.write(f'{molFile},{canonical_smiles}\n')
-                    fo.write(line.replace(molFile, canonical_smiles))
+                    canonicalSMI = Chem.MolToSmiles(mol, canonical=True)
+                    fMap.write(f'{molFile},{canonicalSMI}\n')
+                    fo.write(line.replace(molFile, canonicalSMI))
 
