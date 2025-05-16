@@ -71,7 +71,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     group.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
                    label='Input library: ', condition='useLibrary',
                    help="Input Small molecules library to predict")
-    group.addParam('batchSize', params.IntParam, label='Batch size (MB): ', default=100000, condition='useLibrary',
+    group.addParam('batchSize', params.IntParam, label='Batch size (MB): ', default=100, condition='useLibrary',
                    expertLevel=params.LEVEL_ADVANCED, help='Batch size for running conplex in batches')
     group.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
                    label='Input small molecules: ', condition='not useLibrary',
