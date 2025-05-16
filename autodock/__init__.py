@@ -40,6 +40,8 @@ from scipion.install.funcs import InstallHelper
 # Plugin imports
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC, RDKIT_DIC
+from pwchem.utils import insistentRun
+
 from .bibtex import _bibtexStr
 from .constants import *
 
@@ -280,7 +282,8 @@ class Plugin(pwchemPlugin):
 				break
 
 		if program:
-			protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
+			kwargs = {"cwd": cwd}
+			insistentRun(protocol, program, args, **kwargs)
 		else:
 			print('No autodock_gpu binary was found in {}'.format(progDir))
 
