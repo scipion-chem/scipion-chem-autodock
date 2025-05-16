@@ -65,13 +65,14 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
 
     form.addSection(label="Prediction")
     group = form.addGroup('Input')
-    group.addParam('useLibrary', params.BooleanParam, label='Use library as input : ', default=False,
-                   expertLevel=params.LEVEL_ADVANCED,
+    group.addParam('useLibrary', params.BooleanParam, label='Use library as input : ', default=True,
                    help='Whether to use a SMI library SmallMoleculesLibrary object as input')
 
     group.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
                    label='Input library: ', condition='useLibrary',
                    help="Input Small molecules library to predict")
+    group.addParam('batchSize', params.IntParam, label='Batch size (MB): ', default=100000, condition='useLibrary',
+                   expertLevel=params.LEVEL_ADVANCED, help='Batch size for running conplex in batches')
     group.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
                    label='Input small molecules: ', condition='not useLibrary',
                    help="Input small molecules to be scored with the model")
@@ -147,12 +148,12 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
 
       gpuIdxs = self.getInputGpuIdxs()
       inMols, inSMIFiles = self.getGPUBatches()
-      print(len(inMols), len(inSMIFiles))
 
       pSteps = []
       for i in range(max(len(inMols), len(inSMIFiles))):
         gId = gpuIdxs[i % len(gpuIdxs)]
-        pSteps.append(self._insertFunctionStep(self.predictionStep, i, gId, inMols[i], inSMIFiles[i],
+        args = [None, inSMIFiles[i]] if self.useLibrary.get() else [inMols[i], None]
+        pSteps.append(self._insertFunctionStep(self.predictionStep, i, gId, *args,
                                                prerequisites=tSteps, needsGPU=False))
 
       self._insertFunctionStep(self.createOutputStep, prerequisites=pSteps)
@@ -253,13 +254,13 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
   def getGPUBatches(self):
     nThreads = self.numberOfThreads.get() - 1
 
-    inMols, inSMIFiles = [None for i in range(nThreads)], [None for i in range(nThreads)]
+    inMols, inSMIFiles = [], []
     if not self.useLibrary.get():
       inMols = makeSubsets(self.inputSmallMolecules.get(), nThreads, cloneItem=True)
     else:
       oDir = os.path.abspath(self._getTmpPath())
       libFile = os.path.abspath(self.inputLibrary.get().getFileName())
-      inSMIFiles = splitFile(libFile, n=nThreads, oDir=oDir, remove=False)
+      inSMIFiles = splitFile(libFile, b=self.batchSize.get(), oDir=oDir, remove=False)
     return inMols, inSMIFiles
 
   def getOutputCSV(self):
