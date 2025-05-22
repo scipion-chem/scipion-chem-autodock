@@ -255,7 +255,7 @@ class Plugin(pwchemPlugin):
 			addPackage(env, dependencies=['git', 'conda', 'pip'], default=default)
 
 	@classmethod
-	def addGCRPackage(cls, env, default=True):
+	def addGCRPackage(cls, env, default=False):
 		""" This function provides the necessary commands for installing GEDS. """
 		# Instantiating the install helper
 		installer = InstallHelper(GCR_DIC['name'], packageHome=cls.getVar(GCR_DIC['home']),
