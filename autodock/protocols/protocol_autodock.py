@@ -34,7 +34,7 @@ from pyworkflow.utils.path import makePath, createLink
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseFileName, relabelMapAtomsMol2, \
-  insistentRun, performBatchThreading, mergeFiles
+  insistentRun, performBatchThreading, mergeFiles, convertToSdf, getBaseName
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC, OPENBABEL_DIC
 
@@ -204,6 +204,55 @@ class ProtChemAutodockBase(EMProtocol):
         self.runJob(fullProgram, autodockPlugin.getADTPath(program) + args, cwd=cwd)
       else:
         subprocess.check_call(f'{fullProgram} {autodockPlugin.getADTPath(program)} {args}', cwd=cwd, shell=True)
+
+    ############ UTILS FUNCTIONS ###########################
+    def getLigConvertedDirs(self, it=None):
+      if it is None:
+        ligDirs = [os.path.abspath(self._getTmpPath(file)) for file in os.listdir(self._getTmpPath())
+                   if 'conversion_thread_' in file]
+      else:
+        ligDirs = [os.path.abspath(self._getTmpPath(f'conversion_thread_{it}'))]
+      return ligDirs
+
+    def getConvertedLigandsFiles(self, it=None):
+        ligDirs = self.getLigConvertedDirs(it)
+        return [os.path.join(ligDir, file) for ligDir in ligDirs for file in os.listdir(ligDir)]
+
+    def performMGLLigConversion(self, inMols, it):
+      convMols = []
+      oDir = self.getLigConvertedDirs(it)[0]
+      for mol in inMols:
+        molFile = mol.getFileName()
+        if molFile.endswith(PDBQText):
+          fnSmall = os.path.abspath(os.path.join(oDir, getBaseFileName(molFile)))
+          shutil.copy(molFile, fnSmall)
+        else:
+          fnSmall = self.convertLigand2PDBQT(mol, oDir)[0]
+        convMols.append(fnSmall)
+      return convMols
+
+    def performMeekoLigandConversion(self, inMols, it, remove=True):
+      oDir = self.getLigConvertedDirs(it)[0]
+      molFiles = [mol.getFileName() for mol in inMols]
+
+      molExt = os.path.splitext(molFiles[-1])[-1]
+      if molExt == '.pdbqt':
+        for molFile in molFiles:
+          fnSmall = os.path.abspath(os.path.join(oDir, getBaseFileName(molFile)))
+          shutil.copy(molFile, fnSmall)
+      else:
+        sdfFiles = []
+        for molFile in molFiles:
+          sdfFile = os.path.join(oDir, getBaseName(molFile) + '.sdf')
+          sdfFiles.append(convertToSdf(self, molFile, sdfFile))
+
+        mergedFile = os.path.abspath(self._getTmpPath(f'mergedLigands_{it}.sdf'))
+        mergedFile = mergeFiles(sdfFiles, outFile=mergedFile, remove=True)
+
+        args = f'-i {mergedFile} --multimol_outdir {oDir} '
+        autodockPlugin.runMeekoLigand(self, args)
+        if remove:
+          os.remove(mergedFile)
 
     def convertLigand2PDBQT(self, smallMol, oDir, pose=False, popen=False):
         '''Convert ligand to pdbqt using prepare_ligand4 of ADT'''
