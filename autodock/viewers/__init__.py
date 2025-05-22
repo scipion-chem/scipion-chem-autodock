@@ -5,5 +5,4 @@
 # **************************************************************************
 
 from .viewer_pockets import viewerAutoLigand
-from .viewer_autodock import ProtAutodockDockingViewer, ProtVinaDockingViewer
 from .viewers_data import ViewerRingtail

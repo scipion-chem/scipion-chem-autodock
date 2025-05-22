@@ -50,7 +50,7 @@ class ViewerRingtail(pwviewer.ProtocolViewer):
   def _defineParams(self, form):
     form.addSection(label='Visualization of ringtail database')
     group = form.addGroup('Select bookmark')
-    group.addParam('bookmark', params.StringParam, default='passing_results', label='Database bookmark: ',
+    group.addParam('bookmark', params.StringParam, default='', label='Database bookmark: ',
                   help='Select the bookmark stored in the database to be displayed')
 
     group = form.addGroup('Displays')

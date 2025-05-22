@@ -32,7 +32,7 @@ from pyworkflow.utils.path import makePath
 
 from pwchem import Plugin as pwchem_plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import calculate_centerMass, generate_gpf, insistentRun, getBaseFileName, performBatchThreading
+from pwchem.utils import calculate_centerMass, generate_gpf, insistentRun, getBaseName, makeSubsets
 
 from autodock import Plugin as autodockPlugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
@@ -68,37 +68,30 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
         form.addParallelSection(threads=4, mpi=1)
 
     def _insertAllSteps(self):
-      cId = self._insertFunctionStep('convertStep', prerequisites=[])
-      self.receptorName = self.getReceptorName()
+      inMols = self.inputSmallMolecules.get()
+      nt = self.numberOfThreads.get()
+      subsets = makeSubsets(inMols, nt - 1, cloneItem=True)
 
-      dockSteps = []
-      if self.fromReceptor.get() == 0:
-          dockId = self._insertFunctionStep('dockStep', prerequisites=[cId])
-          dockSteps.append(dockId)
-      else:
-        for pocket in self.inputStructROIs.get():
-            dockId = self._insertFunctionStep('dockStep', pocket.clone(), prerequisites=[cId])
+      cRStep = self._insertFunctionStep('convertReceptorStep', prerequisites=[], needsGPU=False)
+
+      cSteps, dockSteps = [], []
+      for it, molSet in enumerate(subsets):
+        cSteps.append(self._insertFunctionStep('convertLigandsStep', molSet, it, prerequisites=[], needsGPU=False))
+
+        convReqs = [cRStep, cSteps[-1]]
+        if self.fromReceptor.get() == 0:
+            dockId = self._insertFunctionStep('dockStep', it, prerequisites=convReqs, needsGPU=False)
             dockSteps.append(dockId)
+        else:
+          for pocket in self.inputStructROIs.get():
+              dockId = self._insertFunctionStep('dockStep', it, pocket.clone(), prerequisites=convReqs, needsGPU=False)
+              dockSteps.append(dockId)
+      self._insertFunctionStep('createOutputStep', prerequisites=dockSteps, needsGPU=False)
 
-      self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
-    def convertStep(self):
-      inputMols, nt = self.inputSmallMolecules.get(), self.numberOfThreads.get()
-      molLists = performBatchThreading(self.performLigConversion, inputMols, nt)
-      with open(self.getConvertedLigandsFile(), 'w') as f:
-        f.write('\n'.join(molLists))
-
-      receptorFile = self.getOriginalReceptorFile()
-      if receptorFile.endswith(PDBext):
-        self.convertReceptor2PDBQT(receptorFile)
-        shutil.copy(receptorFile, self.getReceptorPDB())
-      elif receptorFile.endswith(PDBQText):
-        self.convertReceptor2PDB(receptorFile)
-        shutil.copy(receptorFile, self.getReceptorPDBQT())
-
-    def dockStep(self, pocket=None):
+    def dockStep(self, it, pocket=None):
       fnReceptor = self.getReceptorPDBQT()
-      pdbqtFiles = self.getConvertedLigandsFiles()
+      pdbqtFiles = self.getConvertedLigandsFiles(it)
 
       outDir = self.getOutputPocketDir(pocket)
       if not os.path.exists(outDir):
@@ -129,10 +122,10 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       nThreads = self.getnThreads()
       scoreFunc = self.getEnumText('scoreName').lower()
       if not self.doZnDock.get() and scoreFunc == 'vina':
-        performBatchThreading(self.performScriptDocking, pdbqtFiles, nThreads, cloneItem=False, outDir=outDir,
-                              fnReceptor=fnReceptor, radius=radius, xCenter=xCenter, yCenter=yCenter, zCenter=zCenter,
-                              gpfFile=gpfFile, flexFn=flexFn)
-
+        self.performScriptDocking(pdbqtFiles, it, outDir=outDir, fnReceptor=fnReceptor, radius=radius, 
+                                  xCenter=xCenter, yCenter=yCenter, zCenter=zCenter,
+                                  gpfFile=gpfFile, flexFn=flexFn)
+        
       else:
           scoreFunc = scoreFunc if not self.doZnDock.get() and not flexFn else 'ad4'
           args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
@@ -145,27 +138,13 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
               args = "--batch {}/*.pdbqt --maps {} --config {}".format(molDir, self.getReceptorName(), paramsFile)  # batch cannot be read from config
               self.runJob(pwchem_plugin.getEnvPath(VINA_DIC, 'bin/vina'), args, cwd=outDir)
 
-    def performScriptDocking(self, pdbqtFiles, molLists, it, **kwargs):
-      k = kwargs
-      paramsFile = self.writeParamsFile(k['fnReceptor'], pdbqtFiles, k['radius'],
-                                        [k['xCenter'], k['yCenter'], k['zCenter']], k['gpfFile'],
-                                        k['outDir'], 1, it, k['flexFn'])
-      autodockPlugin.runScript(self, scriptName, paramsFile, envDict=VINA_DIC, cwd=k['outDir'], popen=True)
-
-
-    def getBatchDirs(self, molFiles):
-        ds = []
-        for mf in molFiles:
-            ds.append(os.path.dirname(mf))
-        return list(set(ds))
-
     def createOutputStep(self):
-      recFile = self.getOriginalReceptorFile()
+      recFile = self.getReceptorPDBQT()
       if self.ringtailOutput.get():
         nt = self.numberOfThreads.get()
         outDir = os.path.abspath(self._getExtraPath())
-        args = f'write --file_path {outDir} --recursive -o ringtail.db -m vina -sr -rf {recFile} -mpr {nt} ' \
-               f'--overwrite'
+        args = f'write --file_path {outDir} --recursive -o ringtail.db -m vina -sr -rf {os.path.abspath(recFile)} ' \
+               f'-mpr {nt} --overwrite'
         autodockPlugin.runRingtail(self, args, cwd=self._getPath())
 
         outputDB = RingtailDatabase(filename=self._getPath('ringtail.db'))
@@ -176,16 +155,16 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       else:
         outDir = self._getPath('outputLigands')
         makePath(outDir)
-        outputSet = SetOfSmallMolecules().create(outputPath=outDir)
+        outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
 
         for pocketDir in self.getPocketDirs():
           pocketDic = {}
           gridId = self.getGridId(pocketDir)
           dockFiles = self.getDockedLigandsFiles(pocketDir)
           for dockFile in dockFiles:
-              molName = os.path.split(dockFile)[1].split(PDBQText)[0]
+              molName = getBaseName(dockFile)
               pocketDic[molName] = self.parseDockedPDBQT(dockFile)
-  
+
           for smallMol in self.inputSmallMolecules.get():
               molName = smallMol.getUniqueName(conf=True)
               if molName in pocketDic:
@@ -215,8 +194,8 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
                     outputSet.append(newSmallMol)
               else:
                 print(f'Molecule {molName} was not found in the docking results')
-  
-        outputSet.proteinFile.set(recFile)
+
+        outputSet.setProteinFile(recFile)
         outputSet.setDocked(True)
         self._defineOutputs(outputSmallMolecules=outputSet)
         self._defineSourceRelation(self.inputSmallMolecules, outputSet)
@@ -233,16 +212,6 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
             nThreads = nThreads // nPockets
         nThreads = 1 if nThreads == 0 else nThreads
         return nThreads
-
-    def performLigConversion(self, inMols, molLists, it):
-      for mol in inMols:
-        molFile = mol.getFileName()
-        if not molFile.endswith(PDBQText):
-          fnSmall = self.convertLigand2PDBQT(mol, self._getTmpPath(), popen=True)[0]
-        else:
-          fnSmall = os.path.abspath(self._getTmpPath(getBaseFileName(molFile + PDBQText)))
-          shutil.copy(molFile, fnSmall)
-        molLists[it].append(fnSmall)
 
     def writeParamsFile(self, fnReceptor, molFiles, radius, center, gpfFile, outDir, nCPUs, it, flexFn=None):
         paramsFile = os.path.join(outDir, f'inputParams_{it}.txt')
@@ -294,6 +263,20 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
 
 ########################### Utils functions ############################
 
+    def performScriptDocking(self, pdbqtFiles, it, outDir, **kwargs):
+      k = kwargs
+      paramsFile = self.writeParamsFile(k['fnReceptor'], pdbqtFiles, k['radius'],
+                                        [k['xCenter'], k['yCenter'], k['zCenter']], k['gpfFile'],
+                                        outDir, 1, it, k['flexFn'])
+      autodockPlugin.runScript(self, scriptName, paramsFile, envDict=VINA_DIC, cwd=outDir)
+
+
+    def getBatchDirs(self, molFiles):
+        ds = []
+        for mf in molFiles:
+            ds.append(os.path.dirname(mf))
+        return list(set(ds))
+
     def parseDockedPDBQT(self, pdbqtFile):
         dockedDic = {}
         towrite = ''
@@ -317,19 +300,6 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
             with open(newFile, 'w') as f:
                 f.write(towrite)
         return dockedDic
-
-    def getMeekoFiles(self, oDir):
-        with open(os.path.join(oDir, 'meeko_files.txt')) as fIn:
-          prepFiles = fIn.read().split()
-        return prepFiles
-    
-    def getConvertedLigandsFile(self):
-        return os.path.abspath(self._getExtraPath('inputLigands.txt'))
-
-    def getConvertedLigandsFiles(self):
-        with open(self.getConvertedLigandsFile()) as f:
-            a = f.read()
-        return a.split('\n')
 
     def getDockedLigandsFiles(self, outDir):
         dockFiles = []

@@ -54,10 +54,10 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
        http://autodock.scripps.edu/faqs-help/manual/autodock-4-2-user-guide/AutoDock4.2_UserGuide.pdf"""
     _label = 'autoLigand'
     fillChoices = ['Number', 'Range']
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     def __init__(self, **args):
         EMProtocol.__init__(self, **args)
-        self.stepsExecutionMode = params.STEPS_PARALLEL
         self.finalPockets = []
 
     def _defineParams(self, form):

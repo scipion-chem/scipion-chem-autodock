@@ -31,12 +31,17 @@ order to select it in the protocol.
 Then, it will load the structure and will take all chain related
 information such as name and number of residues.
 """
+import os, json
+
+from pwchem.utils import runOpenBabel
 
 from pwchem.wizards import *
 from pwchem.utils import RESIDUES1TO3
 
-from autodock.protocols import *
+from autodock.protocols import ProtChemADTPrepareReceptor, ProtChemAutodock, ProtChemVinaDocking, ProtChemAutodockGPU, \
+  ProtEncoderDockScoring, ProtRingtailFilter, ProtChemAutoSiteGenPharmacophore
 from autodock.viewers import ViewerRingtail
+from autodock import Plugin as autodockPlugin
 
 SelectChainWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
                               targets=['chain_name'],
@@ -89,6 +94,11 @@ SelectMultiLigandWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
                                inputs=['inputAtomStruct'],
                                outputs=['het2keep'])
 
+SelectAttributeWizard().addTarget(protocol=ProtEncoderDockScoring,
+                                  targets=['scoreName'],
+                                  inputs=['dockedMols'],
+                                  outputs=['scoreName'])
+
 class AddFlexibleWizard(EmWizard):
   _targets = [(ProtChemAutodock, ['addFlex']), (ProtChemVinaDocking, ['addFlex']), (ProtChemAutodockGPU, ['addFlex'])]
 
@@ -117,13 +127,13 @@ class SelectRingtailWizard():
     return pdbFile
 
 class SelectRingtailChainWizard(SelectRingtailWizard, SelectChainWizardQT):
-  pass
+  _targets, _inputs, _outputs = [], {}, {}
 
 class SelectRingtailResidueWizard(SelectRingtailWizard, SelectResidueWizardQT):
-  pass
+  _targets, _inputs, _outputs = [], {}, {}
 
 class SelectRingtailAtomWizard(SelectRingtailWizard, SelectAtomWizardQT):
-  pass
+  _targets, _inputs, _outputs = [], {}, {}
 
 SelectRingtailChainWizard().addTarget(protocol=ProtRingtailFilter,
                                       targets=['selChain'],
@@ -154,3 +164,35 @@ SelectFromListWizard().addTarget(protocol=ViewerRingtail,
                                  targets=['bookmark'],
                                  inputs=['getBookmarks'],
                                  outputs=['bookmark'])
+
+
+class SelectEncoderModel(VariableWizard):
+  '''Select the encoder model saved in the models folder of autodock plugin'''
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getModels(self):
+    models = []
+    for file in os.listdir(autodockPlugin.getModelsDir()):
+      models.append(file)
+    return models
+
+  def show(self, form, *params):
+    _, outputParam = self.getInputOutput(form)
+    try:
+      models = self.getModels()
+    except Exception as e:
+      print("ERROR: ", e)
+      return
+
+    finalChainList = []
+    for i in models:
+      finalChainList.append(pwobj.String(i))
+    provider = ListTreeProviderString(finalChainList)
+    dlg = dialog.ListDialog(form.root, "Encoder models", provider,
+                            "Select one of the encoder models")
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+SelectEncoderModel().addTarget(protocol=ProtEncoderDockScoring,
+                               targets=['pretrainedModel'],
+                               inputs=[],
+                               outputs=['pretrainedModel'])

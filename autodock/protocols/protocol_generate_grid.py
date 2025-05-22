@@ -76,7 +76,7 @@ class AutodockGridGeneration(ProtChemAutodockBase):
     def _insertAllSteps(self):
         self._insertFunctionStep('getpdbqt')
         self._insertFunctionStep('prepareGrid')
-        self._insertFunctionStep('createOutput')
+        self._insertFunctionStep('createOutputStep')
 
 
     def getpdbqt(self):
@@ -134,6 +134,6 @@ class AutodockGridGeneration(ProtChemAutodockBase):
                             spacing=self.spacing.get(), massCX=xCenter, massCY=yCenter, massCZ=zCenter, npts=npts)
 
 
-    def createOutput(self):
+    def createOutputStep(self):
         self._defineOutputs(outputGrid=self.grid)
         #self._defineSourceRelation(self.inputAtomStruct, self.grid)
