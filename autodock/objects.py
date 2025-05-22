@@ -128,7 +128,7 @@ class RingtailDatabase(data.EMFile):
 
     def displayPlot(self, bookmark=None, pymol=True):
         from autodock import Plugin
-        inDB = self.getFileName()
+        inDB = os.path.abspath(self.getFileName())
         flag = 'pymol' if pymol else "plot"
 
         args = f'read -i {inDB} --{flag} '

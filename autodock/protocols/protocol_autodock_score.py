@@ -31,7 +31,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import generate_gpf, calculate_centerMass, getBaseFileName, makeSubsets, insistentRun
+from pwchem.utils import generate_gpf, calculate_centerMass, getBaseName, makeSubsets, insistentRun
 from pwchem import Plugin as pwchem_plugin
 from pwchem.constants import MGL_DIC
 
@@ -142,7 +142,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
 
     scoresDic = {}
     for dlgFile in self.getDockedLigandsFiles():
-        molName = getBaseFileName(dlgFile)
+        molName = getBaseName(dlgFile)
         scoresDic[molName] = self.parseDockedMolsDLG(dlgFile)
 
     for smallMol in self.getInputMols():

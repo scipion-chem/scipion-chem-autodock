@@ -40,12 +40,15 @@ from scipion.install.funcs import InstallHelper
 # Plugin imports
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC, RDKIT_DIC
+from pwchem.utils import insistentRun
+
 from .bibtex import _bibtexStr
 from .constants import *
 
 # Pluging variables
 _logo = 'autodock_logo.png'
 __version__ = ALPHA_VERSION
+chemPropFile = 'example_model_v2_regression_mol.ckpt'
 
 # Installation variables
 enVars = {'GPU_INCLUDE_PATH': pwem.Config.CUDA_BIN.replace('bin', 'include'), 'GPU_LIBRARY_PATH': pwem.Config.CUDA_LIB}
@@ -86,6 +89,9 @@ class Plugin(pwchemPlugin):
 	# Scrubber
 	_scrubberHome = pwchemPlugin.getDefPath(SCRUBBER_DIC)
 
+	# GCR models
+	_gcrHome = pwchemPlugin.getDefPath(GCR_DIC)
+
 
 	@classmethod
 	def _defineVariables(cls):
@@ -96,6 +102,7 @@ class Plugin(pwchemPlugin):
 		cls._defineEmVar(ASITE_DIC['home'], cls._asiteHome)
 		cls._defineEmVar(SCRUBBER_DIC['home'], cls._scrubberHome)
 		cls._defineEmVar(RINGTAIL_DIC['home'], cls._ringtailHome)
+		cls._defineEmVar(GCR_DIC['home'], cls._gcrHome)
 	
 	@classmethod
 	def defineBinaries(cls, env):
@@ -109,6 +116,7 @@ class Plugin(pwchemPlugin):
 		cls.addAutoSitePackage(env)
 		cls.addRingtailPackage(env)
 		cls.addScrubberPackage(env)
+		cls.addGCRPackage(env)
 
 	@classmethod
 	def getEnviron(cls):
@@ -246,6 +254,21 @@ class Plugin(pwchemPlugin):
 								 'SCRUBBER_INSTALLED').\
 			addPackage(env, dependencies=['git', 'conda', 'pip'], default=default)
 
+	@classmethod
+	def addGCRPackage(cls, env, default=False):
+		""" This function provides the necessary commands for installing GEDS. """
+		# Instantiating the install helper
+		installer = InstallHelper(GCR_DIC['name'], packageHome=cls.getVar(GCR_DIC['home']),
+															packageVersion=GCR_DIC['version'])
+
+		# Installing package
+		installer.getCloneCommand(cls.getGCRGithub(), binaryFolderName=cls.getEnvName(GCR_DIC), targeName='GCR_CLONED'). \
+			addCommand(f'cd {cls.getEnvName(GCR_DIC)} && conda env create -f environment.yml', 'GCR_INSTALLED'). \
+			addCommand(f'wget {cls.getChempropModelLink()}', 'CHEMPROP_MODEL'). \
+			addCommand(f'{cls.getEnvActivationCommand(GCR_DIC)} && git clone {cls.getCOATIGithub()} && '
+								 f'cd COATI && pip install .', 'COATI_INSTALLED'). \
+			addPackage(env, dependencies=['git', 'conda', 'pip'], default=default)
+
 	# ---------------------------------- Protocol functions-----------------------
 	@classmethod
 	def runAutodockGPU(cls, protocol, args, cwd=None):
@@ -259,7 +282,8 @@ class Plugin(pwchemPlugin):
 				break
 
 		if program:
-			protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
+			kwargs = {"cwd": cwd}
+			insistentRun(protocol, program, args, **kwargs)
 		else:
 			print('No autodock_gpu binary was found in {}'.format(progDir))
 
@@ -294,7 +318,7 @@ class Plugin(pwchemPlugin):
 			if getOutput:
 				return subprocess.check_output(f'{fullProgram} {args}', cwd=cwd, shell=True)
 			else:
-				subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+				subprocess.Popen(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
 	@classmethod
 	def runScript(cls, protocol, scriptName, args, envDict, cwd=None, popen=False):
@@ -329,6 +353,10 @@ class Plugin(pwchemPlugin):
 		return cls.getPluginHome('scripts/%s' % scriptName)
 
 	@classmethod
+	def getModelsDir(cls, modelName=''):
+		return os.path.join(cls.getPluginHome('models'), modelName)
+
+	@classmethod
 	def getVinaPath(cls, path=''):
 		return os.path.join(cls.getVar('VINA_HOME'), path)
 
@@ -343,6 +371,10 @@ class Plugin(pwchemPlugin):
 	@classmethod
 	def getADTPath(cls, path=''):
 		return pwchemPlugin.getProgramHome(MGL_DIC, os.path.join('MGLToolsPckgs', 'AutoDockTools', path))
+
+	@classmethod
+	def getGCRPath(cls, path=''):
+		return pwchemPlugin.getProgramHome(GCR_DIC, path)
 
 	@classmethod
 	def getADTSuiteUrl(cls):
@@ -365,6 +397,22 @@ class Plugin(pwchemPlugin):
 	@classmethod
 	def getScrubberGithub(cls):
 		return 'https://github.com/forlilab/molscrub.git'
+
+	@classmethod
+	def getGCRGithub(cls):
+		return 'https://github.com/DaniDelHoyo/GCR_Regression_ForliLab.git'
+
+	@classmethod
+	def getChempropModelLink(cls, modelFile='example_model_v2_regression_mol.ckpt'):
+		return f'https://github.com/chemprop/chemprop/raw/refs/heads/main/tests/data/{modelFile}'
+
+	@classmethod
+	def getChemPropFile(cls):
+		return os.path.abspath(pwchemPlugin.getProgramHome(GCR_DIC, chemPropFile))
+
+	@classmethod
+	def getCOATIGithub(cls):
+		return 'https://github.com/terraytherapeutics/COATI.git'
 
 	@classmethod
 	def getADTTar(cls):

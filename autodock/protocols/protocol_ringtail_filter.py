@@ -31,17 +31,62 @@ import pyworkflow.object as pwobj
 
 from pwem.protocols import EMProtocol
 
-from pwchem.utils import RESIDUES1TO3
+from pwchem.utils import RESIDUES1TO3, getBaseName
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
 from autodock import Plugin as autodockPlugin
 from autodock.objects import RingtailDatabase
 from autodock.constants import VINA
-from autodock.utils import splitSDF
 
 scoreOptions = {'None': None, 'Energy': 'e', 'Ligand efficiency': 'le',
                 'Energy percentile': 'pe', 'Ligand efficiency percentile': 'ple'}
 clusterOptions = {'None': None, 'Morgan fingerprints': 'mfpc', 'Interactions fingerprints': 'ifpc'}
+
+
+def splitSDF(sdfFile, oriName=None):
+  '''Split multi molecule sdf files.
+  Takes into account different conformations of the same molecule.
+  '''
+
+  def getMolName(molText, splitConf=True):
+    molName, confId = molText.split('\n')[0].strip(), None
+    if '_i' in molName and splitConf:
+      molName, confId = molName.split('_i')
+    return molName, confId
+
+  molDic, confFile = {}, None
+  oDir = os.path.dirname(sdfFile)
+
+  with open(sdfFile) as f:
+    sdfText = f.read().strip()
+  molTexts = [molText.strip() for molText in sdfText.split('$$$$') if molText.strip()]
+
+  if len(molTexts) > 1:
+    if oriName is not None:
+      confFile = sdfFile.replace('.sdf', f'_{oriName}.sdf')
+      os.rename(sdfFile, confFile)
+
+    for molText in molTexts:
+      molName, confId = getMolName(molText)
+      oFile = os.path.join(oDir, f'{molName}.sdf')
+      if confId is not None:
+        oFile = oFile.replace('.sdf', f'_{confId}.sdf')
+
+      if molName not in molDic:
+        molDic[molName] = []
+      else:
+        poseId = len(molDic[molName]) + 1
+        oFile = oFile.replace('.sdf', f'_{poseId}.sdf')
+
+      molDic[molName].append(oFile)
+      with open(oFile, 'w') as fo:
+        fo.write(f'{molText}\n\n$$$$')
+
+  else:
+    molName, confId = getMolName(molTexts[0])
+    molDic = {molName: [sdfFile]}
+
+  return molDic, confFile
 
 class ProtRingtailFilter(EMProtocol):
   """Executes a serie of Ringtail filters over a docking database"""
@@ -150,11 +195,10 @@ class ProtRingtailFilter(EMProtocol):
     if self.outMols.get():
       outDir = os.path.abspath(self._getPath())
       posesDic = self.getOutputDic()
-      outputSet = SetOfSmallMolecules().create(outputPath=outDir)
 
-      for posesFile, sdfFiles in posesDic.items():
-        energies, effs = self.parsePosesFile(posesFile)
-        molName = os.path.split(posesFile)[-1].split('_poses')[0]
+      outputSet = SetOfSmallMolecules().create(outputPath=outDir)
+      for molName, sdfFiles in posesDic.items():
+        energies, effs = self.parsePosesFile(sdfFiles[0])
         for i, sFile in enumerate(sdfFiles):
           newSmallMol = SmallMolecule(smallMolFilename=sFile, type='AutoDock')
           newSmallMol.setMolName(molName)
@@ -200,19 +244,16 @@ class ProtRingtailFilter(EMProtocol):
     return args
 
   def getOutputDic(self):
-    '''Return a dic of the form: {oriFileBase: [sdfFileNames]}
+    '''Return a dic of the form: {molName: [sdfFileNames]}
     '''
-    allFiles = [self._getPath(f) for f in os.listdir(self._getPath()) if '.sdf' in f]
-    sdfFiles = {f: [self._getPath(f)] for f in os.listdir(self._getPath()) if '.sdf' in f}
+    sdfFilesDic = {getBaseName(f): [self._getPath(f)] for f in os.listdir(self._getPath()) if '.sdf' in f}
     if not self.outBestMol.get():
       newSDFiles = {}
-      for sFile in allFiles:
-        newFiles, confFile = splitSDF(sFile, oriName='poses')
-        if len(newFiles) == 1:
-          confFile = newFiles[0]
-        newSDFiles[confFile] = newFiles
-      sdfFiles = newSDFiles
-    return sdfFiles
+      for molName, sFiles in sdfFilesDic.items():
+        molDic, _ = splitSDF(sFiles[0], oriName='poses')
+        newSDFiles.update(molDic)
+      sdfFilesDic = newSDFiles
+    return sdfFilesDic
 
   def parsePosesFile(self, pFile):
     '''Return two lists with energies and ligand efficiencies stored in a sdf file

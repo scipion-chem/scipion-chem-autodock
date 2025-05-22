@@ -33,7 +33,8 @@ from pwchem.protocols import ProtChemImportSmallMolecules, ProtChemOBabelPrepare
 from pwchem.utils import assertHandle
 
 # Plugin imports
-from ..protocols import ProtChemADTPrepareReceptor, ProtChemADTPrepareLigands, ProtChemMeekoLigands
+from ..protocols import ProtChemADTPrepareReceptor, ProtChemADTPrepareLigands, ProtChemMeekoLigands, \
+	ProtScrubberPrepareLigands
 from ..protocols import ProtChemAutoLigand, ProtChemAutoSite, ProtChemAutodock
 from ..protocols import ProtChemAutodockGPU, ProtChemVinaDocking, ProtChemAutoSiteGenPharmacophore
 from ..protocols import AutodockGridGeneration, ProtChemAutodockScore
@@ -50,8 +51,8 @@ class TestADPrepareReceptor(BaseTest):
 	@classmethod
 	def _runImportPDB(cls):
 		cls.protImportPDB = cls.newProtocol(
-			ProtImportPdb,
-			inputPdbData=0, pdbId='4erf')
+			ProtImportPdb, inputPdbData=1,
+			pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.pdb'))
 		cls.proj.launchProtocol(cls.protImportPDB, wait=False)
 
 
@@ -61,7 +62,7 @@ class TestADPrepareReceptor(BaseTest):
 			ProtChemADTPrepareReceptor,
 			inputAtomStruct=cls.protImportPDB.outputPdb,
 			HETATM=True, rchains=True, repair=3,
-			chain_name='{"model": 0, "chain": "C", "residues": 93}')
+			chain_name='{"model": 0, "chain": "C", "residues": 141}')
 
 		cls.launchProtocol(cls.protPrepareReceptor)
 
@@ -120,6 +121,23 @@ class TestADMeekoLigands(TestADPrepareLigands):
 
 		self._waitOutput(self.protMeeko, 'outputSmallMolecules', sleepTime=10)
 		assertHandle(self.assertIsNotNone, getattr(self.protMeeko, 'outputSmallMolecules', None), cwd=self.protMeeko.getWorkingDir())
+
+class TestScrubberLigands(TestADPrepareLigands):
+	@classmethod
+	def _runPrepareLigandsScrubber(cls):
+		cls.protScrubber = cls.newProtocol(ProtScrubberPrepareLigands)
+		cls.protScrubber.inputSmallMolecules.set(cls.protImportSmallMols)
+		cls.protScrubber.inputSmallMolecules.setExtended('outputSmallMolecules')
+
+		cls.proj.launchProtocol(cls.protScrubber, wait=False)
+
+
+	def test(self):
+		self._runPrepareLigandsScrubber()
+
+		self._waitOutput(self.protScrubber, 'outputSmallMolecules', sleepTime=10)
+		assertHandle(self.assertIsNotNone, getattr(self.protScrubber, 'outputSmallMolecules', None),
+								 cwd=self.protScrubber.getWorkingDir())
 
 # Binding site predictions
 class TestAutoLigand(TestADPrepareReceptor):

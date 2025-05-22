@@ -70,7 +70,7 @@ class ProtChemADTPrepare(ProtChemPrepareReceptor, ProtChemAutodockBase):
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('preparationStep')
-        self._insertFunctionStep('createOutput')
+        self._insertFunctionStep('createOutputStep')
 
     def callPrepare(self, prog, args, outDir, popen=False):
         if self.repair.get()==3:
@@ -114,14 +114,14 @@ class ProtChemADTPrepare(ProtChemPrepareReceptor, ProtChemAutodockBase):
             args += " -e"
 
         if not popen:
-            self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
-                        autodock_plugin.getADTPath('Utilities24/%s.py'%prog)+args, cwd=outDir)
+            self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh '),
+                        autodock_plugin.getADTPath(f'Utilities24/{prog}.py ') + args, cwd=outDir)
         else:
             fullProgram = pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh ') + \
-                          autodock_plugin.getADTPath('Utilities24/%s.py' % prog)
+                          autodock_plugin.getADTPath(f'Utilities24/{prog}.py ')
             run(fullProgram + args, cwd=outDir, shell=True)
 
-    def createOutput(self):
+    def createOutputStep(self):
         fnOut = self._getExtraPath('atomStruct.pdbqt')
         if os.path.exists(fnOut):
             target = AtomStruct(filename=fnOut)
@@ -178,7 +178,7 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
             fullProgram = '%s && %s %s' % (pwchem_plugin.getEnvActivationCommand(RDKIT_DIC), 'python', zincPrepPath)
             self.runJob(fullProgram, args, cwd=self._getExtraPath())
 
-    def createOutput(self):
+    def createOutputStep(self):
         fnOut = self.getReceptorPDBQT()
         fnOut = fnOut if not self.doZnDock.get() else fnOut.replace('.pdbqt', '_tz.pdbqt')
         if os.path.exists(fnOut):

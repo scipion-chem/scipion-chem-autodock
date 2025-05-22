@@ -49,6 +49,5 @@ from .protocol_autoSite_pharmacophore import ProtChemAutoSiteGenPharmacophore
 
 # Scoring
 from .protocol_autodock_score import ProtChemAutodockScore
-
-
+from .protocol_encoder_dock_scoring import ProtEncoderDockScoring
 

@@ -33,8 +33,8 @@ import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseFileName, relabelMapAtomsMol2, \
-  insistentRun, performBatchThreading, mergeFiles, convertToSdf, getBaseName
+from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseName, relabelMapAtomsMol2, \
+  insistentRun, mergeFiles, getBaseFileName, makeSubsets, convertToSdf
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC, OPENBABEL_DIC
 
@@ -116,41 +116,7 @@ class ProtChemAutodockBase(EMProtocol):
                        help='Whether to use the scripts for preparing the metalloprotein receptor containing Zn')
         return inputGroup, dockGroup
 
-    def performLigConversion(self, inMols, molLists, it):
-      if self.getEnumText('convSoft') == 'MGL':
-        for mol in inMols:
-          molFile = mol.getFileName()
-          if not molFile.endswith(PDBQText):
-            fnSmall = self.convertLigand2PDBQT(mol, self.getInputLigandsPath(), popen=True)[0]
-          else:
-            fnSmall = self.getInputLigandsPath(getBaseFileName(molFile + PDBQText))
-            shutil.copy(molFile, fnSmall)
-          molLists[it].append(fnSmall)
-      
-      else:
-        oDir = self.getInputLigandsPath()
-        molFiles = [mol.getFileName() for mol in inMols]
-        molExt = os.path.splitext(molFiles[-1])[-1]
-        if molExt != '.pdbqt':
-          oFile = os.path.abspath(self._getTmpPath(f'mergedLigands_{it}{molExt}'))
-          mergedFile = mergeFiles(molFiles, outFile=oFile)
-
-          args = f'-i {mergedFile} --multimol_outdir {oDir} '
-          autodockPlugin.runMeekoLigand(self, args, popen=True)
-
-        else:
-          for molFile in molFiles:
-            fnSmall = self.getInputLigandsPath(getBaseFileName(molFile + PDBQText))
-            shutil.copy(molFile, fnSmall)
-        
-        
-    def convertStep(self):
-      inputMols, nt = self.inputSmallMolecules.get(), self.numberOfThreads.get()
-      oDir = self.getInputLigandsPath()
-      if not os.path.exists(oDir):
-        os.mkdir(oDir)
-      molLists = performBatchThreading(self.performLigConversion, inputMols, nt)
-
+    def convertReceptorStep(self):
       receptorFile = self.getOriginalReceptorFile()
       if receptorFile.endswith(PDBext):
         self.convertReceptor2PDBQT(receptorFile)
@@ -159,7 +125,18 @@ class ProtChemAutodockBase(EMProtocol):
         self.convertReceptor2PDB(receptorFile)
         shutil.copy(receptorFile, self.getReceptorPDBQT())
 
+    def convertLigandsStep(self, molSet, it):
+      ligDir = self.getLigConvertedDirs(it)[0]
+      if not os.path.exists(ligDir):
+        os.mkdir(ligDir)
+
+      if self.getEnumText('convSoft') == 'MGLTools':
+        self.performMGLLigConversion(molSet, it)
+      else:
+        self.performMeekoLigandConversion(molSet, it, remove=False)
+
     def generateGridsStep(self, pocket=None, addLigType=True):
+      ligFiles = self.getConvertedLigandsFiles()
       fnReceptor = self.getReceptorPDBQT()
       outDir = self.getOutputPocketDir(pocket)
       makePath(outDir)
@@ -176,7 +153,7 @@ class ProtChemAutodockBase(EMProtocol):
         if self.doZnDock.get() else None
       gpfFile = generate_gpf(fnReceptor, spacing=self.spacing.get(), addLigTypes=addLigType,
                               xc=xCenter, yc=yCenter, zc=zCenter,
-                              npts=npts, outDir=outDir, ligandFns=self.getInputPDBQTFiles(), znFFfile=znFFfile)
+                              npts=npts, outDir=outDir, ligandFns=ligFiles, znFFfile=znFFfile)
 
       if self.doFlexRes:
         _, fnReceptor = self.buildFlexReceptor(fnReceptor, cleanZn=self.doZnDock.get())
@@ -284,42 +261,52 @@ class ProtChemAutodockBase(EMProtocol):
           createLink(inFile, oFile)
         return oFile, oDir
 
-    def getInputLigandsPath(self, path=''):
-        return os.path.abspath(self._getExtraPath('inputLigands', path))
+    def getOriginalReceptorFile(self, getLink=True):
+        recLink = self.getReceptorLink()
+        if recLink is None or not getLink:
+          if hasattr(self, 'inputAtomStruct') and \
+                  (not hasattr(self, 'fromReceptor') or self.fromReceptor.get() == 0):
+              recFile = self.inputAtomStruct.get().getFileName()
+          elif hasattr(self, 'inputStructROIs') and \
+                  (not hasattr(self, 'fromReceptor') or self.fromReceptor.get() == 1):
+              recFile = self.inputStructROIs.get().getProteinFile()
+          else:
+              print('No original receptor file found')
+              return None
 
-    def getInputPDBQTFiles(self):
-        ligandFileNames = []
-        for molFile in os.listdir(self.getInputLigandsPath()):
-            molFile = self.getInputLigandsPath(molFile)
-            ligandFileNames.append(molFile)
-        return ligandFileNames
+          # Return a link so we avoid recursive threads into DB
+          if getLink:
+            recDir = self._getTmpPath('originalReceptor')
+            if not os.path.exists(recDir):
+              os.mkdir(recDir)
 
-    def getOriginalReceptorFile(self):
-        if hasattr(self, 'inputAtomStruct') and \
-                (not hasattr(self, 'fromReceptor') or self.fromReceptor.get() == 0):
-            return self.inputAtomStruct.get().getFileName()
-        elif hasattr(self, 'inputStructROIs') and \
-                (not hasattr(self, 'fromReceptor') or self.fromReceptor.get() == 1):
-            return self.inputStructROIs.get().getProteinFile()
-        else:
-            print('No original receptor file found')
+            recLink = os.path.join(recDir, getBaseFileName(recFile))
+            if not os.path.exists(recLink):
+              os.link(recFile, recLink)
+          else:
+            recLink = recFile
+        return recLink
+
+    def getReceptorLink(self):
+      recDir = self._getTmpPath('originalReceptor')
+      if os.path.exists(recDir):
+        for file in os.listdir(recDir):
+          return os.path.join(recDir, file)
+      return None
 
     def getReceptorName(self):
-        if not hasattr(self, 'receptorName'):
-            fnReceptor = self.getOriginalReceptorFile()
-            return getBaseFileName(fnReceptor)
-        else:
-            return self.receptorName
+        fnReceptor = self.getOriginalReceptorFile()
+        return getBaseName(fnReceptor)
 
     def getReceptorDir(self):
         fnReceptor = self.getOriginalReceptorFile()
         return os.path.dirname(fnReceptor)
 
     def getReceptorPDBQT(self):
-        return os.path.abspath(self._getExtraPath('{}.pdbqt'.format(self.getReceptorName())))
+        return os.path.abspath(self._getExtraPath(f'{self.getReceptorName()}.pdbqt'))
 
     def getReceptorPDB(self):
-        return os.path.abspath(self._getExtraPath('{}.pdb'.format(self.getReceptorName())))
+        return os.path.abspath(self._getExtraPath(f'{self.getReceptorName()}.pdb'))
 
     def convertReceptor2PDB(self, proteinFile):
         inExt = os.path.splitext(os.path.basename(proteinFile))[1]
@@ -344,7 +331,7 @@ class ProtChemAutodockBase(EMProtocol):
             receptorFn = self.cleanPDBQT(receptorFn, outFile=cleanFile)
 
         flexFn, rigFn = self.getFlexFiles()
-        molName = getBaseFileName(receptorFn)
+        molName = getBaseName(receptorFn)
         allFlexRes = self.parseFlexRes(molName)
         args = ' -r {} -s {} -g {} -x {}'.format(receptorFn, allFlexRes, rigFn, flexFn)
         self.runMGLTool(program='Utilities24/prepare_flexreceptor4.py', args=args, cwd=self._getExtraPath())
@@ -587,32 +574,41 @@ class ProtChemAutodock(ProtChemAutodockBase):
 
   # --------------------------- INSERT steps functions --------------------
   def _insertAllSteps(self):
-      cId = self._insertFunctionStep('convertStep', prerequisites=[])
-      self.receptorName = self.getReceptorName()
+      inMols = self.inputSmallMolecules.get()
+      nt = self.numberOfThreads.get()
+      subsets = makeSubsets(inMols, nt - 1, cloneItem=True)
+
+      cRStep = self._insertFunctionStep('convertReceptorStep', prerequisites=[], needsGPU=False)
+
+      cSteps = []
+      for it, molSet in enumerate(subsets):
+        cSteps.append(self._insertFunctionStep('convertLigandsStep', molSet, it, prerequisites=[], needsGPU=False))
 
       dockSteps = []
+      gridReqs = [cRStep] + cSteps
       if self.fromReceptor.get() == 0:
-          gridId = self._insertFunctionStep('generateGridsStep', prerequisites=[cId])
-          dockId = self._insertFunctionStep('dockStep', prerequisites=[gridId])
+        gridId = self._insertFunctionStep('generateGridsStep', prerequisites=gridReqs, needsGPU=False)
+        for it, _ in enumerate(subsets):
+          dockId = self._insertFunctionStep('dockStep', it, prerequisites=[gridId], needsGPU=False)
           dockSteps.append(dockId)
       else:
-        for it, pocket in enumerate(self.inputStructROIs.get()):
-          gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=[cId])
-          dockId = self._insertFunctionStep('dockStep', pocket.clone(), it, prerequisites=[gridId])
-          dockSteps.append(dockId)
+        for pocket in self.inputStructROIs.get():
+          gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=gridReqs, needsGPU=False)
+          for it, _ in enumerate(subsets):
+            dockId = self._insertFunctionStep('dockStep', it, pocket.clone(), prerequisites=[gridId], needsGPU=False)
+            dockSteps.append(dockId)
 
-      self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
+      self._insertFunctionStep('createOutputStep', prerequisites=dockSteps, needsGPU=False)
 
-  def dockStep(self, pocket=None, it=None):
-    molFns = self.getInputPDBQTFiles()
+  def dockStep(self, it, pocket=None):
+    molFns = self.getConvertedLigandsFiles(it)
     if self.doFlexRes:
         flexReceptorFn, receptorFn = self.getFlexFiles()
     else:
         flexReceptorFn, receptorFn = None, self.getReceptorPDBQT()
     outDir = self.getOutputPocketDir(pocket)
-    nt = self.getNTPocket(it)
-    performBatchThreading(self.performDocking, molFns, nt, cloneItem=False,
-                          outDir=outDir, receptorFn=receptorFn, flexReceptorFn=flexReceptorFn)
+    self.performDocking(molFns, outDir, receptorFn, flexReceptorFn)
+
 
   def createOutputStep(self):
     outDir = self._getPath('outputLigands')
@@ -624,7 +620,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
       pocketDic = {}
       gridId = self.getGridId(pocketDir)
       for dlgFile in self.getDockedLigandsFiles(pocketDir):
-        molName = getBaseFileName(dlgFile)
+        molName = getBaseName(dlgFile)
         pocketDic[molName] = self.parseDockedMolsDLG(dlgFile)
 
         for modelId in pocketDic[molName]:
@@ -635,7 +631,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
 
       for smallMol in self.inputSmallMolecules.get():
         molFile = smallMol.getFileName()
-        molName = getBaseFileName(molFile)
+        molName = getBaseName(molFile)
         if molName in pocketDic:
           molDic = pocketDic[molName]
 
@@ -669,7 +665,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
 
   ########################### Utils functions ############################
 
-  def performDocking(self, molFns, molLists, it, outDir, receptorFn, flexReceptorFn):
+  def performDocking(self, molFns, outDir, receptorFn, flexReceptorFn):
     for molFn in molFns:
         dpfFile = self.writeDPF(outDir, molFn, receptorFn, flexReceptorFn)
 

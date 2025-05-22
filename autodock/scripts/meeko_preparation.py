@@ -24,9 +24,36 @@
 # **************************************************************************
 import os, sys
 
+from rdkit import Chem
 from meeko import MoleculePreparation
 
 from utils import getMolFilesDic, parseParams, getBaseName
+
+def fixLigand(mol):
+    """
+    Add explicit hydrogens to carbon atoms and ensure tetravalent nitrogens are assigned a +1 charge
+    """
+    chemProblems = Chem.DetectChemistryProblems(mol)
+    for chemProblem in chemProblems:
+        if chemProblem.GetType() == 'AtomValenceException':
+            atom = mol.GetAtomWithIdx(chemProblem.GetAtomIdx())
+            if atom.GetSymbol() == 'N' and atom.GetFormalCharge() == 0 and atom.GetExplicitValence() == 4:
+                atom.SetFormalCharge(1)
+    Chem.SanitizeMol(mol)
+    for a in mol.GetAtoms():
+        rad = a.GetNumRadicalElectrons()
+        if rad:
+            a.SetNumExplicitHs(rad)
+            a.SetNumRadicalElectrons(0)
+    return Chem.AddHs(Chem.RemoveHs(mol), addCoords=True)
+
+def getBiggestFrag(mol):
+    frags = Chem.GetMolFrags(mol, asMols=True)
+    maxi, bMol = 0, None
+    for mol in frags:
+        if mol.GetNumAtoms() > maxi:
+            maxi, bMol = mol.GetNumAtoms(), mol
+    return bMol
 
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile> 
@@ -39,15 +66,16 @@ if __name__ == "__main__":
 
 
 #####################################################################
-    molFileDic, mols = getMolFilesDic(ligandFiles)
+    molFileDic, _ = getMolFilesDic(ligandFiles)
     outFiles = []
-    if len(mols) > 0:
+    if len(molFileDic) > 0:
         preparator = MoleculePreparation(hydrate=hydra)
-        for mol in mols:
+        for mol, molFile in molFileDic.items():
+            mol = fixLigand(mol)
+            mol = getBiggestFrag(mol)
             preparator.prepare(mol)
 
-            inFile = molFileDic[mol]
-            outFile = os.path.join(outDir, getBaseName(inFile)) + '.pdbqt'
+            outFile = os.path.join(outDir, getBaseName(molFile)) + '.pdbqt'
             preparator.write_pdbqt_file(outFile)
             outFiles.append(outFile)
 
