@@ -161,7 +161,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
         outputSet.append(newSmallMol)
 
     # todo: manage several receptor conformations when flexible docking
-    outputSet.proteinFile.set(self.getOriginalReceptorFile())
+    outputSet.proteinFile.set(self.getReceptorPDB())
     outputSet.setDocked(True)
     self._defineOutputs(outputSmallMolecules=outputSet)
     self._defineSourceRelation(self.inputSmallMolecules, outputSet)

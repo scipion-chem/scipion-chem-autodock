@@ -210,26 +210,23 @@ class ProtChemAutodockBase(EMProtocol):
 
     def performMeekoLigandConversion(self, inMols, it, remove=True):
       oDir = self.getLigConvertedDirs(it)[0]
+      os.makedirs(oDir, exist_ok=True)
       molFiles = [mol.getFileName() for mol in inMols]
 
       molExt = os.path.splitext(molFiles[-1])[-1]
       if molExt == '.pdbqt':
         for molFile in molFiles:
           fnSmall = os.path.abspath(os.path.join(oDir, getBaseFileName(molFile)))
-          shutil.copy(molFile, fnSmall)
+          os.link(molFile, fnSmall)
       else:
-        sdfFiles = []
         for molFile in molFiles:
           sdfFile = os.path.join(oDir, getBaseName(molFile) + '.sdf')
-          sdfFiles.append(convertToSdf(self, molFile, sdfFile))
+          convertToSdf(self, molFile, sdfFile)
 
-        mergedFile = os.path.abspath(self._getTmpPath(f'mergedLigands_{it}.sdf'))
-        mergedFile = mergeFiles(sdfFiles, outFile=mergedFile, remove=True)
-
-        args = f'-i {mergedFile} --multimol_outdir {oDir} '
-        autodockPlugin.runMeekoLigand(self, args)
-        if remove:
-          os.remove(mergedFile)
+          oFile = os.path.abspath(os.path.join(oDir, getBaseName(sdfFile) + PDBQText))
+          args = f'-i {sdfFile} -o {oFile} '
+          autodockPlugin.runMeekoLigand(self, args)
+          os.remove(sdfFile)
 
     def convertLigand2PDBQT(self, smallMol, oDir, pose=False, popen=False):
         '''Convert ligand to pdbqt using prepare_ligand4 of ADT'''
@@ -578,27 +575,27 @@ class ProtChemAutodock(ProtChemAutodockBase):
       nt = self.numberOfThreads.get()
       subsets = makeSubsets(inMols, nt - 1, cloneItem=True)
 
-      cRStep = self._insertFunctionStep('convertReceptorStep', prerequisites=[], needsGPU=False)
+      cRStep = self._insertFunctionStep(self.convertReceptorStep, prerequisites=[], needsGPU=False)
 
       cSteps = []
       for it, molSet in enumerate(subsets):
-        cSteps.append(self._insertFunctionStep('convertLigandsStep', molSet, it, prerequisites=[], needsGPU=False))
+        cSteps.append(self._insertFunctionStep(self.convertLigandsStep, molSet, it, prerequisites=[], needsGPU=False))
 
       dockSteps = []
       gridReqs = [cRStep] + cSteps
       if self.fromReceptor.get() == 0:
-        gridId = self._insertFunctionStep('generateGridsStep', prerequisites=gridReqs, needsGPU=False)
+        gridId = self._insertFunctionStep(self.generateGridsStep, prerequisites=gridReqs, needsGPU=False)
         for it, _ in enumerate(subsets):
-          dockId = self._insertFunctionStep('dockStep', it, prerequisites=[gridId], needsGPU=False)
+          dockId = self._insertFunctionStep(self.dockStep, it, prerequisites=[gridId], needsGPU=False)
           dockSteps.append(dockId)
       else:
         for pocket in self.inputStructROIs.get():
-          gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=gridReqs, needsGPU=False)
+          gridId = self._insertFunctionStep(self.generateGridsStep, pocket.clone(), prerequisites=gridReqs, needsGPU=False)
           for it, _ in enumerate(subsets):
-            dockId = self._insertFunctionStep('dockStep', it, pocket.clone(), prerequisites=[gridId], needsGPU=False)
+            dockId = self._insertFunctionStep(self.dockStep, it, pocket.clone(), prerequisites=[gridId], needsGPU=False)
             dockSteps.append(dockId)
 
-      self._insertFunctionStep('createOutputStep', prerequisites=dockSteps, needsGPU=False)
+      self._insertFunctionStep(self.createOutputStep, prerequisites=dockSteps, needsGPU=False)
 
   def dockStep(self, it, pocket=None):
     molFns = self.getConvertedLigandsFiles(it)
@@ -614,7 +611,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
     outDir = self._getPath('outputLigands')
     makePath(outDir)
     outputSet = SetOfSmallMolecules().create(outputPath=outDir)
-    recFile = self.getOriginalReceptorFile()
+    recFile = self.getReceptorPDB()
 
     for pocketDir in self.getPocketDirs():
       pocketDic = {}
@@ -656,7 +653,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
 
               outputSet.append(newSmallMol)
 
-    outputSet.proteinFile.set(self.getOriginalReceptorFile())
+    outputSet.proteinFile.set(recFile)
     outputSet.setDocked(True)
     self._defineOutputs(outputSmallMolecules=outputSet)
     self._defineSourceRelation(self.inputSmallMolecules, outputSet)

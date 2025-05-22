@@ -201,7 +201,7 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
 
     def createOutputStep(self):
         outFiles, resultsFile = self.organizeOutput()
-        receptorFile = self.getOriginalReceptorFile()
+        receptorFile = self.getReceptorPDB()
 
         outPockets = SetOfStructROIs(filename=self._getPath('pockets.sqlite'))
         for oFile in outFiles:

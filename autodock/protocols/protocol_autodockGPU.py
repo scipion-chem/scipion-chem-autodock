@@ -196,7 +196,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
   
           inputMols = self.inputSmallMolecules.get()
           outputMols = performBatchThreading(self.performOutputCreation, inputMols, nt,
-                                             gridId=gridId, pocketDic=pocketDic, recFile=self.getOriginalReceptorFile())
+                                             gridId=gridId, pocketDic=pocketDic, recFile=recFile)
   
           for smallMol in outputMols:
             outputSet.append(smallMol)
