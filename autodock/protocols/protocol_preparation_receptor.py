@@ -35,15 +35,15 @@ from pwchem.utils import cleanPDB
 from pwchem.constants import MGL_DIC, RDKIT_DIC
 from pwchem.protocols import ProtChemPrepareReceptor
 
-from autodock import Plugin as autodock_plugin
+from autodock import Plugin as autodockPlugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
 
 class ProtChemADTPrepare(ProtChemPrepareReceptor, ProtChemAutodockBase):
-    def _defineParamsBasic(self, form):
+    def _defineParamsBasic(self, form, condition='True'):
         choicesRepair = ['None', 'Bonds', 'Hydrogens', 'Bonds hydrogens']
         if self.typeRL=="target":
             choicesRepair.append('Check hydrogens')
-        preparation = form.addGroup('Preparation')
+        preparation = form.addGroup('Preparation', condition=condition)
         preparation.addParam('repair', params.EnumParam, choices=choicesRepair,
                       default=0, label='Repair action:',
                       help='Bonds: build a single bond from each atom with no bonds to its closest neighbor\n'
@@ -115,10 +115,10 @@ class ProtChemADTPrepare(ProtChemPrepareReceptor, ProtChemAutodockBase):
 
         if not popen:
             self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh '),
-                        autodock_plugin.getADTPath(f'Utilities24/{prog}.py ') + args, cwd=outDir)
+                        autodockPlugin.getADTPath(f'Utilities24/{prog}.py ') + args, cwd=outDir)
         else:
             fullProgram = pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh ') + \
-                          autodock_plugin.getADTPath(f'Utilities24/{prog}.py ')
+                          autodockPlugin.getADTPath(f'Utilities24/{prog}.py ')
             run(fullProgram + args, cwd=outDir, shell=True)
 
     def createOutputStep(self):
@@ -127,6 +127,9 @@ class ProtChemADTPrepare(ProtChemPrepareReceptor, ProtChemAutodockBase):
             target = AtomStruct(filename=fnOut)
             self._defineOutputs(outputStructure=target)
             self._defineSourceRelation(self.inputAtomStruct, target)
+
+
+MEEKO, MGL = 0, 1
 
 class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
     """Prepare receptor using Autodocking Tools from MGL"""
@@ -141,10 +144,14 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
                       help='Input Atomic structure to prepare for Autodock docking')
 
         self.defineCleanParams(form, w=False)
-        ProtChemADTPrepare._defineParamsBasic(self, form)
+
+        form.addParam('prepProg', params.EnumParam, choices=['Meeko', 'MGLTools'], label='Preparation program:',
+                      default=MEEKO, help='Software to use for the receptor preparation')
+
+        ProtChemADTPrepare._defineParamsBasic(self, form, condition=f'prepProg=={MGL}')
 
         form.addParam('doZnDock', params.BooleanParam, label='Perform Zn metalloprotein preparation: ', default=False,
-                       expertLevel=params.LEVEL_ADVANCED,
+                       expertLevel=params.LEVEL_ADVANCED, condition=f'prepProg=={MGL}',
                        help='Whether to use the scripts for preparing the metalloprotein receptor containing Zn')
 
     def preparationStep(self):
@@ -167,16 +174,21 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
                                False, self.HETATM.get(), chainIds, het2keep)
 
         fnOut = self.getReceptorPDBQT()
-        args = ' -r %s -o %s' % (os.path.abspath(cleanedPDB), fnOut)
-        ProtChemADTPrepare.callPrepare(self, "prepare_receptor4", args, outDir=self._getExtraPath())
+        if self.prepProg.get() == MGL:
+            args = ' -r %s -o %s' % (os.path.abspath(cleanedPDB), fnOut)
+            ProtChemADTPrepare.callPrepare(self, "prepare_receptor4", args, outDir=self._getExtraPath())
 
-        if self.doZnDock.get():
-            zincPrepPath = autodock_plugin.getVinaScriptsPath('zinc_pseudo.py')
+            if self.doZnDock.get():
+                zincPrepPath = autodockPlugin.getVinaScriptsPath('zinc_pseudo.py')
 
-            auxOut = fnOut.replace('.pdbqt', '_tz.pdbqt')
-            args = ' -r {} -o {}'.format(fnOut, auxOut)
-            fullProgram = '%s && %s %s' % (pwchem_plugin.getEnvActivationCommand(RDKIT_DIC), 'python', zincPrepPath)
-            self.runJob(fullProgram, args, cwd=self._getExtraPath())
+                auxOut = fnOut.replace('.pdbqt', '_tz.pdbqt')
+                args = ' -r {} -o {}'.format(fnOut, auxOut)
+                fullProgram = '%s && %s %s' % (pwchem_plugin.getEnvActivationCommand(RDKIT_DIC), 'python', zincPrepPath)
+                self.runJob(fullProgram, args, cwd=self._getExtraPath())
+        else:
+            outBase = os.path.splitext(fnOut)[0]
+            args = f' -i {os.path.abspath(cleanedPDB)} -o {outBase} -a -p'
+            autodockPlugin.runMeekoReceptor(self, args)
 
     def createOutputStep(self):
         fnOut = self.getReceptorPDBQT()

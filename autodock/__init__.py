@@ -302,6 +302,14 @@ class Plugin(pwchemPlugin):
 			subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
 	@classmethod
+	def runMeekoReceptor(cls, protocol, args, cwd=None, popen=False):
+		fullProgram = f'{cls.getEnvActivationCommand(RDKIT_DIC)} && mk_prepare_receptor.py '
+		if not popen:
+			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+		else:
+			subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+
+	@classmethod
 	def runScrubber(cls, protocol, args, cwd=None, popen=False):
 		fullProgram = f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && scrub.py '
 		if not popen:
