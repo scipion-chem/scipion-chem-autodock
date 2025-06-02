@@ -440,8 +440,11 @@ class ProtChemAutodockBase(EMProtocol):
             molDic[posId] = {'pdb': ''}
           elif line.startswith('DOCKED: USER    Estimated Free Energy'):
             molDic[posId]['energy'] = line.split('=')[1].split('kcal/mol')[0]
+            molDic[posId]['ligEfficiency'] = float(molDic[posId]['energy']) / nAtoms
           elif line.startswith('DOCKED: USER    Estimated Inhibition'):
             molDic[posId]['ki'] = line.split()[7]
+          elif line.startswith('Number of atoms'):
+            nAtoms = int(line.split()[-1])
 
           elif ' '.join(line.split()[:2]) in ['DOCKED: REMARK', 'DOCKED: BRANCH', 'DOCKED: ROOT', 'DOCKED: ENDROOT',
                                               'TER', 'DOCKED: ATOM', 'DOCKED: HETATM',
@@ -636,8 +639,10 @@ class ProtChemAutodock(ProtChemAutodockBase):
             newSmallMol = SmallMolecule()
             newSmallMol.copy(smallMol, copyId=False)
             newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
+            newSmallMol._ligandEfficiency = pwobj.String(molDic[posId]['ligEfficiency'])
+
             ki = molDic[posId]['ki'] if 'ki' in molDic[posId] else None
-            newSmallMol._ligandEfficiency = pwobj.String(ki)
+            newSmallMol._ki = pwobj.String(ki)
 
             poseFile = molDic[posId]['file']
             if os.path.getsize(poseFile) > 0:

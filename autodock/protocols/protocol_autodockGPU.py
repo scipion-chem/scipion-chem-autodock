@@ -236,10 +236,9 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
           newSmallMol = SmallMolecule()
           newSmallMol.copy(smallMol, copyId=False)
           newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
-          if 'ki' in molDic[posId]:
-            newSmallMol._ligandEfficiency = pwobj.String(molDic[posId]['ki'])
-          else:
-            newSmallMol._ligandEfficiency = pwobj.String(None)
+          newSmallMol._ligandEfficiency = pwobj.Float(molDic[posId]['ligEfficiency'])
+          ki = molDic[posId]['ki'] if 'ki' in molDic[posId] else None
+          newSmallMol._ki = pwobj.String(ki)
 
           poseFile = molDic[posId]['file']
           if os.path.getsize(poseFile) > 0:
