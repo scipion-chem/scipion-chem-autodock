@@ -251,7 +251,9 @@ class Plugin(pwchemPlugin):
 		installer.getCloneCommand(cls.getScrubberGithub(), targeName='SCRUBBER_CLONED'). \
 			addCommand(f'conda create --name {cls.getEnvName(SCRUBBER_DIC)} python=3.10 -y'). \
 			addCommand(f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && cd molscrub && pip install -e .',
-								 'SCRUBBER_INSTALLED').\
+								 'SCRUBBER_INSTALLED'). \
+			addCommand(f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && conda install autogrid',
+								 'AUTOGRID_INSTALLED'). \
 			addPackage(env, dependencies=['git', 'conda', 'pip'], default=default)
 
 	@classmethod
@@ -311,6 +313,14 @@ class Plugin(pwchemPlugin):
 
 	@classmethod
 	def runScrubber(cls, protocol, args, cwd=None, popen=False):
+		fullProgram = f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && scrub.py '
+		if not popen:
+			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+		else:
+			subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+
+	@classmethod
+	def runAutogrid(cls, protocol, args, cwd=None, popen=False):
 		fullProgram = f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && scrub.py '
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)

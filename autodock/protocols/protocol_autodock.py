@@ -34,11 +34,12 @@ from pyworkflow.utils.path import makePath, createLink
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseName, relabelMapAtomsMol2, \
-  insistentRun, mergeFiles, getBaseFileName, makeSubsets, convertToSdf
+  insistentRun, getBaseFileName, makeSubsets, convertToSdf
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC, OPENBABEL_DIC
 
 from autodock import Plugin as autodockPlugin
+from autodock.constants import SCRUBBER_DIC
 
 
 PDBext, PDBQText = '.pdb', '.pdbqt'
@@ -151,7 +152,7 @@ class ProtChemAutodockBase(EMProtocol):
       npts = (radius * 2) / self.spacing.get()
       znFFfile = autodockPlugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
         if self.doZnDock.get() else None
-      gpfFile = generate_gpf(fnReceptor, spacing=self.spacing.get(), addLigTypes=addLigType,
+      gpfFile = generate_gpf(fnReceptor, spacing=self.spacing.get(), allDefAtomTypes=True,
                               xc=xCenter, yc=yCenter, zc=zCenter,
                               npts=npts, outDir=outDir, ligandFns=ligFiles, znFFfile=znFFfile)
 
@@ -159,7 +160,7 @@ class ProtChemAutodockBase(EMProtocol):
         _, fnReceptor = self.buildFlexReceptor(fnReceptor, cleanZn=self.doZnDock.get())
 
       args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
-      insistentRun(self, autodockPlugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
+      insistentRun(self, "autogrid4", args, envDic=SCRUBBER_DIC, cwd=outDir)
 
     def cleanTmpFiles(self):
       for molFile in os.listdir(self._getExtraPath()):
