@@ -127,27 +127,27 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       gpuList = self.getGPU_Ids()
       subsets = makeSubsets(inMols, nt - 1, cloneItem=True)
 
-      cRStep = self._insertFunctionStep('convertReceptorStep', prerequisites=[], needsGPU=False)
+      cRStep = self._insertFunctionStep(self.convertReceptorStep, prerequisites=[], needsGPU=False)
 
       cSteps = []
       for it, molSet in enumerate(subsets):
-        cSteps.append(self._insertFunctionStep('convertLigandsStep', molSet, it, prerequisites=[], needsGPU=False))
+        cSteps.append(self._insertFunctionStep(self.convertLigandsStep, molSet, it, prerequisites=[], needsGPU=False))
 
       dockSteps = []
       gridReqs = [cRStep] + cSteps
       if self.fromReceptor.get() == 0:
-        gridId = self._insertFunctionStep('generateGridsStep', prerequisites=gridReqs, needsGPU=False)
+        gridId = self._insertFunctionStep(self.generateGridsStep, prerequisites=gridReqs, needsGPU=False)
         for it, _ in enumerate(subsets):
-          dockId = self._insertFunctionStep('dockStep', it, gpuList, prerequisites=[gridId])
+          dockId = self._insertFunctionStep(self.dockStep, it, gpuList, prerequisites=[gridId])
           dockSteps.append(dockId)
       else:
         for pocket in self.inputStructROIs.get():
-          gridId = self._insertFunctionStep('generateGridsStep', pocket.clone(), prerequisites=gridReqs, needsGPU=False)
+          gridId = self._insertFunctionStep(self.generateGridsStep, pocket.clone(), prerequisites=gridReqs, needsGPU=False)
           for it, _ in enumerate(subsets):
-            dockId = self._insertFunctionStep('dockStep', it, gpuList, pocket.clone(), prerequisites=[gridId])
+            dockId = self._insertFunctionStep(self.dockStep, it, gpuList, pocket.clone(), prerequisites=[gridId])
             dockSteps.append(dockId)
 
-      self._insertFunctionStep('createOutputStep', prerequisites=dockSteps, needsGPU=False)
+      self._insertFunctionStep(self.createOutputStep, prerequisites=dockSteps, needsGPU=False)
 
   def dockStep(self, it, gpuIdxs, pocket=None):
       molFns = self.getConvertedLigandsFiles(it)
@@ -199,6 +199,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
                                              gridId=gridId, pocketDic=pocketDic, recFile=recFile)
   
           for smallMol in outputMols:
+            smallMol.guessMolName()
             outputSet.append(smallMol)
   
         outputSet.setProteinFile(recFile)

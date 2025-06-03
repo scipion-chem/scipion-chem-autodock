@@ -226,8 +226,11 @@ class ProtChemAutodockBase(EMProtocol):
 
           oFile = os.path.abspath(os.path.join(oDir, getBaseName(sdfFile) + PDBQText))
           args = f'-i {sdfFile} -o {oFile} '
-          autodockPlugin.runMeekoLigand(self, args)
-          os.remove(sdfFile)
+          try:
+            autodockPlugin.runMeekoLigand(self, args)
+          except: pass
+          if remove:
+            os.remove(sdfFile)
 
     def convertLigand2PDBQT(self, smallMol, oDir, pose=False, popen=False):
         '''Convert ligand to pdbqt using prepare_ligand4 of ADT'''
