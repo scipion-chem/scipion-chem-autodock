@@ -44,6 +44,7 @@ from pwchem import Plugin as pwchem_plugin
 
 from autodock import Plugin as autodock_plugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
+from autodock.constants import SCRUBBER_DIC
 
 
 NUMBER, RANGE = 0, 1
@@ -162,7 +163,7 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
                                     npts=npts, outDir=outDir)
 
             args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
-            insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
+            insistentRun(self, "autogrid4", args, envDic=SCRUBBER_DIC, cwd=outDir)
 
     def predictPocketStep(self, pocketSize):
         pdbName = self.getReceptorName()
