@@ -110,7 +110,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
 
       znFFfile = autodockPlugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
         if self.doZnDock.get() else None
-      gpfFile = generate_gpf(fnReceptor, spacing=spacing,
+      gpfFile = generate_gpf(fnReceptor, spacing=spacing, allDefAtomTypes=True,
                               xc=xCenter, yc=yCenter, zc=zCenter,
                               npts=npts, outDir=outDir, ligandFns=pdbqtFiles, znFFfile=znFFfile)
 

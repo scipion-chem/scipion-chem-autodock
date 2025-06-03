@@ -118,7 +118,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
     makePath(outDir)
 
     npts = (radius * 2) / self.spacing.get()
-    gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(),
+    gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(), allDefAtomTypes=True,
                             xc=x_center, yc=y_center, zc=z_center,
                             npts=npts, outDir=outDir, ligandFns=self.ligandFileNames)
 

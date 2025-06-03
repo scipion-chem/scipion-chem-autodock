@@ -119,7 +119,7 @@ class AutodockGridGeneration(ProtChemAutodockBase):
         # Create the GPF file, required by autogrid to build the grid and glg
         npts = (self.radius.get()*2)/self.spacing.get()  # x,y,z points of the grid
 
-        gpfFile = generate_gpf(atomStructFn, spacing=self.spacing.get(),
+        gpfFile = generate_gpf(atomStructFn, spacing=self.spacing.get(), allDefAtomTypes=True,
                                      xc=xCenter, yc=yCenter, zc=zCenter,
                                      npts=npts, outDir=self._getExtraPath())
 

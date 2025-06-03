@@ -158,7 +158,7 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
             npts = (radius * 2) / self.spacing.get()
 
             makePath(outDir)
-            gpfFile = generate_gpf(self.getReceptorPDBQT(), spacing=self.spacing.get(),
+            gpfFile = generate_gpf(self.getReceptorPDBQT(), spacing=self.spacing.get(), allDefAtomTypes=True,
                                     xc=xCenter, yc=yCenter, zc=zCenter,
                                     npts=npts, outDir=outDir)
 
