@@ -37,6 +37,7 @@ from pwchem.constants import MGL_DIC
 
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
 from autodock import Plugin as autodock_plugin
+from autodock.constants import SCRUBBER_DIC
 
 
 LGA, GA, LS, SA = 0, 1, 2, 3
@@ -117,12 +118,12 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
     makePath(outDir)
 
     npts = (radius * 2) / self.spacing.get()
-    gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(),
+    gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(), allDefAtomTypes=True,
                             xc=x_center, yc=y_center, zc=z_center,
                             npts=npts, outDir=outDir, ligandFns=self.ligandFileNames)
 
     args = "-p {} -l {}.glg".format(gpf_file, self.getReceptorName())
-    insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
+    insistentRun(self, "autogrid4", args, envDic=SCRUBBER_DIC, cwd=outDir)
 
   def scoreStep(self, mols):
     flexReceptorFn, receptorFn = None, self.getReceptorPDBQT()

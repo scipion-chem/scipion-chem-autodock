@@ -44,6 +44,7 @@ from pwchem.constants import MGL_DIC
 from autodock import Plugin as autodock_plugin
 from autodock.objects import GridADT
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
+from autodock.constants import SCRUBBER_DIC
 
 
 class AutodockGridGeneration(ProtChemAutodockBase):
@@ -118,7 +119,7 @@ class AutodockGridGeneration(ProtChemAutodockBase):
         # Create the GPF file, required by autogrid to build the grid and glg
         npts = (self.radius.get()*2)/self.spacing.get()  # x,y,z points of the grid
 
-        gpfFile = generate_gpf(atomStructFn, spacing=self.spacing.get(),
+        gpfFile = generate_gpf(atomStructFn, spacing=self.spacing.get(), allDefAtomTypes=True,
                                      xc=xCenter, yc=yCenter, zc=zCenter,
                                      npts=npts, outDir=self._getExtraPath())
 
@@ -127,8 +128,7 @@ class AutodockGridGeneration(ProtChemAutodockBase):
         open(glgFile, mode='a').close()
 
         args = "-p %s -l %s" % (gpfFile, glgFile)
-        insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"),
-                     args, cwd=self._getExtraPath())
+        insistentRun(self, "autogrid4", args, envDic=SCRUBBER_DIC, cwd=self._getExtraPath())
         eMapFile = self._getExtraPath("%s.e.map" %nameProtein)
         self.grid = GridADT(eMapFile, os.path.relpath(atomStructFn), radius=self.radius.get(),
                             spacing=self.spacing.get(), massCX=xCenter, massCY=yCenter, massCZ=zCenter, npts=npts)

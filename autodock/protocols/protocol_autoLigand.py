@@ -44,6 +44,7 @@ from pwchem import Plugin as pwchem_plugin
 
 from autodock import Plugin as autodock_plugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
+from autodock.constants import SCRUBBER_DIC
 
 
 NUMBER, RANGE = 0, 1
@@ -157,12 +158,12 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
             npts = (radius * 2) / self.spacing.get()
 
             makePath(outDir)
-            gpfFile = generate_gpf(self.getReceptorPDBQT(), spacing=self.spacing.get(),
+            gpfFile = generate_gpf(self.getReceptorPDBQT(), spacing=self.spacing.get(), allDefAtomTypes=True,
                                     xc=xCenter, yc=yCenter, zc=zCenter,
                                     npts=npts, outDir=outDir)
 
             args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
-            insistentRun(self, autodock_plugin.getPackagePath(package='AUTODOCK', path="autogrid4"), args, cwd=outDir)
+            insistentRun(self, "autogrid4", args, envDic=SCRUBBER_DIC, cwd=outDir)
 
     def predictPocketStep(self, pocketSize):
         pdbName = self.getReceptorName()

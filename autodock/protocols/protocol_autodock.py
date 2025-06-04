@@ -134,7 +134,7 @@ class ProtChemAutodockBase(EMProtocol):
       if self.getEnumText('convSoft') == 'MGLTools':
         self.performMGLLigConversion(molSet, it)
       else:
-        self.performMeekoLigandConversion(molSet, it, remove=False)
+        self.performMeekoLigandConversion(molSet, it, remove=True)
 
     def generateGridsStep(self, pocket=None, addLigType=True):
       ligFiles = self.getConvertedLigandsFiles()

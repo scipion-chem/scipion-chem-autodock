@@ -28,10 +28,8 @@ import os, shutil
 
 from pyworkflow.protocol import params
 
-from pwchem.utils import performBatchThreading, findThreadFiles, concatFiles, splitFile, makeSubsets
-from pwchem import Plugin as pwchemPlugin
+from pwchem.utils import findThreadFiles, concatFiles, splitFile, makeSubsets, insistentRun
 from pwchem.constants import RDKIT_DIC
-from pwchem.objects import SmallMoleculesLibrary
 
 from autodock import Plugin as autodockPlugin
 from autodock.protocols import ProtChemAutodockGPU
@@ -69,7 +67,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
                    help='Whether to use a SMI library SmallMoleculesLibrary object as input')
 
     group.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
-                   label='Input library: ', condition='useLibrary',
+                   label='Input library: ', condition='useLibrary', allowsNull=True,
                    help="Input Small molecules library to predict")
     group.addParam('batchSize', params.IntParam, label='Batch size (MB): ', default=100, condition='useLibrary',
                    expertLevel=params.LEVEL_ADVANCED, help='Batch size for running conplex in batches')
@@ -178,7 +176,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
       args += f'-ef {autodockPlugin.getChemPropFile()} '
 
     modelsPath = os.path.abspath(autodockPlugin.getPluginHome('models'))
-    pwchemPlugin.runCondaCommand(self, args, GCR_DIC, f'python {scriptName}', cwd=self._getPath())
+    insistentRun(self, f'python {scriptName}', args, envDic=GCR_DIC, cwd=self._getPath())
 
     shutil.copytree(os.path.abspath(self._getPath(sysName)), os.path.join(modelsPath, sysName), dirs_exist_ok=True)
     self.mergeAllSMIFiles(True, gpuIdx)
@@ -195,7 +193,8 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
       smisFile = self.buildSMIsFile(inMols, writeScores=False, gpuIdx=gpuIdx, it=i)
     elif inSMIFile:
       smisFile = self.getInputSMIFile(writeScores=False, gpuIdx=gpuIdx, it=i)
-      os.link(inSMIFile, smisFile)
+      if not os.path.exists(smisFile):
+        os.link(inSMIFile, smisFile)
 
     modelsPath = os.path.abspath(autodockPlugin.getPluginHome('models'))
     shutil.copytree(os.path.join(modelsPath, sysName), os.path.abspath(self._getPath(sysName)), dirs_exist_ok=True)
@@ -205,7 +204,7 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     if self.getEnumText('encoder') == CHEMPROP:
       args += f'-ef {autodockPlugin.getChemPropFile()} '
 
-    pwchemPlugin.runCondaCommand(self, args, GCR_DIC, f'python {scriptName}', cwd=self._getPath())
+    insistentRun(self, f'python {scriptName}', args, envDic=GCR_DIC, cwd=self._getPath())
 
   def createOutputStep(self):
     for gpuIdx in self.getInputGpuIdxs():
@@ -219,7 +218,8 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
         with open(oLibFile, 'w') as f:
           for smiName, score in smiScoreDic.items():
             if not self.applyFilter.get() or score < self.outThres.get():
-              f.write(f'{mapDic[smiName]}\t{score}\n')
+              prevLine = "\t".join(mapDic[smiName].split())
+              f.write(f'{prevLine}\t{score}\n')
 
         prevHeaders = inLib.getHeaders()
         outputLib = inLib.clone()
@@ -326,11 +326,15 @@ class ProtEncoderDockScoring(ProtChemAutodockGPU):
     if molFile.endswith('.smi'):
       self.writeSMIs(dMols, writeScores, it, origin='file', gpuIdx=gpuIdx)
     else:
-      getFileFunc = 'getPoseFile' if writeScores else 'getFileName'
-      molFile = getattr(dMols[0], getFileFunc)()
+      getFileFuncs = ['getPoseFile', 'getFileName']
+      fileFuncIdx = 0 if writeScores else 1
+      molFile = getattr(dMols[0], getFileFuncs[fileFuncIdx])()
+      molFile2 = getattr(dMols[0], getFileFuncs[abs(fileFuncIdx-1)])()
 
       if self.checkHasSMI(molFile):
         smiFile, mapFile = self.writeSMIs(dMols, writeScores, it, origin='Meeko', gpuIdx=gpuIdx)
+      elif self.checkHasSMI(molFile2):
+        smiFile, mapFile = self.writeSMIs(dMols, not writeScores, it, origin='Meeko', gpuIdx=gpuIdx)
       else:
         inMolsFile = self.writeInputMolsFile(dMols, writeScores, it, gpuIdx=gpuIdx)
         mapFile = self.getMapSMIFile(writeScores, it, gpuIdx=gpuIdx)

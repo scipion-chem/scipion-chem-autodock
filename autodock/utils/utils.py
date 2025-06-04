@@ -63,7 +63,7 @@ def splitSDF(sdfFile, oriName=None, oDir=None):
         fo.write(f'{molText}\n\n$$$$')
       molDic[molName].append((oFile, confFile))
 
-  else:
+  elif len(molTexts) == 1:
     molName, confId = getMolName(molTexts[0])
     molDic = {molName: [(sdfFile, confFile)]}
 

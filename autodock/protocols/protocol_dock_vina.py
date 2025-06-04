@@ -36,7 +36,7 @@ from pwchem.utils import calculate_centerMass, generate_gpf, insistentRun, getBa
 
 from autodock import Plugin as autodockPlugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
-from autodock.constants import VINA_DIC, VINA
+from autodock.constants import VINA_DIC, VINA, SCRUBBER_DIC
 from autodock.objects import RingtailDatabase
 
 meekoScript = 'meeko_preparation.py'
@@ -110,7 +110,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
 
       znFFfile = autodockPlugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
         if self.doZnDock.get() else None
-      gpfFile = generate_gpf(fnReceptor, spacing=spacing,
+      gpfFile = generate_gpf(fnReceptor, spacing=spacing, allDefAtomTypes=True,
                               xc=xCenter, yc=yCenter, zc=zCenter,
                               npts=npts, outDir=outDir, ligandFns=pdbqtFiles, znFFfile=znFFfile)
 
@@ -129,7 +129,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       else:
           scoreFunc = scoreFunc if not self.doZnDock.get() and not flexFn else 'ad4'
           args = "-p {} -l {}.glg".format(gpfFile, self.getReceptorName())
-          insistentRun(self, autodockPlugin.getPackagePath("AUTOSITE", path='bin/autogrid4'), args, cwd=outDir)
+          insistentRun(self, "autogrid4", args, envDic=SCRUBBER_DIC, cwd=outDir)
 
           batchDirs = self.getBatchDirs(pdbqtFiles)
           for molDir in batchDirs:

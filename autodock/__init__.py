@@ -236,8 +236,8 @@ class Plugin(pwchemPlugin):
 		installer.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && '
 												 f'conda install ringtail={RINGTAIL_DIC["version"]} pymol-open-source -y',
 												 'RINGTAIL_INSTALLED'). \
-			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install {MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}',
-								 'MEEKO_INSTALLED'). \
+			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install --no-deps '
+								 f'{MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED'). \
 			addPackage(env, dependencies=['conda'], default=default)
 
 	@classmethod

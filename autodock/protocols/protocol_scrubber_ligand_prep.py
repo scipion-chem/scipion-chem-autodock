@@ -84,13 +84,13 @@ class ProtScrubberPrepareLigands(ProtChemADTPrepareLigands):
     def _insertAllSteps(self):
         inMols = self.inputSmallMolecules.get()
         nt = self.numberOfThreads.get()
-        subsets = makeSubsets(inMols, nt, cloneItem=True)
+        subsets = makeSubsets(inMols, nt-1, cloneItem=True)
 
         pSteps = []
         for it, molSet in enumerate(subsets):
-          pSteps.append(self._insertFunctionStep('preparationStep', molSet, it, prerequisites=[]))
+          pSteps.append(self._insertFunctionStep(self.preparationStep, molSet, it, prerequisites=[]))
 
-        self._insertFunctionStep('createOutputStep', prerequisites=pSteps)
+        self._insertFunctionStep(self.createOutputStep, prerequisites=pSteps)
 
     def preparationStep(self, molSet, it):
         cDir = os.path.abspath(self._getTmpPath(f'inputLigands_{it}'))
