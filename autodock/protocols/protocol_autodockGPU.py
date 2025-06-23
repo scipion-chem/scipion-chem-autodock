@@ -45,7 +45,75 @@ searchKeys = {SW: 'sw', SD: 'sd', FIRE: 'fire', AD: 'ad', ADAM: 'adam'}
 
 
 class ProtChemAutodockGPU(ProtChemAutodockBase):
-  """Perform a docking experiment with AutoDock-GPU https://github.com/ccsb-scripps/AutoDock-GPU"""
+  """Perform a docking experiment with AutoDock-GPU https://github.com/ccsb-scripps/AutoDock-GPU
+User IA Manual: AutoDock-GPU Protocol in Scipion-Chem
+
+The AutoDockGPU protocol in Scipion-Chem integrates the GPU-accelerated version
+of AutoDock4 into a visual, modular workflow. This allows users to perform
+efficient molecular docking on GPUs (or alternatively CPUs with OpenCL) using
+grid maps and ligand structures prepared beforehand.
+
+To begin using the protocol, the user must provide a receptor grid file in
+`.maps.fld` format, which encapsulates precomputed interaction grids for all
+atom types involved in docking. A ligand file in PDBQT format is also essential,
+as it defines the molecule to be docked, including torsion flexibility and
+partial charges. Optionally, a separate flexible residues file can be included
+if one wishes to simulate limited receptor flexibility during docking.
+
+Batch processing is possible through a ligand list file, which references
+multiple ligands for screening. If the user has previously defined a docking
+configuration using a `.dpf` file (as in classic AutoDock4), this can be
+partially imported to initialize parameters. Additionally, including an X-ray
+or reference ligand structure allows the protocol to compute RMSD values,
+helping to assess how closely docked poses reproduce known binding conformations.
+
+Controlling the output of the docking procedure is flexible. The user can define
+a base name for output files and enable detailed analysis of contacts between
+the ligand and receptor atoms. These contacts are classified as reactive,
+hydrogen bonds, or van der Waals based on distance thresholds. Output formats
+include XML and DLG files, both of which can be generated simultaneously or
+independently, and the DLG output can optionally be redirected to the console
+rather than saved to a file. The number of docking poses returned can be
+tailored by adjusting settings that define whether all poses, only the best, or
+a limited number of top-scoring solutions are kept. Clustering of the poses can
+be enabled, and the RMSD tolerance that defines whether two poses belong to the
+same cluster can be specified. To account for molecular symmetry during
+clustering, the user can activate symmetric RMSD handling.
+
+Docking can be run on a specific GPU or OpenCL-compatible CPU, and the user can
+choose the device by its numeric identifier. There is also the possibility to
+resume or initialize a run from a previously saved XML file containing a
+population of poses. To ensure reproducibility, one can provide a specific
+random seed; otherwise, the system clock and process ID will be used.
+
+The core of the docking behavior is defined by parameters of the Lamarckian
+Genetic Algorithm. The user selects the number of docking runs (i.e.,
+independent searches), and within each run, they can specify how many
+evaluations or generations the algorithm should carry out. A heuristic mode can
+be enabled to adaptively control search termination, and parameters such as
+convergence thresholds and checking frequency determine how early a run may stop
+if convergence is detected. The algorithm includes a local search phase, where
+the search method (e.g., ADADELTA or Solis-Wets) and its configuration (such as
+the number of iterations or step size) are customizable. Population diversity is
+governed by mutation and crossover rates, and selection pressure can be adjusted
+through tournament selection. The maximum translation and rotation allowed for
+ligand movement can also be defined, influencing how broadly the search explores
+pose space.
+
+Beyond the genetic algorithm, several scoring and force-field parameters can be
+fine-tuned. For instance, the user can define how unbound energy terms are
+computed and apply smoothing to van der Waals potentials to prevent energy
+spikes. The behavior of the scoring function with respect to specific atom-type
+interactions can be overridden if needed, and derivative atom types used in
+interaction computation can be set as well.
+
+Once the protocol is executed, the user obtains a detailed log of the docking
+process along with one or more docked ligand poses. If contact analysis is
+enabled, a table of atom-atom contacts by type and distance is included. These
+results can be used for further scoring, visualization, or as the basis for
+post-docking analyses. The modular nature of Scipion allows seamless integration
+of the docking protocol with ligand preparation tools, scoring workflows, or
+molecular dynamics simulations."""
   _label = 'AutoDock-GPU docking'
   _program = ""
 
