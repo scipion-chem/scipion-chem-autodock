@@ -45,7 +45,52 @@ scriptName = 'vina_docking.py'
 PDBext, PDBQText = '.pdb', '.pdbqt'
 
 class ProtChemVinaDocking(ProtChemAutodockBase):
-    """Dock ligands using Vina"""
+    """Dock ligands using Vina
+    
+    User IA Manual: DockVina Protocol
+    
+The DockVina protocol integrates the AutoDock Vina docking engine within the
+Scipion-Chem platform, enabling users to perform molecular docking of ligands
+against a receptor using an efficient and widely used scoring function. This
+protocol is particularly useful in virtual screening campaigns or in evaluating
+the binding mode of a small molecule within a known pocket.
+
+To configure the docking, the user must provide a receptor structure in PDBQT
+format. This file defines the rigid target macromolecule, including the torsion
+and partial charge information required by the Vina algorithm. At least one
+ligand must also be provided, similarly in PDBQT format. The ligand may include
+rotatable bonds and partial charges, and must be formatted consistently with the
+receptor. Optionally, a file containing multiple ligands can be specified to
+enable batch docking in a single run.
+
+The definition of the docking box is crucial. The user must set the coordinates
+for the center of the search space in x, y, and z dimensions. Additionally, the
+size of the box in each direction must be provided, expressed in angstroms. The
+search box should fully encompass the expected binding pocket, with a margin to
+allow for flexibility in ligand placement and orientation. An incorrect or too
+restrictive box definition may lead to failure in detecting the correct binding
+pose.
+
+The protocol also exposes Vina?s key scoring and sampling parameters. The
+exhaustiveness setting determines how thoroughly the conformational space is
+sampled. Higher values increase accuracy but also raise computational time. The
+user may also specify the number of output poses to generate for each ligand,
+allowing exploration of multiple plausible binding modes. An energy range
+parameter sets the threshold, in kcal/mol, within which alternate poses are
+retained relative to the top-scoring pose.
+
+If the user provides a random seed, the docking process becomes deterministic,
+which is useful for reproducibility. Otherwise, the protocol will rely on
+Vina?s internal seeding mechanism for stochastic search. All poses produced are
+written as PDBQT files and can be directly inspected within Scipion or passed to
+other protocols for scoring or visualization. A docking log is also generated,
+detailing the search process and score rankings.
+
+Ultimately, this protocol provides a streamlined interface for using AutoDock
+Vina within Scipion, linking receptor and ligand preparation, docking execution,
+and post-processing in a unified environment. It is suitable for both novice
+users seeking default parameters and advanced users requiring control over the
+search and scoring behaviors."""
     _label = 'Vina docking'
     _program = ""
 
