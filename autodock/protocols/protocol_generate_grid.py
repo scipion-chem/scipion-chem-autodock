@@ -50,6 +50,52 @@ from autodock.constants import SCRUBBER_DIC
 class AutodockGridGeneration(ProtChemAutodockBase):
     """
     Calls ADT to prepare a grid with an input that is the prepared target protein
+
+    User IA Manual: GenerateGrid Protocol
+    
+The GenerateGrid protocol in Scipion-Chem prepares the receptor affinity maps
+required for docking using AutoDock-based engines. These maps represent the
+interaction energies between the receptor and various ligand atom types across a
+defined 3D grid, and are essential for enabling fast and accurate docking
+predictions.
+
+To begin, the user must provide a receptor structure in PDBQT format. This file
+must contain the properly prepared receptor, including charges and torsional
+information, and must be compatible with AutoDock tools. Once the receptor is
+loaded, the user defines the region of interest for docking by setting the
+coordinates of the center of the grid box, as well as its dimensions in the x,
+y, and z directions. The dimensions should be large enough to fully encompass
+the suspected or known binding site, with some buffer space to allow for
+flexibility in ligand poses.
+
+In cases where a reference ligand is available, the user may choose to enable
+automatic box fitting. In this mode, the protocol calculates the appropriate box
+dimensions based on the spatial distribution of the ligand atoms, ensuring that
+the entire ligand is enclosed with a user-defined margin. This feature is
+particularly useful when the binding site is known, or when reproducing docking
+conditions from a crystal structure.
+
+The resolution of the generated maps is determined by the grid spacing
+parameter, which defines the distance between adjacent points in angstroms. A
+finer grid (smaller spacing) increases precision but also computational cost, so
+it should be adjusted depending on the complexity of the site and the desired
+accuracy. The user may also specify the atom types for which energy maps will be
+calculated. These types typically correspond to the most common atom types found
+in the ligands to be docked, and should be selected carefully to ensure
+compatibility during docking.
+
+Once configured, the protocol runs AutoGrid to compute the energy maps. The
+result is a `.maps.fld` file, which includes all requested atom-type grids along
+with metadata describing the grid box and receptor properties. This file is then
+used by downstream protocols such as AutoDock-GPU or Vina for efficient ligand
+docking. The user may inspect the resulting maps visually within Scipion to
+confirm the box placement and energy distribution before continuing with further
+modeling steps.
+
+In summary, GenerateGrid sets up the spatial and energetic framework for
+grid-based docking in Scipion-Chem. Proper configuration of the receptor, box
+parameters, atom types, and grid resolution is essential for ensuring that
+docking simulations are accurate and biologically meaningful.
     """
 
     _label = 'Grid generation with ADT'
