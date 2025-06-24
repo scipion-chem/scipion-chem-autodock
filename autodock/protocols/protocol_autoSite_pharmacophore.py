@@ -38,7 +38,44 @@ from pyworkflow.protocol import params
 from pwchem.objects import PharmacophoreChem, PharmFeature
 
 class ProtChemAutoSiteGenPharmacophore(EMProtocol):
-    """Generate a Pharmacophore from a AutoSite structural ROI """
+    """Generate a Pharmacophore from a AutoSite structural ROI 
+    
+    User IA Manual: AutoSitePharmacophore Protocol in Scipion-Chem
+
+The AutoSitePharmacophore protocol is intended for the identification of
+pharmacophoric features within predicted binding pockets on a target receptor.
+It functions by analyzing previously generated AutoSite map outputs, typically
+derived from grid-based site prediction, and extracting chemical features such
+as hydrogen bond donors and acceptors, hydrophobic regions, and aromatic
+centers that are relevant for ligand binding.
+
+To use this protocol effectively, the user must first supply a valid AutoSite
+output directory, which contains the spatial information of predicted ligand
+binding sites in a receptor. This data is used to extract pharmacophoric points.
+The protocol optionally allows the inclusion of a reference ligand in PDBQT
+format. When such a ligand is provided, the pharmacophore model can be filtered
+or refined to better reflect features relevant to known interactions or to
+constrain the model to regions near the ligand?s pose. This improves the
+biological relevance of the predicted features and aids downstream applications
+such as virtual screening, scaffold hopping, or de novo design.
+
+The user has control over the filtering behavior through several parameters. A
+distance cutoff determines how close a pharmacophoric feature must be to the
+reference ligand to be retained. This spatial constraint helps focus the model
+on relevant portions of the pocket. Additionally, one can specify which types of
+pharmacophoric features to include in the final model, such as hydrophobic,
+hydrogen-bond donor, or acceptor features, depending on the goals of the
+analysis. Further, the output can be limited to features found only in selected
+binding sites or cavities, especially when AutoSite has predicted multiple
+regions of interest.
+
+The protocol generates as output a pharmacophore description in standard formats
+that can be visualized within Scipion or exported for use in external tools.
+These features can then guide ligand design strategies or be used in
+pharmacophore-based screening to identify new potential hits. Ultimately, this
+protocol serves as a bridge between structure-based binding site prediction and
+ligand-centric design approaches, enabling a more interpretable and
+chemically-relevant description of receptor interaction potential."""
     _label = 'AutoSite pharmacophore'
 
     def _defineParams(self, form):
