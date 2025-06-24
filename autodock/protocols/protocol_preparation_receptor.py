@@ -39,6 +39,44 @@ from autodock import Plugin as autodockPlugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
 
 class ProtChemADTPrepare(ProtChemPrepareReceptor, ProtChemAutodockBase):
+    """
+User IA Manual: PreparationReceptor Protocol
+
+The PreparationReceptor protocol is responsible for converting a macromolecular
+structure into a format suitable for docking, specifically the PDBQT format
+required by AutoDock-based tools. It ensures that the receptor structure
+includes all necessary chemical and structural features while preserving
+biological relevance for binding site analysis.
+
+To begin, the user must provide a receptor structure, typically in PDB format.
+This structure should represent the rigid part of the docking system, such as a
+protein or nucleic acid. The protocol processes this input by first validating
+its geometry and ensuring that all atoms are properly defined. Hydrogens are
+added where necessary, and special attention is given to standardizing atom
+names and resolving common formatting issues.
+
+A key step in this process involves assigning atomic charges, typically
+Gasteiger charges, and detecting atom types compatible with the AutoDock force
+field. The protocol ensures that non-polar hydrogens are merged appropriately
+and that any alternate conformations or heteroatoms unrelated to the binding
+site are removed unless explicitly preserved by the user.
+
+The user can control whether to include or exclude water molecules, metal ions,
+or cofactors, depending on the nature of the system. Additionally, it is
+possible to define whether the receptor should be treated as a rigid entity or
+prepared for limited flexibility in downstream protocols that support flexible
+residues.
+
+Once the structure has been processed, it is exported as a PDBQT file that
+captures all required information, including torsion constraints (if any),
+partial charges, and docking-specific atom types. This output can be passed
+directly to grid generation or docking protocols in Scipion-Chem.
+
+In summary, this protocol prepares the receptor by transforming a standard
+biomolecular structure into a chemically complete and docking-compatible format.
+It provides essential preconditions for accurate ligand docking and ensures
+smooth integration into AutoDock workflows.
+"""
     def _defineParamsBasic(self, form, condition='True'):
         choicesRepair = ['None', 'Bonds', 'Hydrogens', 'Bonds hydrogens']
         if self.typeRL=="target":
