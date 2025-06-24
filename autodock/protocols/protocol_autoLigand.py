@@ -52,7 +52,45 @@ NOTPREVGRID, RANGEFILL = 'not prevGrid', "fillType==1"
 
 class ProtChemAutoLigand(ProtChemAutodockBase):
     """Perform a pocket find experiment with autoLigand. See the help at
-       http://autodock.scripps.edu/faqs-help/manual/autodock-4-2-user-guide/AutoDock4.2_UserGuide.pdf"""
+       http://autodock.scripps.edu/faqs-help/manual/autodock-4-2-user-guide/AutoDock4.2_UserGuide.pdf
+    
+    User IA Manual: AutoLigand Protocol in Scipion-Chem
+
+The AutoLigand protocol is designed to identify potential binding sites in a
+macromolecule, preparing affinity grid maps that can later be used by AutoGrid
+or AutoDock. This is particularly useful in structure-based drug design when
+the location of the ligand binding site is unknown or needs to be explored
+systematically.
+
+To execute the protocol, the user must provide a macromolecule file in PDBQT
+format, which contains atom coordinates, partial charges, and AutoDock-specific
+torsion definitions. This file is the target for pocket prediction. The user
+must also define the center of the grid box, either manually or by referencing
+a previously docked ligand or known binding location. In addition to the
+center, the box dimensions in the x, y, and z directions must be specified to
+define the region to be searched. These dimensions should be large enough to
+include possible binding cavities, but not so large as to dilute the spatial
+resolution or increase computation time unnecessarily.
+
+AutoLigand supports two search modes. In single mode, the user defines one
+single site by setting a fixed volume in cubic angstroms. The software then
+searches for the optimal position of that volume within the defined box. In
+multi mode, multiple volumes are placed iteratively to cover the space,
+allowing the identification of several potential pockets. The number of sites
+and their respective volumes must be provided by the user. Additionally, the
+user can define how many of those detected sites will be retained for
+subsequent docking or analysis.
+
+The protocol outputs one or more affinity maps for each predicted site,
+organized as a map set. These maps are compatible with downstream tools such as
+AutoGrid or AutoDock-GPU and can be used to guide ligand docking in the
+identified regions. The user can inspect the predicted pockets visually, using
+Scipion's viewer integrations, and select those most promising for virtual
+screening or optimization.
+
+Overall, AutoLigand automates the search for suitable ligand binding pockets by
+combining energy-based calculations with spatial grid scanning, and integrates
+smoothly into Scipion's modular workflow for structure-based virtual screening."""
     _label = 'autoLigand'
     fillChoices = ['Number', 'Range']
     stepsExecutionMode = params.STEPS_PARALLEL
