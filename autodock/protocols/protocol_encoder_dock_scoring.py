@@ -48,6 +48,49 @@ def average(l):
 class ProtEncoderDockScoring(ProtChemAutodockGPU):
   """Trains a prediction of the docking score over a set of small molecules using a encoder-regressor model.
   This model must be trained for each receptor separately with docking scores.
+  
+  User IA Manual: EncoderDockScoring Protocol
+
+The EncoderDockScoring protocol enables the rescoring of docked ligand poses
+using the neural network-based scoring functions from the EncoderDock framework.
+This protocol serves as a post-docking analysis tool, taking as input a set of
+poses, either predicted by a docking engine or generated from other structural
+sources, and producing a ranking or scoring of those poses based on deep
+learning-derived interaction features.
+
+To begin the process, the user must supply a set of docked poses in PDBQT
+format. These are typically the output of previous docking runs using tools like
+AutoDock-GPU or Vina. Alongside the ligand poses, the protocol requires the
+receptor structure in PDBQT format. This receptor must match the context in
+which the docking was performed, as its atomic composition and grid alignment
+influence the input features fed into the neural model.
+
+The core parameter of the protocol is the choice of EncoderDock model. The user
+can select among different pretrained neural networks that vary in their
+architecture, training data, and prediction goals. Some models are optimized for
+predicting binding affinity, while others focus on classification tasks such as
+distinguishing binders from non-binders. Depending on the selected model, the
+protocol will output either continuous scores or categorical probabilities.
+
+Another important option involves filtering or selection of poses. If multiple
+poses exist for the same ligand, the user can decide whether to score all of
+them or only the top-ranked pose according to the original docking score. This
+enables flexible workflows that either preserve the full diversity of the
+docking ensemble or prioritize computational efficiency.
+
+As part of the scoring process, the protocol extracts spatial and physicochemical
+features from the receptor-ligand complex, encodes them into grid-based
+representations, and forwards them to the neural network. The scores produced
+are stored in a tabular output that associates each ligand pose with its neural
+score. These scores can be visualized in Scipion or exported for external
+analysis. In cases where classification models are used, a threshold-based
+decision (e.g., binder vs. non-binder) can be derived and used to prioritize
+compounds for further validation.
+
+In summary, this protocol integrates machine learning-based scoring into
+structure-based drug discovery workflows within Scipion, enhancing traditional
+docking results with learned models that capture complex interaction patterns
+beyond what is possible with classical energy-based scoring functions.
   """
   _label = 'Encoder-regressor dock scoring'
   _program = ""
