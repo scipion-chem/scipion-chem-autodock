@@ -50,17 +50,23 @@ if __name__ == "__main__":
         v.write_maps(mapsName, pDic['gpfFile'])
         v.load_maps(mapsName)
 
-    outFiles = []
+    outFiles, failed = [], []
     for molFile in ligandFiles:
-        v.set_ligand_from_file(molFile)
-        v.dock(exhaustiveness=int(pDic['exhaust']), n_poses=int(pDic['nPoses']),
-               min_rmsd=float(pDic['minRMSD']), max_evals=int(pDic['maxEvals']))
+        try:
+            v.set_ligand_from_file(molFile)
+            v.dock(exhaustiveness=int(pDic['exhaust']), n_poses=int(pDic['nPoses']),
+                   min_rmsd=float(pDic['minRMSD']), max_evals=int(pDic['maxEvals']))
 
-        outFile = os.path.join(outDir, getBaseName(molFile)) + '.pdbqt'
-        v.write_poses(pdbqt_filename=outFile)
-        outFiles.append(outFile)
+            outFile = os.path.join(outDir, getBaseName(molFile)) + '.pdbqt'
+            v.write_poses(pdbqt_filename=outFile)
+            outFiles.append(outFile)
+        except:
+            failed.append(molFile)
 
     with open(os.path.join(outDir, f'docked_files_{pDic["it"]}.txt'), 'w') as f:
         f.write('\n'.join(outFiles))
+
+    with open(os.path.join(outDir, f'failed_docked_files_{pDic["it"]}.txt'), 'w') as f:
+        f.write('\n'.join(failed))
 
 
