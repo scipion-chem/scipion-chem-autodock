@@ -252,7 +252,7 @@ class Plugin(pwchemPlugin):
 			addCommand(f'conda create --name {cls.getEnvName(SCRUBBER_DIC)} python=3.10 -y'). \
 			addCommand(f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && cd molscrub && pip install -e .',
 								 'SCRUBBER_INSTALLED'). \
-			addCommand(f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && conda install -c bioconda autogrid',
+			addCommand(f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && conda install -c conda-forge autogrid=4.2.9',
 								 'AUTOGRID_INSTALLED'). \
 			addPackage(env, dependencies=['git', 'conda', 'pip'], default=default)
 
