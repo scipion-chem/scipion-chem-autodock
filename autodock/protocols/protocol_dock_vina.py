@@ -349,7 +349,7 @@ search and scoring behaviors."""
     def getDockedLigandsFiles(self, outDir):
         dockFiles = []
         for file in os.listdir(outDir):
-            if 'docked_files' in file:
+            if 'docked_files' in file and not "failed" in file:
                 dockedFilesFile = os.path.join(outDir, file)
                 with open(dockedFilesFile) as fIn:
                     dockFiles += fIn.read().split()

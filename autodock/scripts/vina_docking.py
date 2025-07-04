@@ -24,9 +24,39 @@
 # **************************************************************************
 import os, sys
 from vina import Vina
+from multiprocessing import Process, Queue, Pipe
 
 from utils import getBaseName, parseParams
 
+def runVina(q, kwargs):
+    try:
+        v, outDir = kwargs['v'], kwargs['outDir']
+        molFile, pDic = kwargs['molFile'], kwargs['pDic']
+        outFile = getOutFile(molFile, outDir)
+        v.set_ligand_from_file(molFile)
+        v.dock(exhaustiveness=int(pDic['exhaust']), n_poses=int(pDic['nPoses']),
+               min_rmsd=float(pDic['minRMSD']), max_evals=int(pDic['maxEvals']))
+
+        v.write_poses(pdbqt_filename=outFile)
+        q.put(("SUCCESS", outFile))
+    except Exception as e:
+        q.put(("ERROR", e))
+def safeRunVina(kwargs):
+    q = Queue()
+    p = Process(target=runVina, args=(q, kwargs))
+    p.start()
+    p.join()  # Add timeout to prevent hanging
+    if not q.empty():  # Check if the subprocess put a result
+        status, payload = q.get()
+        if status == "SUCCESS":
+            return payload  # Return the result
+        else:
+            raise payload  # Re-raise the exception
+    else:
+        raise RuntimeError("C++ function did not return any result")
+
+def getOutFile(molFile, outDir):
+    return os.path.join(outDir, getBaseName(molFile)) + '.pdbqt'
 
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile> <outputDir>
@@ -53,20 +83,19 @@ if __name__ == "__main__":
     outFiles, failed = [], []
     for molFile in ligandFiles:
         try:
-            v.set_ligand_from_file(molFile)
-            v.dock(exhaustiveness=int(pDic['exhaust']), n_poses=int(pDic['nPoses']),
-                   min_rmsd=float(pDic['minRMSD']), max_evals=int(pDic['maxEvals']))
-
-            outFile = os.path.join(outDir, getBaseName(molFile)) + '.pdbqt'
-            v.write_poses(pdbqt_filename=outFile)
-            outFiles.append(outFile)
+            kwargs = {'v': v, 'molFile': molFile, 'outDir': outDir, 'pDic': pDic}
+            result = safeRunVina(kwargs)
+            if isinstance(result, Exception):
+                raise result
+            outFiles.append(result)
         except:
             failed.append(molFile)
 
     with open(os.path.join(outDir, f'docked_files_{pDic["it"]}.txt'), 'w') as f:
         f.write('\n'.join(outFiles))
 
-    with open(os.path.join(outDir, f'failed_docked_files_{pDic["it"]}.txt'), 'w') as f:
-        f.write('\n'.join(failed))
+    if failed:
+        with open(os.path.join(outDir, f'failed_docked_files_{pDic["it"]}.txt'), 'w') as f:
+            f.write('\n'.join(failed))
 
 
