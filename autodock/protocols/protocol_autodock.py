@@ -43,6 +43,7 @@ from autodock.constants import SCRUBBER_DIC
 
 
 PDBext, PDBQText = '.pdb', '.pdbqt'
+MGL = 'MGLTools'
 
 LGA, GA, LS, SA = 0, 1, 2, 3
 searchDic = {LGA: 'Lamarckian Genetic Algorithm', GA: 'Genetic Algorithm', LS: 'Local Search',
@@ -155,9 +156,9 @@ class ProtChemAutodockBase(EMProtocol):
         dockGroup.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
                        label='Input small molecules: ', allowsNull=False,
                        help="Input small molecules to be docked with AutoDock")
-        dockGroup.addParam('convSoft', EnumParam, label='Convert ligands with : ', default=0,
-                            choices=['Meeko', 'MGLTools'], display=EnumParam.DISPLAY_HLIST, expertLevel=LEVEL_ADVANCED,
-                            help='Convert ligands to pdbqt using this software')
+        dockGroup.addParam('convSoft', EnumParam, label='Convert receptor/ligands with : ', default=0,
+                            choices=['Meeko', MGL], display=EnumParam.DISPLAY_HLIST, expertLevel=LEVEL_ADVANCED,
+                            help='Convert receptor and ligands to pdbqt using this software')
         dockGroup.addParam('nRuns', IntParam, label='Number of docking runs: ', default=10,
                        help='Number of independent runs using the selected strategy. \n'
                             'Different docking positions will be found for each of them.')
@@ -183,7 +184,7 @@ class ProtChemAutodockBase(EMProtocol):
       if not os.path.exists(ligDir):
         os.mkdir(ligDir)
 
-      if self.getEnumText('convSoft') == 'MGLTools':
+      if self.getEnumText('convSoft') == MGL:
         self.performMGLLigConversion(molSet, it)
       else:
         self.performMeekoLigandConversion(molSet, it, remove=True)
@@ -369,12 +370,17 @@ class ProtChemAutodockBase(EMProtocol):
           runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
         return oFile
 
-    def convertReceptor2PDBQT(self, proteinFile):
-        oFile = self.getReceptorPDBQT()
-        if not os.path.exists(oFile):
-          args = ' -v -r %s -o %s' % (proteinFile, oFile)
-          self.runMGLTool(program='Utilities24/prepare_receptor4.py', args=args)
-        return oFile
+    def convertReceptor2PDBQT(self, cleanedPDB):
+        fnOut = self.getReceptorPDBQT()
+        if self.getEnumText('convSoft') == MGL:
+            args = ' -v -r %s -o %s' % (cleanedPDB, fnOut)
+            self.runMGLTool(program='Utilities24/prepare_receptor4.py', args=args)
+        else:
+            outBase = os.path.splitext(fnOut)[0]
+            args = f' -i {os.path.abspath(cleanedPDB)} -o {outBase} -a -p'
+            autodockPlugin.runMeekoReceptor(self, args)
+
+        return fnOut
 
     def buildFlexReceptor(self, receptorFn, cleanZn=False):
         if cleanZn:
@@ -564,8 +570,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
                    choices=['Classical Solis and Wets', 'pseudo-Solis and Wets'], default=1,
                    help='Whether to use the classical Solis and Wets local searcher, using the method of uniform '
                         'variances for changes in translations, orientations, and torsions; or the pseudo-Solis and '
-                        'Wets local searcher. This method maintains the relative proportions of variances for the '
-                        'translations in � and the rotations in radians')
+                        'Wets local searcher.')
     group.addParam('swMaxIts', IntParam, label='Number of iterations: ', default=300,
                    help='This is the maximum number of iterations that the local search procedure applies to the '
                         'phenotype of any given individual, per generation')
@@ -588,7 +593,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
     line.addParam('e0max2', IntParam, label='Maximum number of retries: ', default=10000)
 
     line = group.addLine('Ligand step sizes: ', expertLevel=LEVEL_ADVANCED,
-                         help='[(t/q/d)step] Defines the maximum translation (A) / angular (�) / dihedral (�) jump '
+                         help='[(t/q/d)step] Defines the maximum translation (A) / angular / dihedral jump '
                               'for the first cycle that the ligand may make in one simulated annealing step. When '
                               '\u201ctrnrf\u201d is less than 1, the reduction factor is multiplied with the tstep at the end of '
                               'each cycle, to give the new value for the next cycle.')
