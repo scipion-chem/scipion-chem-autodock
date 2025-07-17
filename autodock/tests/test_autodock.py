@@ -121,6 +121,8 @@ class TestADMeekoLigands(TestADPrepareLigands):
 
 		self._waitOutput(self.protMeeko, 'outputSmallMolecules', sleepTime=10)
 		assertHandle(self.assertIsNotNone, getattr(self.protMeeko, 'outputSmallMolecules', None), cwd=self.protMeeko.getWorkingDir())
+		assertHandle(self.assertGreater, len(getattr(self.protMeeko, 'outputSmallMolecules')), 0,
+								 cwd=self.protMeeko.getWorkingDir())
 
 class TestScrubberLigands(TestADPrepareLigands):
 	@classmethod
