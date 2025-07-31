@@ -237,7 +237,8 @@ class Plugin(pwchemPlugin):
 												 f'conda install ringtail={RINGTAIL_DIC["version"]} pymol-open-source -y',
 												 'RINGTAIL_INSTALLED'). \
 			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install --no-deps '
-								 f'{MEEKO_DIC["name"]}=={MEEKO_DIC["version"]}', 'MEEKO_INSTALLED'). \
+								 f'{MEEKO_DIC["name"]}=={MEEKO_DIC["version"]} prody==2.4', 'MEEKO_INSTALLED'). \
+			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && conda install gemmi==0.7.3', 'MEEKO_DEPS_INSTALLED'). \
 			addPackage(env, dependencies=['conda'], default=default)
 
 	@classmethod
