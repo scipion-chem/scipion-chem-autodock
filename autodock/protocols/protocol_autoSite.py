@@ -32,15 +32,14 @@ protein structure using the AutoSite software
 
 import os, shutil
 
-from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, FloatParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, FloatParam, LEVEL_ADVANCED, EnumParam
 from pyworkflow.protocol import params
 
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import insistentRun
 
 from autodock import Plugin as autodock_plugin
-from autodock.protocols.protocol_autodock import ProtChemAutodockBase
-
+from autodock.protocols.protocol_autodock import ProtChemAutodockBase, MGL
 
 
 class ProtChemAutoSite(ProtChemAutodockBase):
@@ -98,16 +97,20 @@ landscape of a receptor."""
         form.addSection(label='Input')
         group = form.addGroup('Input')
         group.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
-                      label='Input atomic structure:', allowsNull=False,
-                      help="The atom structure to search pockets in")
+                       label='Input atomic structure:', allowsNull=False,
+                       help="The atom structure to search pockets in")
+
+        group.addParam('convSoft', EnumParam, label='Convert receptor/ligands with : ', default=0,
+                       choices=['Meeko', MGL], display=EnumParam.DISPLAY_HLIST, expertLevel=LEVEL_ADVANCED,
+                       help='Convert receptor and ligands to pdbqt using this software')
 
         group = form.addGroup('Parameters')
         group.addParam('spacing', FloatParam, default=1, label='Step size (A): ',
-                      help="Distance between each point in the electrostatic grid. This value is used to adjust the "
-                           "radius as number of (x,y,z) points : radius/spacing = number of points along 3 dimensions ")
+                       help="Distance between each point in the electrostatic grid. This value is used to adjust the "
+                            "radius as number of (x,y,z) points : radius/spacing = number of points along 3 dimensions ")
 
         group.addParam('nneighbors', IntParam, default=14, label='Number of neighbors: ',
-                      help="Minimum number of neighbor grid points for a cluster to be considered a pocket")
+                       help="Minimum number of neighbor grid points for a cluster to be considered a pocket")
 
         line = group.addLine('Energy cutoffs: ', expertLevel=LEVEL_ADVANCED,
                              help='Energy cutoffs for the C, O, and H atom types points (kcal/mol) to be considered of '
