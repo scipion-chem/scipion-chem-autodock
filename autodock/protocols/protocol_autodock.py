@@ -376,9 +376,13 @@ class ProtChemAutodockBase(EMProtocol):
             args = ' -v -r %s -o %s' % (cleanedPDB, fnOut)
             self.runMGLTool(program='Utilities24/prepare_receptor4.py', args=args)
         else:
-            outBase = os.path.splitext(fnOut)[0]
-            args = f' -i {os.path.abspath(cleanedPDB)} -o {outBase} -a -p'
-            autodockPlugin.runMeekoReceptor(self, args)
+            try:
+                outBase = os.path.splitext(fnOut)[0]
+                args = f' -i {os.path.abspath(cleanedPDB)} -o {outBase} -a -p'
+                autodockPlugin.runMeekoReceptor(self, args)
+            except:
+                args = ' -v -r %s -o %s' % (cleanedPDB, fnOut)
+                self.runMGLTool(program='Utilities24/prepare_receptor4.py', args=args)
 
         return fnOut
 
