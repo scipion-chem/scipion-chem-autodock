@@ -34,9 +34,10 @@ import os, shutil
 
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, FloatParam, LEVEL_ADVANCED, EnumParam
 from pyworkflow.protocol import params
+from pwem.convert.atom_struct import toPdb
 
 from pwchem.objects import SetOfStructROIs, StructROI
-from pwchem.utils import insistentRun
+from pwchem.utils import insistentRun, getBaseName
 
 from autodock import Plugin as autodock_plugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase, MGL
@@ -120,7 +121,12 @@ class ProtChemAutoSite(ProtChemAutodockBase):
 
     # --------------------------- Utils functions --------------------
     def getOriginalReceptorFile(self):
-        return self.inputAtomStruct.get().getFileName()
+        recFile = self.inputAtomStruct.get().getFileName()
+        if recFile.endswith('cif'):
+            pdbFile = self._getExtraPath(f'{getBaseName(recFile)}.pdb')
+            toPdb(recFile, pdbFile)
+            recFile = pdbFile
+        return recFile
 
 
     def getAutoSiteArgs(self, fnReceptor):
