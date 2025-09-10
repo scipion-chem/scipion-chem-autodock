@@ -240,6 +240,7 @@ search and scoring behaviors."""
               else:
                 print(f'Molecule {molName} was not found in the docking results')
 
+        outputSet.updateMolClass()
         outputSet.setProteinFile(recFile)
         outputSet.setDocked(True)
         self._defineOutputs(outputSmallMolecules=outputSet)
