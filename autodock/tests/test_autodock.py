@@ -264,7 +264,7 @@ class TestAutoDockGPU(TestAutoDock):
 				ProtChemAutodockGPU,
 				inputAtomStruct=self.protPrepareReceptor.outputStructure,
 				inputSmallMolecules=self.protMeeko.outputSmallMolecules,
-				fromReceptor=0, radius=24, nRuns=2,
+				fromReceptor=0, nRuns=2, pocketRadiusN=1,
 				numberOfThreads=4, useGpu=True)
 			self.proj.launchProtocol(protAutoDock, wait=False)
 		else:
