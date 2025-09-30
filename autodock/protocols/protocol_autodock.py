@@ -92,7 +92,7 @@ class ProtChemAutodockBase(EMProtocol):
                        label='Input pockets: ', condition='not fromReceptor == 0',
                        help="The protein structural ROIs to dock in")
         inputGroup.addParam('pocketRadiusN', FloatParam, label='Grid radius vs StructROI radius: ',
-                       condition='not fromReceptor == 0', default=1.1, allowsNull=False,
+                       condition='not fromReceptor == 0', default=1.2, allowsNull=False,
                        help='The radius * n of each StructROI will be used as grid radius')
 
         inputGroup.addParam('spacing', FloatParam, label='Spacing of the grids: ', default=0.5, allowsNull=False,
@@ -144,13 +144,14 @@ class ProtChemAutodockBase(EMProtocol):
       makePath(outDir)
 
       if self.fromReceptor.get() == 0:
-        pdbFile, radius = self.getReceptorPDB(), self.radius.get()
+        pdbFile, radius = self.getReceptorPDB(), [self.radius.get()] * 3
         _, xCenter, yCenter, zCenter = calculate_centerMass(pdbFile)
       else:
-        radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
+        minMaxCoords = pocket.getLimits()
+        radius = [(minMax[1]-minMax[0]) * self.pocketRadiusN.get() for minMax in minMaxCoords]
         xCenter, yCenter, zCenter = pocket.calculateMassCenter()
 
-      npts = (radius * 2) / self.spacing.get()
+      npts = [(r * 2) / self.spacing.get() for r in radius]
       znFFfile = autodockPlugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
         if self.doZnDock.get() else None
       gpfFile = generate_gpf(fnReceptor, spacing=self.spacing.get(), allDefAtomTypes=True,
