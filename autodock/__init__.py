@@ -63,9 +63,6 @@ class Plugin(pwchemPlugin):
     _<binaryNameInLowercase>Binary will be a folder inside _<packageNameInLowercase>Home and its name will be <binaryName>.
         For example: _atdBinary = "~/Documents/scipion/software/em/autoDock-4.2.6/AutoDock"
     """
-	# AutoDock
-	_atdHome = pwchemPlugin.getDefPath(AUTODOCK_DIC)
-	_atdBinary = os.path.join(_atdHome, 'AutoDock')
 
 	# AutoDockGPU
 	_atdgpuHome = pwchemPlugin.getDefPath(ADGPU_DIC)
@@ -95,7 +92,6 @@ class Plugin(pwchemPlugin):
 
 	@classmethod
 	def _defineVariables(cls):
-		cls._defineEmVar(AUTODOCK_DIC['home'], cls._atdHome)
 		cls._defineEmVar(ADGPU_DIC['home'], cls._atdgpuHome)
 		cls._defineEmVar(VINA_DIC['home'], cls._vinaHome)
 		cls._defineEmVar(VINAGPU_DIC['home'], cls._vinagpuHome)
@@ -134,12 +130,12 @@ class Plugin(pwchemPlugin):
 	def addADTPackage(cls, env, default=True):
 		""" This function provides the neccessary commands for installing AutoDock. """
 		# Instantiating the install helper
-		installer = InstallHelper(AUTODOCK_DIC['name'], packageHome=cls.getVar(AUTODOCK_DIC['home']), packageVersion=AUTODOCK_DIC['version'])
+		installer = InstallHelper(AUTODOCK_DIC['name'], packageHome=cls.getVar(AUTODOCK_DIC['home']),
+															packageVersion=AUTODOCK_DIC['version'])
 
-		# Installing package
-		installer.getExtraFile(cls.getADTSuiteUrl(), 'ADT_DOWNLOADED', fileName=cls.getADTTar())\
-			.addCommand(f'tar -xf {cls.getADTTar()} --strip-components 1 && rm {cls.getADTTar()}', 'ADT_EXTRACTED')\
-			.addPackage(env, dependencies=['wget'], default=default)
+		installer.getCondaEnvCommand() \
+			.addCondaPackages([f'autodock={AUTODOCK_DIC["version"]}'], channel='bioconda', targetName='ADT_CONDA') \
+			.addPackage(env, ['conda'], default=default)
 
 	@classmethod
 	def addAutoDockGPUPackage(cls, env, default=True):
@@ -274,6 +270,14 @@ class Plugin(pwchemPlugin):
 
 	# ---------------------------------- Protocol functions-----------------------
 	@classmethod
+	def runAutoDock4(cls, protocol, args, cwd=None, popen=False):
+		fullProgram = f'{cls.getEnvActivationCommand(AUTODOCK_DIC)} && autodock4 '
+		if not popen:
+			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+		else:
+			subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+
+	@classmethod
 	def runAutodockGPU(cls, protocol, args, cwd=None):
 		""" Run autodock gpu command from a given protocol """
 		program = ''
@@ -396,11 +400,6 @@ class Plugin(pwchemPlugin):
 		return pwchemPlugin.getProgramHome(GCR_DIC, path)
 
 	@classmethod
-	def getADTSuiteUrl(cls):
-		return 'https://autodock.scripps.edu/wp-content/uploads/sites/56/2021/10/autodocksuite-{}-x86_64Linux2.tar'.\
-			format(AUTODOCK_DIC['version'])
-
-	@classmethod
 	def getADFRSuiteUrl(cls):
 		return 'https://ccsb.scripps.edu/adfr/download/1038/ADFRsuite_x86_64Linux_{}.tar.gz'.\
 			format(ASITE_DIC['version'])
@@ -432,10 +431,6 @@ class Plugin(pwchemPlugin):
 	@classmethod
 	def getCOATIGithub(cls):
 		return 'https://github.com/terraytherapeutics/COATI.git'
-
-	@classmethod
-	def getADTTar(cls):
-		return AUTODOCK_DIC['name'] + '-' + AUTODOCK_DIC['version'] + '.tar'
 
 	@classmethod
 	def getASITETar(cls):

@@ -735,8 +735,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
 
         fnDLG = dpfFile.replace('.dpf', '.dlg')
         args = " -p %s -l %s" % (dpfFile, fnDLG)
-        progCall = autodockPlugin.getPackagePath('AUTODOCK', "autodock4") + args
-        subprocess.check_call(progCall, cwd=outDir, shell=True)
+        autodockPlugin.runAutoDock4(self, args, cwd=outDir, popen=True)
 
   def getNTPocket(self, it=None):
       if not it:

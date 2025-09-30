@@ -37,7 +37,7 @@ from pwchem import Plugin as pwchem_plugin
 from pwchem.constants import MGL_DIC
 
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
-from autodock import Plugin as autodock_plugin
+from autodock import Plugin as autodockPlugin
 from autodock.constants import SCRUBBER_DIC
 
 
@@ -194,7 +194,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
 
         fnDLG = dpfFile.replace('.dpf', '.dlg')
         args = "-p %s -l %s" % (dpfFile, fnDLG)
-        self.runJob(autodock_plugin.getPackagePath(package='AUTODOCK', path="autodock4"), args, cwd=outDir)
+        autodockPlugin.runAutoDock4(self, args, cwd=outDir)
 
 
   def createOutputStep(self):
@@ -265,7 +265,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
           args += ' -x ' + flexFn
 
       self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
-                  autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py') + args, cwd=outDir)
+                  autodockPlugin.getADTPath('Utilities24/prepare_dpf42.py') + args, cwd=outDir)
 
 
       myDPFstr, cont = '', True
