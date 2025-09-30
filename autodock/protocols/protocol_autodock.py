@@ -198,8 +198,8 @@ class ProtChemAutodockBase(EMProtocol):
         minMaxCoords = pocket.getLimits()
         xCenter, yCenter, zCenter = pocket.calculateMassCenter()
 
-      radius = [(minMax[1] - minMax[0]) * self.pocketRadiusN.get() for minMax in minMaxCoords]
-      npts = [(r * 2) / self.spacing.get() for r in radius]
+      diams = [(minMax[1] - minMax[0]) * self.pocketRadiusN.get() for minMax in minMaxCoords]
+      npts = [d / self.spacing.get() for d in diams]
       znFFfile = autodockPlugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
         if self.doZnDock.get() else None
       gpfFile = generate_gpf(fnReceptor, spacing=self.spacing.get(), allDefAtomTypes=True,
