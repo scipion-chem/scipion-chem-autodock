@@ -32,12 +32,13 @@ in the protein, including the hydrogens. This is necessary to subsequently
 generate the electrostatic potential grid.
 """
 
-import os
+import os, shutil
 
 from pyworkflow.protocol.params import  FloatParam, PointerParam
 from pwem.convert import AtomicStructHandler
 
-from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, insistentRun
+from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, insistentRun, \
+  calculateCoordLimits, getBaseName
 from pwchem import Plugin as pwchem_plugin
 from pwchem.constants import MGL_DIC
 
@@ -62,8 +63,9 @@ class AutodockGridGeneration(ProtChemAutodockBase):
                       allowsNull=False,
                       help="Select the prepared atomic structure of "
                            "the docking target protein")
-
-        form.addParam('radius', FloatParam, label='Radius')
+        form.addParam('pocketRadiusN', FloatParam, label='Grid radius vs AtomStruct radius: ',
+                      default=1.2, allowsNull=False,
+                      help='The radius * n of each AtomStruct will be used as grid radius')
 
         form.addParam('spacing', FloatParam, default=0.375, label='Step size (A)',
                       help="Distance between each point in the electrostatic grid."
@@ -75,49 +77,48 @@ class AutodockGridGeneration(ProtChemAutodockBase):
 
     # --------------------------- Steps functions --------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('getpdbqt')
-        self._insertFunctionStep('prepareGrid')
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.convertReceptorStep)
+        self._insertFunctionStep(self.generateGridsStep)
+        self._insertFunctionStep(self.createOutputStep)
 
 
-    def getpdbqt(self):
+    def convertReceptorStep(self):
         """ Prepare the pdbqt used to generate the grid file e-map"""
 
         filename = self.getOriginalReceptorFile()
         if filename.endswith('.cif'):
-            self.pdbFile = self._getTmpPath("atomStruct.pdb")
-            nameProtein = (os.path.basename(filename)).split(".")[0]
+            pdbFile = self.getReceptorPDB()
             aStruct1 = AtomicStructHandler(filename)
-            aStruct1.write(self.pdbFile)
+            aStruct1.write(pdbFile)
         elif filename.endswith('.pdbqt'):
-            self.pdbFile = self._getTmpPath("atomStruct.pdb")
-            nameProtein = (os.path.basename(filename)).split(".")[0]
-            args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(filename), os.path.abspath(self.pdbFile))
+            pdbFile = self.getReceptorPDB()
+            args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(filename), os.path.abspath(pdbFile))
             runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getTmpPath()))
         else:
-            self.pdbFile = filename
-            nameProtein = (os.path.basename(self.pdbFile)).split(".")[0]
+            pdbFile = self.getReceptorPDB()
+            shutil.copy(filename, pdbFile)
 
-        fnOut = self._getExtraPath('%s.pdbqt' % nameProtein)
-
-        args = ' -v -r %s -o %s' % (self.pdbFile, fnOut)
+        fnOut = self.getReceptorPDBQT()
+        args = ' -v -r %s -o %s' % (pdbFile, fnOut)
 
         program = "prepare_receptor4"
         self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
                     autodock_plugin.getADTPath('Utilities24/%s.py' % program) + args)
 
 
-    def prepareGrid(self):
+    def generateGridsStep(self):
         """
         """
         atomStructFn = os.path.abspath(self.getReceptorPDBQT())
         nameProtein = (os.path.basename(atomStructFn)).split(".")[0]
 
         # Center of the molecule (use the pdb file)
-        _, xCenter, yCenter, zCenter = calculate_centerMass(self.pdbFile)
+        _, xCenter, yCenter, zCenter = calculate_centerMass(self.getReceptorPDB())
 
         # Create the GPF file, required by autogrid to build the grid and glg
-        npts = (self.radius.get()*2)/self.spacing.get()  # x,y,z points of the grid
+        minMaxCoords = calculateCoordLimits(self.getReceptorPDB())
+        diams = [(minMax[1] - minMax[0]) * self.pocketRadiusN.get() for minMax in minMaxCoords]
+        npts = [d / self.spacing.get() for d in diams]
 
         gpfFile = generate_gpf(atomStructFn, spacing=self.spacing.get(), allDefAtomTypes=True,
                                      xc=xCenter, yc=yCenter, zc=zCenter,
@@ -129,9 +130,9 @@ class AutodockGridGeneration(ProtChemAutodockBase):
 
         args = "-p %s -l %s" % (gpfFile, glgFile)
         insistentRun(self, "autogrid4", args, envDic=SCRUBBER_DIC, cwd=self._getExtraPath())
-        eMapFile = self._getExtraPath("%s.e.map" %nameProtein)
-        self.grid = GridADT(eMapFile, os.path.relpath(atomStructFn), radius=self.radius.get(),
-                            spacing=self.spacing.get(), massCX=xCenter, massCY=yCenter, massCZ=zCenter, npts=npts)
+        eMapFile = self._getExtraPath("%s.e.map" % nameProtein)
+        self.grid = GridADT(eMapFile, os.path.relpath(atomStructFn),
+                            spacing=self.spacing.get(), massCX=xCenter, massCY=yCenter, massCZ=zCenter)
 
 
     def createOutputStep(self):

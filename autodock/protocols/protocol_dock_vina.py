@@ -32,7 +32,8 @@ from pyworkflow.utils.path import makePath
 
 from pwchem import Plugin as pwchem_plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import calculate_centerMass, generate_gpf, insistentRun, getBaseName, makeSubsets
+from pwchem.utils import calculate_centerMass, generate_gpf, insistentRun, getBaseName, \
+  makeSubsets, calculateCoordLimits
 
 from autodock import Plugin as autodockPlugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
@@ -98,19 +99,19 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
           makePath(outDir)
 
       if self.fromReceptor.get() == 0:
-          radius = self.radius.get()
-          # Use the original pdb for mass center
+          pdbFile = self.getReceptorPDB()
+          minMaxCoords = calculateCoordLimits(pdbFile)
           _, xCenter, yCenter, zCenter = calculate_centerMass(self.getReceptorPDB())
       else:
-          radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
+          minMaxCoords = pocket.getLimits()
           xCenter, yCenter, zCenter = pocket.calculateMassCenter()
 
-      spacing = self.spacing.get()
-      npts = (radius * 2) / spacing
+      radius = [((minMax[1] - minMax[0]) / 2) * self.pocketRadiusN.get() for minMax in minMaxCoords]
+      npts = [(r*2) / self.spacing.get() for r in radius]
 
       znFFfile = autodockPlugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
         if self.doZnDock.get() else None
-      gpfFile = generate_gpf(fnReceptor, spacing=spacing, allDefAtomTypes=True,
+      gpfFile = generate_gpf(fnReceptor, spacing=self.spacing.get(), allDefAtomTypes=True,
                               xc=xCenter, yc=yCenter, zc=zCenter,
                               npts=npts, outDir=outDir, ligandFns=pdbqtFiles, znFFfile=znFFfile)
 
@@ -225,7 +226,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
         f.write('mapsName:: {}\n'.format(self.getReceptorName()))
         f.write('gpfFile:: {}\n'.format(gpfFile))
 
-        f.write('boxSize:: {}\n'.format(3*[radius*2]))
+        f.write('boxSize:: {}\n'.format([r*2 for r in radius]))
         f.write('boxCenter:: {}\n'.format(center))
 
         f.write('scoreName:: {}\n'.format(self.getEnumText('scoreName')))
