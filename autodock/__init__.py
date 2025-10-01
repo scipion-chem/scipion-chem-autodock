@@ -230,7 +230,7 @@ class Plugin(pwchemPlugin):
 
 		# Installing package
 		installer.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && '
-												 f'conda install ringtail={RINGTAIL_DIC["version"]} pymol-open-source -y',
+												 f'conda install -y ringtail={RINGTAIL_DIC["version"]} pymol-open-source -c conda-forge',
 												 'RINGTAIL_INSTALLED'). \
 			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install --no-deps '
 								 f'{MEEKO_DIC["name"]}=={MEEKO_DIC["version"]} prody==2.4', 'MEEKO_INSTALLED'). \
