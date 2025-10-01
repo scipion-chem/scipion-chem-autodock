@@ -34,7 +34,7 @@ from pyworkflow.utils.path import makePath, createLink
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseName, relabelMapAtomsMol2, \
-  insistentRun, getBaseFileName, makeSubsets, convertToSdf
+  insistentRun, getBaseFileName, makeSubsets, convertToSdf, calculateCoordLimits
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC, OPENBABEL_DIC
 
@@ -53,9 +53,7 @@ meekoScript = 'meeko_preparation.py'
 class ProtChemAutodockBase(EMProtocol):
     """Base class protocol for AutoDock docking protocols"""
 
-    def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
-        self.stepsExecutionMode = STEPS_PARALLEL
+    stepsExecutionMode = STEPS_PARALLEL
 
     def _defineFlexParams(self, form):
         group = form.addGroup('Flexible residues')
@@ -83,17 +81,14 @@ class ProtChemAutodockBase(EMProtocol):
         inputGroup.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
                        label='Input atomic structure: ', condition='fromReceptor == 0',
                        help="The atom structure to use as receptor in the docking")
-        inputGroup.addParam('radius', FloatParam, label='Grid radius for whole protein: ',
-                       condition='fromReceptor == 0', allowsNull=False,
-                       help='Radius of the Autodock grid for the whole protein')
 
         # Docking on pockets
         inputGroup.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
                        label='Input pockets: ', condition='not fromReceptor == 0',
                        help="The protein structural ROIs to dock in")
-        inputGroup.addParam('pocketRadiusN', FloatParam, label='Grid radius vs StructROI radius: ',
-                       condition='not fromReceptor == 0', default=1.1, allowsNull=False,
-                       help='The radius * n of each StructROI will be used as grid radius')
+        inputGroup.addParam('pocketRadiusN', FloatParam, label='Grid radius vs StructROI/AtomStruct radius: ',
+                       default=1.2, allowsNull=False,
+                       help='The radius * n of each StructROI/AtomStruct will be used as grid radius')
 
         inputGroup.addParam('spacing', FloatParam, label='Spacing of the grids: ', default=0.5, allowsNull=False,
                        help='Spacing of the generated Autodock grids')
@@ -144,13 +139,15 @@ class ProtChemAutodockBase(EMProtocol):
       makePath(outDir)
 
       if self.fromReceptor.get() == 0:
-        pdbFile, radius = self.getReceptorPDB(), self.radius.get()
+        pdbFile = self.getReceptorPDB()
+        minMaxCoords = calculateCoordLimits(pdbFile)
         _, xCenter, yCenter, zCenter = calculate_centerMass(pdbFile)
       else:
-        radius = (pocket.getDiameter() / 2) * self.pocketRadiusN.get()
+        minMaxCoords = pocket.getLimits()
         xCenter, yCenter, zCenter = pocket.calculateMassCenter()
 
-      npts = (radius * 2) / self.spacing.get()
+      diams = [(minMax[1] - minMax[0]) * self.pocketRadiusN.get() for minMax in minMaxCoords]
+      npts = [d / self.spacing.get() for d in diams]
       znFFfile = autodockPlugin.getPackagePath(package='VINA', path='AutoDock-Vina/data/AD4Zn.dat') \
         if self.doZnDock.get() else None
       gpfFile = generate_gpf(fnReceptor, spacing=self.spacing.get(), allDefAtomTypes=True,
@@ -686,8 +683,7 @@ class ProtChemAutodock(ProtChemAutodockBase):
 
         fnDLG = dpfFile.replace('.dpf', '.dlg')
         args = " -p %s -l %s" % (dpfFile, fnDLG)
-        progCall = autodockPlugin.getPackagePath('AUTODOCK', "autodock4") + args
-        subprocess.check_call(progCall, cwd=outDir, shell=True)
+        autodockPlugin.runAutoDock4(self, args, cwd=outDir, popen=True)
 
   def getNTPocket(self, it=None):
       if not it:

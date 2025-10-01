@@ -35,16 +35,8 @@ to select the radius of the sphere that contains the protein or a desired zone.
 from pwchem.wizards import GetRadiusProtein
 
 # Plugin imports
-from ..protocols import AutodockGridGeneration, ProtChemAutodock, ProtChemVinaDocking
-from ..protocols import ProtChemAutoLigand, ProtChemAutodockGPU, ProtChemAutoSite
 from ..protocols import ProtChemAutodockScore
 
-for prot in [AutodockGridGeneration, ProtChemAutodock, ProtChemVinaDocking, ProtChemAutoLigand, ProtChemAutodockGPU,
-             ProtChemAutoSite]:
-    GetRadiusProtein().addTarget(protocol=prot,
-                                 targets=['radius'],
-                                 inputs=['inputAtomStruct'],
-                                 outputs=['radius'])
 
 GetRadiusProtein().addTarget(protocol=ProtChemAutodockScore,
                              targets=['radius'],

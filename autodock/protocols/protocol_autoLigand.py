@@ -39,7 +39,7 @@ from pyworkflow.protocol import params
 
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.constants import MGL_DIC
-from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, insistentRun
+from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, insistentRun, calculateCoordLimits
 from pwchem import Plugin as pwchem_plugin
 
 from autodock import Plugin as autodock_plugin
@@ -75,10 +75,9 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
         group.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
                       label='Input atomic structure:', condition=NOTPREVGRID, allowsNull=False,
                       help="The atom structure to search pockets in")
-        group.addParam('radius', FloatParam, label='Grid radius for whole protein: ',
-                       allowsNull=False, condition=NOTPREVGRID,
-                       help='Radius of the Autodock grid for the whole protein.'
-                            'The wizard will provide for an approximation')
+        group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs AtomStruct radius: ',
+                       default=1.1, allowsNull=False,
+                       help='The radius * n of each AtomStruct will be used as grid radius')
         group.addParam('spacing', FloatParam, default=1, label='Step size (A)',
                       condition=NOTPREVGRID,
                       help="Distance between each point in the electrostatic grid."
@@ -145,7 +144,6 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
         if self.prevGrid:
             shutil.copytree(self.getReceptorDir(), outDir, dirs_exist_ok=True)
         else:
-            radius = self.radius.get()
             strFile = self.getOriginalReceptorFile()
             if os.path.splitext(strFile)[1] == '.pdbqt':
                 pdbFile = os.path.abspath(self._getTmpPath('pdbInput.pdb'))
@@ -154,8 +152,11 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
             else:
                 pdbFile = strFile
 
+            minMaxCoords = calculateCoordLimits(pdbFile)
+            diams = [(minMax[1] - minMax[0]) * self.pocketRadiusN.get() for minMax in minMaxCoords]
+            npts = [d / self.spacing.get() for d in diams]
+
             _, xCenter, yCenter, zCenter = calculate_centerMass(pdbFile)
-            npts = (radius * 2) / self.spacing.get()
 
             makePath(outDir)
             gpfFile = generate_gpf(self.getReceptorPDBQT(), spacing=self.spacing.get(), allDefAtomTypes=True,

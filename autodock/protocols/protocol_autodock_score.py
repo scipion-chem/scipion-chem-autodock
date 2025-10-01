@@ -31,12 +31,13 @@ import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import generate_gpf, calculate_centerMass, getBaseName, makeSubsets, insistentRun
+from pwchem.utils import generate_gpf, calculate_centerMass, getBaseName, makeSubsets, \
+  insistentRun, calculateCoordLimits
 from pwchem import Plugin as pwchem_plugin
 from pwchem.constants import MGL_DIC
 
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
-from autodock import Plugin as autodock_plugin
+from autodock import Plugin as autodockPlugin
 from autodock.constants import SCRUBBER_DIC
 
 
@@ -58,8 +59,9 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
     group.addParam('inputSmallMolecules', MultiPointerParam, pointerClass="SetOfSmallMolecules",
                    label='Input small molecules: ',
                    help="Input small molecules to be scored with AutoDock4")
-    group.addParam('radius', FloatParam, label='Grid radius for whole protein: ', allowsNull=False,
-                   help='Radius of the Autodock grid for the whole protein')
+    group.addParam('pocketRadiusN', FloatParam, label='Grid radius vs AtomStruct radius: ',
+                   default=1.1, allowsNull=False,
+                   help='The radius * n of each AtomStruct will be used as grid radius')
     group.addParam('spacing', FloatParam, label='Spacing of the grids: ', default=0.5, allowsNull=False,
                    help='Spacing of the generated Autodock grids')
 
@@ -108,16 +110,17 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
     fnReceptor = self.getReceptorPDBQT()
     outDir = self.getScoringDir()
 
-    radius = self.radius.get()
     # Use the original pdb for mass center
     pdbFile = self.getOriginalReceptorFile()
     if not os.path.splitext(pdbFile)[1] == '.pdb':
       pdbFile = self.convertReceptor2PDB(pdbFile)
+    minMaxCoords = calculateCoordLimits(pdbFile)
+    diams = [(minMax[1] - minMax[0]) * self.pocketRadiusN.get() for minMax in minMaxCoords]
     structure, x_center, y_center, z_center = calculate_centerMass(pdbFile)
 
     makePath(outDir)
 
-    npts = (radius * 2) / self.spacing.get()
+    npts = [d / self.spacing.get() for d in diams]
     gpf_file = generate_gpf(fnReceptor, spacing=self.spacing.get(), allDefAtomTypes=True,
                             xc=x_center, yc=y_center, zc=z_center,
                             npts=npts, outDir=outDir, ligandFns=self.ligandFileNames)
@@ -135,7 +138,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
 
         fnDLG = dpfFile.replace('.dpf', '.dlg')
         args = "-p %s -l %s" % (dpfFile, fnDLG)
-        self.runJob(autodock_plugin.getPackagePath(package='AUTODOCK', path="autodock4"), args, cwd=outDir)
+        autodockPlugin.runAutoDock4(self, args, cwd=outDir)
 
 
   def createOutputStep(self):
@@ -206,7 +209,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
           args += ' -x ' + flexFn
 
       self.runJob(pwchem_plugin.getProgramHome(MGL_DIC, 'bin/pythonsh'),
-                  autodock_plugin.getADTPath('Utilities24/prepare_dpf42.py') + args, cwd=outDir)
+                  autodockPlugin.getADTPath('Utilities24/prepare_dpf42.py') + args, cwd=outDir)
 
 
       myDPFstr, cont = '', True
