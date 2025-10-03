@@ -55,9 +55,8 @@ class ViewerRingtail(pwviewer.ProtocolViewer):
 
     group = form.addGroup('Displays')
     group.addParam('displayPymol', params.LabelParam, label='Display molecules: ',
-                   help='Display molecules in the bookmark using PyMol')
-    group.addParam('displayPlot', params.LabelParam, label='Display energies: ',
-                   help='Display a plot with the energies vs ligand efficiencies of the molecules in the bookmark')
+                   help='Display molecules in the bookmark using PyMol. Click on the dots of the graph to display the '
+                        'corresponding molecule in pymol')
 
   def getBookmarks(self):
     return self.protocol.getBookmarks()
@@ -65,16 +64,11 @@ class ViewerRingtail(pwviewer.ProtocolViewer):
   def _getVisualizeDict(self):
     return {
       'displayPymol': self._viewMols,
-      'displayPlot': self._viewEnergies,
     }
 
   def _viewMols(self, e=None):
     molDB = self.getInputDB()
     molDB.displayPlot(bookmark=self.bookmark.get().strip(), pymol=True)
-
-  def _viewEnergies(self, e=None):
-    molDB = self.getInputDB()
-    molDB.displayPlot(bookmark=self.bookmark.get().strip(), pymol=False)
 
   def getInputDB(self):
     molDB = None
