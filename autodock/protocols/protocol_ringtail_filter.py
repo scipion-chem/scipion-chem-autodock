@@ -193,36 +193,23 @@ and actionable subsets for further study."""
 
   def filterStep(self):
     inDB = self.inputRingtail.get()
-    dbFile = os.path.abspath(inDB.getFileName())
-    args = f'read -i {dbFile} -s {self.bookmark.get()} '
-    if inDB.getType() == VINA:
-      args += '-m vina '
+    kwargs = {'bookmark': self.bookmark.get()}
 
     scFilt = scoreOptions[self.getEnumText("scoreFilt")]
-    if scFilt is not None:
-      args += f'-{scFilt} {self.scoreValue.get()} '
-
+    kwargs['scoreDic'] = {scFilt: self.scoreValue.get()} if scFilt else {}
     clFilt = clusterOptions[self.getEnumText("cluster")]
-    if clFilt is not None:
-      args += f'-{clFilt} {self.clustCut.get()} '
+    kwargs['clusterDic'] = {clFilt: self.clustCut.get()} if clFilt else {}
 
-    if self.setMax.get():
-      args += f'-mna {self.maxAtoms.get()} '
+    kwargs['maxAtoms'] = self.maxAtoms.get() if self.setMax.get() else None
+    kwargs['smarts'] = self.smarts.get().strip() if self.smarts.get().strip() else None
+    kwargs['minHB'] = self.minHB.get()
+    kwargs['vdwIntLines'] = self.vdwInt.get().strip()
+    kwargs['hbIntLines'] = self.vdwInt.get().strip()
 
-    if self.smarts.get().strip():
-      args += f'--ligand_substruct {self.smarts.get()} '
-    
-    if self.minHB.get() > 0:
-      args += f'-hc {self.minHB.get()} '
-    args += self.getInteractionsArgs(vdw=True)
-    args += self.getInteractionsArgs(vdw=False)
+    kwargs['outDir'] = os.path.abspath(self._getPath()) if self.outMols.get() else None
+    kwargs['outBest'] = self.outBestMol.get()
 
-    if self.outMols.get():
-      outDir = os.path.abspath(self._getPath())
-      args += f'-sdf {outDir} --individual_sdf_files '
-      if not self.outBestMol.get():
-        args += '-oap '
-
+    args = inDB.buildFilterArgs(**kwargs)
     autodockPlugin.runRingtail(self, args, cwd=self._getPath())
 
   def createOutputStep(self):
