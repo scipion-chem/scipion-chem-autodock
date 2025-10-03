@@ -179,7 +179,6 @@ class RingtailDatabase(data.EMFile):
             if not outBest:
                 args += '-oap '
 
-        print('args: ', args)
         return args
 
     def performBaseFilter(self, bookmark='base'):
