@@ -152,6 +152,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
         outputDB.setReceptorFile(recFile)
         outputDB.setType(VINA)
         outputDB.createSumFile(self.getSumPath())
+        outputDB.performBaseFilter()
         self._defineOutputs(outputRingtail=outputDB)
       else:
         outDir = self._getPath('outputLigands')
