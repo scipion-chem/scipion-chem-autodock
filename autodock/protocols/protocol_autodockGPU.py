@@ -61,6 +61,9 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     super()._defineParams(form)
     form.addParam('ringtailOutput', BooleanParam, label='Create ringtail output: ', default=False,
                   help='Create a ringtail database as output of the docking execution')
+    form.addParam('remTmp', BooleanParam, label='Remove intermediate files: ', default=True,
+                  expertLevel=LEVEL_ADVANCED, condition='not ringtailOutput',
+                  help='Whether to remove the intermediate files generate by AutoDock to reduce the memory usage')
 
     form.addSection(label="Search")
     group = form.addGroup('Heuristics')
@@ -181,11 +184,13 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
         outputDB = RingtailDatabase(filename=self._getPath('ringtail.db'))
         outputDB.setReceptorFile(recFile)
         outputDB.createSumFile(self.getSumPath())
+        outputDB.performBaseFilter()
         self._defineOutputs(outputRingtail=outputDB)
       else:
         outDir = self._getPath('outputLigands')
         makePath(outDir)
-  
+
+        inputMols = self.inputSmallMolecules.get()
         outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
         for pocketDir in self.getPocketDirs():
           dlgFiles = self.getDockedLigandsFiles(pocketDir)
@@ -194,10 +199,12 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
                                              gridId=gridId, outDir=outDir)
           pocketDic = {k: v for pDic in pocketDics for (k, v) in pDic.items()}
   
-          inputMols = self.inputSmallMolecules.get()
           outputMols = performBatchThreading(self.performOutputCreation, inputMols, nt,
                                              gridId=gridId, pocketDic=pocketDic, recFile=recFile)
-  
+
+          if self.remTmp.get():
+            self.removeTmpFiles(pocketDir)
+
           for smallMol in outputMols:
             smallMol.guessMolName()
             outputSet.append(smallMol)
@@ -331,6 +338,10 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     for pocketDir in self.getPocketDirs():
       replaceInFiles(os.path.abspath(pocketDir), f'..\/{recName}', recName, file_extension='.dlg')
 
+  def removeTmpFiles(self, pDir):
+    for file in os.listdir(pDir):
+      if file.split('.')[-1] in ['dlg', 'xml', 'pdbqt', 'map']:
+        os.remove(os.path.join(pDir, file))
 
   def _summary(self):
     s = []

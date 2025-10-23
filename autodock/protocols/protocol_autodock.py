@@ -323,7 +323,7 @@ class ProtChemAutodockBase(EMProtocol):
         else:
             try:
                 outBase = os.path.splitext(fnOut)[0]
-                args = f' -i {os.path.abspath(cleanedPDB)} -o {outBase} -a -p'
+                args = f' -i {os.path.abspath(cleanedPDB)} -o {outBase} -a -p --default_altloc A'
                 autodockPlugin.runMeekoReceptor(self, args)
             except:
                 args = ' -v -r %s -o %s' % (cleanedPDB, fnOut)

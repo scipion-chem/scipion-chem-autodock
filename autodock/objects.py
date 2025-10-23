@@ -93,6 +93,10 @@ class RingtailDatabase(data.EMFile):
         self._receptorFile = self._radius = String(receptorFile)
         self._type = String(dbType)
 
+    def getDBDir(self):
+        inDBFile = os.path.abspath(self.getFileName())
+        return os.path.dirname(inDBFile)
+
     def getSummary(self):
         args = f'read --input_db {self.getFileName()} -su'
         ringSum = Plugin.runRingtail(None, args, popen=True, getOutput=True)
@@ -134,5 +138,51 @@ class RingtailDatabase(data.EMFile):
         args = f'read -i {inDB} --{flag} '
         if bookmark:
             args += f'-s {bookmark} '
-        cwd = os.path.dirname(inDB)
+        cwd = self.getDBDir()
         Plugin.runRingtail(None, args, popen=True, cwd=cwd)
+
+    def buildFilterArgs(self, bookmark='base', scoreDic=None, clusterDic=None,
+                        maxAtoms=None, smarts=None, minHB=0, vdwIntLines='', hbIntLines='',
+                        outDir=None, outBest=True):
+        dbFile = os.path.abspath(self.getFileName())
+        args = f'read -i {dbFile} -s {bookmark} '
+        if self.getType() == 'Vina':
+            args += '-m vina '
+
+        if scoreDic:
+            for scoreName, scoreValue in scoreDic.items():
+                args += f'-{scoreName} {scoreValue} '
+
+        if clusterDic:
+            for clustName, clustValue in clusterDic.items():
+                args += f'-{clustName} {clustValue} '
+
+        if maxAtoms:
+            args += f'-mna {maxAtoms} '
+
+        if smarts:
+            args += f'--ligand_substruct {smarts.strip()} '
+
+        if minHB > 0:
+            args += f'-hc {minHB} '
+
+        if vdwIntLines:
+            vdwIntList = vdwIntLines.split("\n")
+            args += f'-vdw {"-vdw ".join(vdwIntList)} '
+
+        if hbIntLines:
+            hbIntList = hbIntLines.split("\n")
+            args += f'-hb {"-hb ".join(hbIntList)} '
+
+        if outDir:
+            args += f'-sdf {outDir} --individual_sdf_files '
+            if not outBest:
+                args += '-oap '
+
+        return args
+
+    def performBaseFilter(self, bookmark='base'):
+        args = self.buildFilterArgs(bookmark, scoreDic={'e': 1000})
+        cwd = self.getDBDir()
+        Plugin.runRingtail(None, args, cwd=cwd, popen=True)
+
