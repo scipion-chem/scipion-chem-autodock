@@ -34,10 +34,10 @@ import os, shutil
 
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, FloatParam, LEVEL_ADVANCED, EnumParam
 from pyworkflow.protocol import params
-from pwem.convert.atom_struct import toPdb
 
 from pwchem.objects import SetOfStructROIs, StructROI
-from pwchem.utils import insistentRun, getBaseName
+from pwchem.utils import insistentRun, getBaseName, writeCIFLine
+from pwchem.constants import CIF_DEF_COLS, CIF_DEF_HEADER
 
 from autodock import Plugin as autodock_plugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase, MGL
@@ -168,10 +168,6 @@ landscape of a receptor."""
     # --------------------------- Utils functions --------------------
     def getOriginalReceptorFile(self):
         recFile = self.inputAtomStruct.get().getFileName()
-        if recFile.endswith('cif'):
-            pdbFile = self._getExtraPath(f'{getBaseName(recFile)}.pdb')
-            toPdb(recFile, pdbFile)
-            recFile = pdbFile
         return recFile
 
 
@@ -183,6 +179,25 @@ landscape of a receptor."""
             args += ' --pep'
         return args
 
+    def convert2Cif(self, pdbFile):
+        cifCols = '\n'.join(CIF_DEF_COLS)
+        outStr = CIF_DEF_HEADER.format(cifCols)
+        pocketK = self.getIdFromFile(pdbFile)
+
+        with open(pdbFile) as f:
+            for i, line in enumerate(f):
+                pLine = line.strip().split()
+                coords = [float(c) for c in pLine[5:8]]
+                replacements = [str(i + 1), f'{pLine[2]}{i + 1}', 'STP', 'C', 1, pocketK, *coords]
+                cifLine = writeCIFLine(*replacements, type_symbol=pLine[2])
+                outStr += cifLine
+
+        oFile = pdbFile.replace('.pdb', '.cif')
+        with open(oFile, 'w') as fo:
+            fo.write(outStr)
+        os.remove(pdbFile)
+        return oFile
+
 
     def getIdFromFile(self, file):
         return int(os.path.basename(file).split('_')[-1].split('.')[0])
@@ -190,9 +205,14 @@ landscape of a receptor."""
     def getOutFiles(self, key='_cl_'):
         outFiles, pdbName = [], self.getReceptorName()
         allFiles = os.listdir(self._getExtraPath(pdbName))
+        ext = os.path.splitext(self.getOriginalReceptorFile())[1]
+
         for file in allFiles:
+            file = self._getExtraPath(pdbName, file)
+            if ext == '.cif' and file.endswith('.pdb'):
+                file = self.convert2Cif(file)
             if key in file:
-                outFiles.append(self._getExtraPath(pdbName, file))
+                outFiles.append(file)
         return outFiles
 
     def getScoresDic(self):
