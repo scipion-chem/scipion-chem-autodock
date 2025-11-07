@@ -37,7 +37,6 @@ class AutodockGrid(data.EMFile):
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
 
-
 class GridADT(data.EMFile):
     """ Represent a grid file in map (ASCIII) format generated with ADT"""
     def __init__(self, filename=None, proteinFile=None, **kwargs):
@@ -49,9 +48,16 @@ class GridADT(data.EMFile):
         self._massCY = Float(kwargs.get('massCY', None))
         self._massCZ = Float(kwargs.get('massCZ', None))
         self._npts = Integer(kwargs.get('npts', None))
+        self._tool = String(kwargs.get('tool', None)) #to specify tool used (ADT or AGFR)
 
     def __str__(self):
         return '{} (Radius={}, Spacing={})'.format(self.__class__.__name__, self.getRadius(), self.getSpacing())
+
+    def getTool(self):
+        return self._tool.get()
+
+    def setTool(self, value):
+        self._tool.set(value)
 
     def getRadius(self):
         return self._radius.get()
@@ -84,6 +90,25 @@ class GridADT(data.EMFile):
 
     def getFilesDirectory(self):
         return '/'.join(self.getProteinFile().split('/')[:-1])
+
+class SetOfGridADT(data.EMSet):
+    """ Set of Binding sites """
+    ITEM_TYPE = GridADT
+
+    def __init__(self, filename=None, **kwargs):
+        super().__init__(filename, **kwargs)
+
+    def __str__(self):
+        s = '{} ({} items)'.format(self.getClassName(), self.getSize())
+        return s
+
+    def clone(self):
+        clone = self.getClass()()
+        clone.copy(self, ignoreAttrs=[])
+        return clone
+
+    def append(self, item, update=False):
+        super().append(item)
 
 
 class RingtailDatabase(data.EMFile):

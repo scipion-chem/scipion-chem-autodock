@@ -27,11 +27,13 @@
 # Preparation receptor
 from .protocol_preparation_receptor import ProtChemADTPrepareReceptor
 from .protocol_generate_grid import AutodockGridGeneration
+from .protocol_generate_target_file import ProtGenerateTargetFile
 
 # Preparation ligans
 from .protocol_preparation_ligands import ProtChemADTPrepareLigands
 from .protocol_scrubber_ligand_prep import ProtScrubberPrepareLigands
 from .protocol_meeko_ligands import ProtChemMeekoLigands
+
 
 # ROI definition
 from .protocol_autoLigand import ProtChemAutoLigand
@@ -43,6 +45,7 @@ from .protocol_autodockGPU import ProtChemAutodockGPU
 from .protocol_dock_vina import ProtChemVinaDocking
 from .protocol_ringtail_create import ProtRingtailCreation
 from .protocol_ringtail_filter import ProtRingtailFilter
+from .protocol_autodock_crankpep import ProtCrankPep
 
 # Pharmacophores
 from .protocol_autoSite_pharmacophore import ProtChemAutoSiteGenPharmacophore
