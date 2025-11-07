@@ -27,8 +27,11 @@ import re
 import shutil, os
 import zipfile
 
+import pyworkflow
+from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem.utils import pdbqt2other
 from pwem.protocols import EMProtocol
+from pyworkflow.object import Float
 from pyworkflow.protocol import params
 
 from autodock import Plugin
@@ -61,7 +64,7 @@ class ProtCrankPep(EMProtocol):
 
     def _insertAllSteps(self):
         self._insertFunctionStep('createFilesStep')
-        #self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep('createOutputStep')
 
     def createFilesStep(self):
         targetFile = os.path.abspath(self.inputGrids.get().getFirstItem().getFileName())
@@ -85,26 +88,43 @@ class ProtCrankPep(EMProtocol):
             Plugin.runADCP(self, args, cwd=resultsFolder)
 
     def createOutputStep(self):
-        recFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
-        for prot in self.inputSmallMolecules.get():
-            protFile = os.path.abspath(prot.getFileName())
+        logFile = os.path.abspath(self._getPath(f'logs/run.stdout'))
+        outputLogData = self.readOutputData(logFile)
+        i = 0
+        outputMols = SetOfSmallMolecules().create(outputPath=self._getPath())
+
+        for grid in self.inputGrids.get():
+            protFile = grid.getAttributeValue('_peptideFile')
+            recFile = grid.getAttributeValue('_proteinFile')
             protName = os.path.splitext(os.path.basename(protFile))[0]
-            logFile = os.path.abspath(self._getExtraPath(f'{protName}.log'))
+            resultsFolder = os.path.abspath(os.path.join(self._getPath(), protName))
+            rankedFiles = self.rankedFiles(resultsFolder)
+            data = outputLogData[i]
+            mappingFile = os.path.abspath(grid.getFileName())
 
-            data = self.getInfo(logFile)
+            for file in rankedFiles:
+                newMol = SmallMolecule(smallMolFilename=protFile, proteinFile=recFile, molName=protName, type='Autodock-CrankPep')
+                m = re.search(r'_ranked_(\d+)', file)
+                if m:
+                    modeNum = int(m.group(1))
+                    if modeNum in data:
+                        affinity = data[modeNum]["affinity"]
+                        energy = data[modeNum]["energy"]
+                        bestRun = data[modeNum]["bestRun"]
+                        newMol.setPoseFile(os.path.abspath(file))
+                        newMol.setMappingFile(mappingFile)
+                        newMol.setConfId(modeNum)
+                        newMol.setGridId(1)
+                        newMol.setPoseId(modeNum)
+                        newMol.setDockId(bestRun)
+                        newMol.setEnergy(energy)
+                        newMol._ligandAffinity = pyworkflow.object.Float()
+                        newMol.setAttributeValue('_ligandAffinity', affinity)
+                        outputMols.append(newMol)
 
-            fileName = os.path.join(self._getExtraPath(), f"{protName}.trg")
-            grid = GridADT(fileName, proteinFile=recFile, spacing=data['spacing'], massCX=data['center'][0], massCY=data['center'][1], massCZ=data['center'][2], tool='AGFR')
-            grid._peptideFile = protFile
-            grid._XLength = data['length'][0]
-            grid._YLength = data['length'][1]
-            grid._ZLength = data['length'][2]
-            grid._XSize = data['size'][0]
-            grid._YSize = data['size'][1]
-            grid._ZSize = data['size'][2]
-            grid._numPockets = data['numPockets']
-
-            self._defineOutputs(outputGrid=grid)
+            i=i+1
+        outputMols.setDocked(True)
+        self._defineOutputs(outputSmallMolecules=outputMols)
 
 
 # --------------------------- INFO functions -----------------------------------
@@ -194,3 +214,55 @@ class ProtCrankPep(EMProtocol):
             'TRP':'W', 'TYR':'Y'
         }
         return aa_dict.get(resname.upper())
+
+    def rankedFiles(self, directory):
+        allFiles = os.listdir(directory)
+        ranked_files = [f for f in allFiles if '_ranked_' in f]
+        return ranked_files
+
+    def readOutputData(self, logFile):
+        allRuns = []
+        dockingData = {}
+        tableStarted = False
+
+        with open(logFile, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("Performing search"):
+                    if dockingData:
+                        allRuns.append(dockingData)
+                        dockingData = {}
+                    tableStarted = False
+                    continue
+
+                if line.startswith("mode |  affinity"):
+                    tableStarted = True
+                    continue
+
+                if not line or line.startswith("|") or line.startswith("-----"):
+                    continue
+
+                if line.startswith("clean up"):
+                    if dockingData:
+                        allRuns.append(dockingData)
+                        dockingData = {}
+                    tableStarted = False
+                    continue
+
+                if tableStarted:
+                    parts = line.split()
+                    if len(parts) >= 9 and parts[0].isdigit():
+                        mode = int(parts[0])
+                        affinity = float(parts[1])
+                        energy = float(parts[7])
+                        bestRun = int(parts[8])
+                        dockingData[mode] = {
+                            "affinity": affinity,
+                            "energy": energy,
+                            "bestRun": bestRun
+                        }
+
+            if dockingData:
+                allRuns.append(dockingData)
+
+        return allRuns

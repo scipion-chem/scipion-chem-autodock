@@ -27,6 +27,7 @@ import re
 import shutil, os
 import zipfile
 
+import pyworkflow
 from pwem.protocols import EMProtocol
 from pyworkflow.object import String, Float, Integer
 from pyworkflow.protocol import params
@@ -110,14 +111,14 @@ class ProtGenerateTargetFile(EMProtocol):
 
             fileName = os.path.join(self._getPath(f"{protName}"), f"{protName}.trg")
             grid = GridADT(fileName, proteinFile=recFile, spacing=data['spacing'], massCX=data['center'][0], massCY=data['center'][1], massCZ=data['center'][2], tool='AGFR')
-            grid._peptideFile = String()
-            grid._XLength = Float()
-            grid._YLength = Float()
-            grid._ZLength = Float()
-            grid._XSize = Float()
-            grid._YSize = Float()
-            grid._ZSize = Float()
-            grid._numPockets = Integer()
+            grid._peptideFile = pyworkflow.object.String()
+            grid._XLength = pyworkflow.object.Float()
+            grid._YLength = pyworkflow.object.Float()
+            grid._ZLength = pyworkflow.object.Float()
+            grid._XSize = pyworkflow.object.Float()
+            grid._YSize = pyworkflow.object.Float()
+            grid._ZSize = pyworkflow.object.Float()
+            grid._numPockets = pyworkflow.object.Integer()
 
             grid.setAttributeValue('_peptideFile', protFile)
             grid.setAttributeValue('_XLength' , data['length'][0])
