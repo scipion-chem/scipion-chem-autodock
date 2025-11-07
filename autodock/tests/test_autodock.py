@@ -34,7 +34,7 @@ from pwchem.utils import assertHandle
 
 # Plugin imports
 from ..protocols import ProtChemADTPrepareReceptor, ProtChemADTPrepareLigands, ProtChemMeekoLigands, \
-	ProtScrubberPrepareLigands
+    ProtScrubberPrepareLigands, ProtGenerateTargetFile
 from ..protocols import ProtChemAutoLigand, ProtChemAutoSite, ProtChemAutodock
 from ..protocols import ProtChemAutodockGPU, ProtChemVinaDocking, ProtChemAutoSiteGenPharmacophore
 from ..protocols import AutodockGridGeneration, ProtChemAutodockScore
@@ -387,3 +387,36 @@ class TestAutoDockScoring(TestAutoDockGPU):
 		self._waitOutput(protAutoDock1, 'outputSmallMolecules', sleepTime=10)
 		protScore = self._runScoring(protAutoDock1)
 		assertHandle(self.assertIsNotNone, getattr(protScore, 'outputSmallMolecules', None), cwd=protScore.getWorkingDir())
+
+class TestGridADCP(TestADPrepareReceptor):
+    #import pdb from ddbb and pdb from rcsb to use as inputs
+    #todo put the prepare thing to run the protocols
+    def _runImportFromPDBid(self):
+        self.protImportPDB = self.newProtocol(
+            ProtImportPdb,
+            pdbId='6A5J ')
+
+        self.launchProtocol(self.protImportPDB)
+
+    @classmethod
+    def _runPrepareLigandsADT(cls):
+        cls.protPrepareLigandADT = cls.newProtocol(
+            ProtChemADTPrepareLigands,
+            doConformers=True, method_conf=0, number_conf=2, rmsd_cutoff=0.375)
+        cls.protPrepareLigandADT.inputSmallMolecules.set(cls.protImportPDB)
+        cls.protPrepareLigandADT.inputSmallMolecules.setExtended('outputSmallMolecules')
+
+        cls.proj.launchProtocol(cls.protPrepareLigandADT, wait=False)
+
+    def _runTargetFile(self):
+        self.protTragetFile = self.newProtocol(
+            ProtGenerateTargetFile,
+            inputAtomStruct=self.protPrepareLigandADT.outputSmallMolecules,
+            inputSmallMolecules=self.protPrepareLigandADT.outputSmallMolecules,
+        )
+        self.launchProtocol(self.protTragetFile)
+
+
+
+
+
