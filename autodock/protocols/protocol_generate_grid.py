@@ -178,7 +178,7 @@ docking simulations are accurate and biologically meaningful.
         insistentRun(self, "autogrid4", args, envDic=SCRUBBER_DIC, cwd=self._getExtraPath())
         eMapFile = self._getExtraPath("%s.e.map" % nameProtein)
         self.grid = GridADT(eMapFile, os.path.relpath(atomStructFn),
-                            spacing=self.spacing.get(), massCX=xCenter, massCY=yCenter, massCZ=zCenter)
+                            spacing=self.spacing.get(), massCX=xCenter, massCY=yCenter, massCZ=zCenter, tool='ADT')
 
 
     def createOutputStep(self):
