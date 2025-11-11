@@ -51,15 +51,15 @@ class ProtGenerateTargetFile(EMProtocol):
                       label='Receptor protein:', allowsNull=False,
                       help='It must be in pdbqt format.')
         #todo input smallMols or atomStructs
-        form.addParam('inputType', params.EnumParam, label='Input type: ', default=INPUT_TYPE[0],
+        form.addParam('inputType', params.EnumParam, label='Input type: ', default=0,
                       choices=INPUT_TYPE, allowsNull=False)
 
         form.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
-                      #condition=f'inputType=={INPUT_TYPE[0]}',
+                      condition=f'inputType==0',
                       label='Set of small molecules:', allowsNull=True,
                       help='It must be in pdb or mol2 format, you may use Schrodinger convert to change it.')
         form.addParam('inputAtomStructs', params.PointerParam, pointerClass="SetOfAtomStructs",
-                      #condition=f'inputType=={INPUT_TYPE[1]}',
+                      condition=f'inputType==1',
                       label='Set of atom structures:', allowsNull=True,
                       help='It must be in pdb or mol2 format, you may use Schrodinger convert to change it.')
 
@@ -82,10 +82,11 @@ class ProtGenerateTargetFile(EMProtocol):
 
     def createFileStep(self):
         recFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
-        if self.inputType.get() == 'SetOfSmallMolecules':
+        if self.inputType.get() == 0:
             peptides = self.inputSmallMolecules.get()
         else:
             peptides = self.inputAtomStructs.get()
+        print(peptides)
         for prot in peptides:
             protFile = os.path.abspath(prot.getFileName())
             protName = os.path.splitext(os.path.basename(protFile))[0]
@@ -97,7 +98,7 @@ class ProtGenerateTargetFile(EMProtocol):
             Plugin.runAGFR(self, args, cwd=self._getExtraPath())
 
     def extractFileStep(self):
-        if self.inputType.get() == 'SetOfSmallMolecules':
+        if self.inputType.get() == 0:
             peptides = self.inputSmallMolecules.get()
         else:
             peptides = self.inputAtomStructs.get()
@@ -123,7 +124,7 @@ class ProtGenerateTargetFile(EMProtocol):
     def createOutputStep(self):
         recFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
         grids = SetOfGridADT(filename=self._getPath('setOfGrids.sqlite'))
-        if self.inputType.get() == 'SetOfSmallMolecules':
+        if self.inputType.get() == 0:
             peptides = self.inputSmallMolecules.get()
         else:
             peptides = self.inputAtomStructs.get()
