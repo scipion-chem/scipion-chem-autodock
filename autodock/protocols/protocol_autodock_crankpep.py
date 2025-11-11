@@ -24,8 +24,7 @@
 # *
 # **************************************************************************
 import re
-import shutil, os
-import zipfile
+import os
 
 import pyworkflow
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
@@ -35,7 +34,6 @@ from pyworkflow.object import Float
 from pyworkflow.protocol import params
 
 from autodock import Plugin
-from autodock.objects import GridADT
 
 
 class ProtCrankPep(EMProtocol):
@@ -75,7 +73,6 @@ class ProtCrankPep(EMProtocol):
             pdbqt2other(self, protFile, pdbFile)
 
             seq = self.getSequenceFromPdb(pdbFile)
-
             args = [f'-t {targetFile} -s {seq} -N {self.nRuns.get()} -o {protName}_docking -ref {pdbFile}']
 
             if(self.cyc.get()):
@@ -111,7 +108,7 @@ class ProtCrankPep(EMProtocol):
                         affinity = data[modeNum]["affinity"]
                         energy = data[modeNum]["energy"]
                         bestRun = data[modeNum]["bestRun"]
-                        newMol.setPoseFile(os.path.abspath(file))
+                        newMol.setPoseFile(os.path.abspath(os.path.join(resultsFolder,file)))
                         newMol.setMappingFile(mappingFile)
                         newMol.setConfId(modeNum)
                         newMol.setGridId(1)
@@ -124,6 +121,8 @@ class ProtCrankPep(EMProtocol):
 
             i=i+1
         outputMols.setDocked(True)
+        recFile = grid.getAttributeValue('_proteinFile')
+        outputMols.setProteinFile(recFile)
         self._defineOutputs(outputSmallMolecules=outputMols)
 
 
