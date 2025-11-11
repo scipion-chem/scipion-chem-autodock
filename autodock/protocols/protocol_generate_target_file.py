@@ -28,12 +28,16 @@ import shutil, os
 import zipfile
 
 import pyworkflow
+from pwchem.objects import SetOfSmallMolecules
+from pwem.objects import SetOfAtomStructs
 from pwem.protocols import EMProtocol
 from pyworkflow.object import String, Float, Integer
 from pyworkflow.protocol import params
 
 from autodock import Plugin
 from autodock.objects import GridADT, SetOfGridADT
+
+INPUT_TYPE = ['SetOfSmallMolecules', 'SetOfAtomStructs']
 
 
 class ProtGenerateTargetFile(EMProtocol):
@@ -46,9 +50,18 @@ class ProtGenerateTargetFile(EMProtocol):
         form.addParam('inputAtomStruct', params.PointerParam, pointerClass="AtomStruct",
                       label='Receptor protein:', allowsNull=False,
                       help='It must be in pdbqt format.')
+        #todo input smallMols or atomStructs
+        form.addParam('inputType', params.EnumParam, label='Input type: ', default=INPUT_TYPE[0],
+                      choices=INPUT_TYPE, allowsNull=False)
+
         form.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
-                      label='Set of small molecules:', allowsNull=False,
-                      help='It must be in pdb or mol2 format, you may use Schrodinger convert to change it')
+                      #condition=f'inputType=={INPUT_TYPE[0]}',
+                      label='Set of small molecules:', allowsNull=True,
+                      help='It must be in pdb or mol2 format, you may use Schrodinger convert to change it.')
+        form.addParam('inputAtomStructs', params.PointerParam, pointerClass="SetOfAtomStructs",
+                      #condition=f'inputType=={INPUT_TYPE[1]}',
+                      label='Set of atom structures:', allowsNull=True,
+                      help='It must be in pdb or mol2 format, you may use Schrodinger convert to change it.')
 
         conformers = form.addGroup("Parameters")
         conformers.addParam('padding', params.FloatParam, default=4.0,
@@ -69,7 +82,11 @@ class ProtGenerateTargetFile(EMProtocol):
 
     def createFileStep(self):
         recFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
-        for prot in self.inputSmallMolecules.get():
+        if self.inputType.get() == 'SetOfSmallMolecules':
+            peptides = self.inputSmallMolecules.get()
+        else:
+            peptides = self.inputAtomStructs.get()
+        for prot in peptides:
             protFile = os.path.abspath(prot.getFileName())
             protName = os.path.splitext(os.path.basename(protFile))[0]
             args = [f'-r {recFile} -l {protFile} -o {protName} -P {self.padding.get()}']
@@ -80,7 +97,11 @@ class ProtGenerateTargetFile(EMProtocol):
             Plugin.runAGFR(self, args, cwd=self._getExtraPath())
 
     def extractFileStep(self):
-        for prot in self.inputSmallMolecules.get():
+        if self.inputType.get() == 'SetOfSmallMolecules':
+            peptides = self.inputSmallMolecules.get()
+        else:
+            peptides = self.inputAtomStructs.get()
+        for prot in peptides:
             protFile = os.path.abspath(prot.getFileName())
             protName = os.path.splitext(os.path.basename(protFile))[0]
             extraDir = self._getExtraPath()
@@ -102,7 +123,11 @@ class ProtGenerateTargetFile(EMProtocol):
     def createOutputStep(self):
         recFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
         grids = SetOfGridADT(filename=self._getPath('setOfGrids.sqlite'))
-        for prot in self.inputSmallMolecules.get():
+        if self.inputType.get() == 'SetOfSmallMolecules':
+            peptides = self.inputSmallMolecules.get()
+        else:
+            peptides = self.inputAtomStructs.get()
+        for prot in peptides:
             protFile = os.path.abspath(prot.getFileName())
             protName = os.path.splitext(os.path.basename(protFile))[0]
             logFile = os.path.abspath(self._getExtraPath(f'{protName}.log'))
