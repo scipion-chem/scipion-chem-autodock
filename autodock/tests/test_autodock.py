@@ -433,8 +433,7 @@ class TestADCP(TestADPrepareReceptor):
         self.protTargetFile = self.newProtocol(
             ProtGenerateTargetFile,
             inputAtomStruct=self.protPrepareReceptor.outputStructure,
-            inputType=1,
-            inputAtomStructs=self.protImportPeptides.outputAtomStructs
+            inputPeptides=self.protImportPeptides.outputAtomStructs
         )
         self.launchProtocol(self.protTargetFile, wait=True)
 
