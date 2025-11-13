@@ -28,7 +28,9 @@ import shutil, os
 import zipfile
 
 import pyworkflow
+from pwchem import MGL_DIC
 from pwchem.objects import SetOfSmallMolecules
+from pwem.convert import cifToPdb
 from pwem.objects import SetOfAtomStructs
 from pwem.protocols import EMProtocol
 from pyworkflow.object import String, Float, Integer
@@ -86,11 +88,15 @@ class ProtGenerateTargetFile(EMProtocol):
             peptides = self.inputSmallMolecules.get()
         else:
             peptides = self.inputAtomStructs.get()
-        print(peptides)
         for prot in peptides:
             protFile = os.path.abspath(prot.getFileName())
+
+            if not protFile.endswith('.pdbqt'):
+                protFile = self.preparePeptidePDBQT(protFile, self._getExtraPath())
+
             protName = os.path.splitext(os.path.basename(protFile))[0]
-            args = [f'-r {recFile} -l {protFile} -o {protName} -P {self.padding.get()}']
+
+            args = [f'-r {recFile} -l {os.path.abspath(protFile)} -o {protName} -P {self.padding.get()}']
 
             if(self.flexRes.get()):
                 args.append(f'-f {self.flexibleString.get()}')
@@ -203,3 +209,25 @@ class ProtGenerateTargetFile(EMProtocol):
 
         return data
 
+    def preparePeptidePDBQT(self, peptideFile, outDir):
+        """
+        Convert a peptide PDB/MOL2 file to PDBQT using prepare_ligand4.py via pythonsh.
+        """
+        ext = os.path.splitext(peptideFile)[1].lower()
+
+        if ext == '.cif':
+            pdbFile = os.path.join(outDir, os.path.splitext(os.path.basename(peptideFile))[0] + '.pdb')
+            cifToPdb(peptideFile, pdbFile)
+            peptideFile = pdbFile
+
+        pdbqtFile = os.path.join(outDir, os.path.splitext(os.path.basename(peptideFile))[0] + '.pdbqt')
+        prog = 'prepare_ligand4'
+        pythonsh = Plugin.getProgramHome(MGL_DIC, 'bin/pythonsh ')
+        scriptPath = Plugin.getADTPath(f'Utilities24/{prog}.py ')
+        program = pythonsh + scriptPath
+
+        arguments = f"-l {os.path.abspath(peptideFile)} -o {os.path.abspath(pdbqtFile)}"
+
+        self.runJob(program, arguments, cwd=outDir)
+
+        return pdbqtFile
