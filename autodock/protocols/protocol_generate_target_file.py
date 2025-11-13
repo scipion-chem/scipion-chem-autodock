@@ -135,8 +135,14 @@ class ProtGenerateTargetFile(EMProtocol):
         else:
             peptides = self.inputAtomStructs.get()
         for prot in peptides:
-            protFile = os.path.abspath(prot.getFileName())
-            protName = os.path.splitext(os.path.basename(protFile))[0]
+            origFile = os.path.abspath(prot.getFileName())
+            ext = os.path.splitext(origFile)[1].lower()
+            if ext == '.cif':
+                protFile = os.path.abspath(os.path.join(self._getExtraPath(), os.path.splitext(os.path.basename(origFile))[0] + '.pdb'))
+            else:
+                protFile = origFile
+
+            protName = os.path.splitext(os.path.basename(origFile))[0]
             logFile = os.path.abspath(self._getExtraPath(f'{protName}.log'))
 
             data = self.getInfo(logFile)

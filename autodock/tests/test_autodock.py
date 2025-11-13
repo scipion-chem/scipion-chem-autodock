@@ -26,7 +26,7 @@
 
 # Scipion em imports
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
-from pwem.protocols import ProtImportPdb, ProtSetFilter
+from pwem.protocols import ProtImportPdb, ProtSetFilter, ProtImportSetOfAtomStructs
 
 # Scipion chem imports
 from pwchem.protocols import ProtChemImportSmallMolecules, ProtChemOBabelPrepareLigands
@@ -398,9 +398,8 @@ class TestADCP(TestADPrepareReceptor):
         tests.setupTestProject(cls)
 
         cls._runImportPDB()
-        cls._runImportSmallMols()
+        cls._runImportPeptides()
         cls._runPrepareReceptorADT()
-        cls._runPrepareLigandsADT()
         cls._runTargetFile()
 
     @classmethod
@@ -412,35 +411,30 @@ class TestADCP(TestADPrepareReceptor):
         cls.launchProtocol(cls.protImportPDB,  wait=True)
 
     @classmethod
-    def _runImportSmallMols(cls):
-        cls.protImportSmallMols = cls.newProtocol(
-            ProtChemImportSmallMolecules,
-            #todo change this, add the small peptides to data!?
-            filesPath=('/home/bpueche/scipion3/data/tests/smallPeptides/pdb'))
-        cls.launchProtocol(cls.protImportSmallMols, wait=True)
+    def _runImportPeptides(cls):
+        cls.protImportPeptides = cls.newProtocol(
+            ProtImportSetOfAtomStructs,
+            pdbIds='1FDF'
+        )
+        cls.launchProtocol(cls.protImportPeptides, wait=True)
 
     @classmethod
     def _runPrepareReceptorADT(cls):
         cls.protPrepareReceptor = cls.newProtocol(
             ProtChemADTPrepareReceptor,
+            prepProg=1,
             inputAtomStruct=cls.protImportPDB.outputPdb,
             HETATM=True, rchains=False, repair=3)
 
         cls.launchProtocol(cls.protPrepareReceptor, wait=True)
 
     @classmethod
-    def _runPrepareLigandsADT(cls):
-        cls.protPrepareLigandADT = cls.newProtocol(
-            ProtChemADTPrepareLigands,
-            inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules)
-        cls.launchProtocol(cls.protPrepareLigandADT, wait=True)
-
-    @classmethod
     def _runTargetFile(self):
         self.protTargetFile = self.newProtocol(
             ProtGenerateTargetFile,
             inputAtomStruct=self.protPrepareReceptor.outputStructure,
-            inputSmallMolecules=self.protPrepareLigandADT.outputSmallMolecules
+            inputType=1,
+            inputAtomStructs=self.protImportPeptides.outputAtomStructs
         )
         self.launchProtocol(self.protTargetFile, wait=True)
 
