@@ -394,7 +394,6 @@ class TestADCP(TestADPrepareReceptor):
     def setUpClass(cls):
         super().setUpClass()
         cls.ds = DataSet.getDataSet('model_building_tutorial')
-        #cls.dsLig = DataSet.getDataSet("smallPeptides")
         tests.setupTestProject(cls)
 
         cls._runImportPDB()
@@ -429,23 +428,23 @@ class TestADCP(TestADPrepareReceptor):
         cls.launchProtocol(cls.protPrepareReceptor, wait=True)
 
     @classmethod
-    def _runTargetFile(self):
-        self.protTargetFile = self.newProtocol(
+    def _runTargetFile(cls):
+        cls.protTargetFile = cls.newProtocol(
             ProtGenerateTargetFile,
-            inputAtomStruct=self.protPrepareReceptor.outputStructure,
-            inputPeptides=self.protImportPeptides.outputAtomStructs
+            inputAtomStruct=cls.protPrepareReceptor.outputStructure,
+            inputPeptides=cls.protImportPeptides.outputAtomStructs
         )
-        self.launchProtocol(self.protTargetFile, wait=True)
+        cls.launchProtocol(cls.protTargetFile, wait=True)
 
     @classmethod
-    def _runADCP(self):
-        self.protADCP = self.newProtocol(
+    def _runADCP(cls):
+        cls.protADCP = cls.newProtocol(
             ProtCrankPep,
-            inputGrids=self.protTargetFile.outputGrids,
+            inputGrids=cls.protTargetFile.outputGrids,
             nRuns=5
         )
-        self.proj.launchProtocol(self.protADCP)
-        return self.protADCP
+        cls.proj.launchProtocol(cls.protADCP)
+        return cls.protADCP
 
     def test(self):
         protADCP = self._runADCP()
