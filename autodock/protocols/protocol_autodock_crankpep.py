@@ -176,15 +176,15 @@ class ProtCrankPep(EMProtocol):
         Uppercase for helix (H), lowercase for coil/other.
         """
         sequence = []
-        helix_residues = set()
+        helixResidues = set()
         with open(pdbFile, 'r') as f:
             for line in f:
                 if line.startswith("HELIX"):
-                    start_res = int(line[21:25].strip())
-                    end_res = int(line[33:37].strip())
+                    startRes = int(line[21:25].strip())
+                    endRes = int(line[33:37].strip())
                     chain = line[19]
-                    helix_residues.update((chain, i) for i in range(start_res, end_res+1))
-        seq_dict = {}
+                    helixResidues.update((chain, i) for i in range(startRes, endRes+1))
+        seqDict = {}
         for line in open(pdbFile, 'r'):
             if line.startswith("ATOM") and line[13:15].strip() == "CA":
                 resname = line[17:20].strip()
@@ -192,32 +192,32 @@ class ProtCrankPep(EMProtocol):
                 resnum = int(line[22:26].strip())
                 aa = self.threetToOne(resname)
                 if aa:
-                    if (chain, resnum) in helix_residues:
+                    if (chain, resnum) in helixResidues:
                         aa = aa.upper()
                     else:
                         aa = aa.lower()
-                    seq_dict[(chain, resnum)] = aa
+                    seqDict[(chain, resnum)] = aa
 
-        for key in sorted(seq_dict):
-            sequence.append(seq_dict[key])
+        for key in sorted(seqDict):
+            sequence.append(seqDict[key])
 
         return ''.join(sequence)
 
 
     def threetToOne(self, resname):
         """Convert 3-letter amino acid code to 1-letter."""
-        aa_dict = {
+        aaDict = {
             'ALA':'A', 'CYS':'C', 'ASP':'D', 'GLU':'E', 'PHE':'F', 'GLY':'G',
             'HIS':'H', 'ILE':'I', 'LYS':'K', 'LEU':'L', 'MET':'M', 'ASN':'N',
             'PRO':'P', 'GLN':'Q', 'ARG':'R', 'SER':'S', 'THR':'T', 'VAL':'V',
             'TRP':'W', 'TYR':'Y'
         }
-        return aa_dict.get(resname.upper())
+        return aaDict.get(resname.upper())
 
     def rankedFiles(self, directory):
         allFiles = os.listdir(directory)
-        ranked_files = [f for f in allFiles if '_ranked_' in f]
-        return ranked_files
+        rankedFiles = [f for f in allFiles if '_ranked_' in f]
+        return rankedFiles
 
     def readOutputData(self, logFile):
         allRuns = []

@@ -53,12 +53,7 @@ class ProtGenerateTargetFile(EMProtocol):
                       label='Receptor protein:', allowsNull=False,
                       help='It must be in pdbqt format.')
 
-        #form.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
-        #              condition=f'inputType==0',
-        #              label='Set of small molecules:', allowsNull=True,
-        #              help='It must be in pdb or mol2 format, you may use Schrodinger convert to change it.')
         form.addParam('inputPeptides', params.PointerParam, pointerClass="SetOfAtomStructs,SetOfSmallMolecules",
-                      #condition=f'inputType==1',
                       label='Input peptides:', allowsNull=True,
                       help='It must be in pdb or mol2 format, you may use Schrodinger convert to change it.')
 
@@ -195,11 +190,11 @@ class ProtGenerateTargetFile(EMProtocol):
         except IndexError:
             data['center'] = data['length'] = data['size'] = (None, None, None)
 
-        spacing_match = re.search(r'spacing\s+: +([\d\.]+)', log)
-        data['spacing'] = float(spacing_match.group(1)) if spacing_match else None
+        spacingMatch = re.search(r'spacing\s+: +([\d\.]+)', log)
+        data['spacing'] = float(spacingMatch.group(1)) if spacingMatch else None
 
-        pocket_match = re.search(r'found\s+(\d+)\s+pocket\(s\)', log)
-        data['numPockets'] = int(pocket_match.group(1)) if pocket_match else 0
+        pocketMatch = re.search(r'found\s+(\d+)\s+pocket\(s\)', log)
+        data['numPockets'] = int(pocketMatch.group(1)) if pocketMatch else 0
 
         return data
 
