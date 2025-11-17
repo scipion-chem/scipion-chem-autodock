@@ -34,7 +34,7 @@ from pyworkflow.utils.path import makePath, createLink
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseName, relabelMapAtomsMol2, \
-  insistentRun, getBaseFileName, makeSubsets, convertToSdf, calculateCoordLimits
+  insistentRun, getBaseFileName, makeSubsets, convertToSdf, calculateCoordLimits, pdbFromASFile
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC, OPENBABEL_DIC
 
@@ -42,7 +42,7 @@ from autodock import Plugin as autodockPlugin
 from autodock.constants import SCRUBBER_DIC
 
 
-PDBext, PDBQText = '.pdb', '.pdbqt'
+PDBext, CIFext, PDBQText = '.pdb', '.cif', '.pdbqt'
 MGL = 'MGLTools'
 
 LGA, GA, LS, SA = 0, 1, 2, 3
@@ -115,9 +115,13 @@ class ProtChemAutodockBase(EMProtocol):
 
     def convertReceptorStep(self):
       receptorFile = self.getOriginalReceptorFile()
+      if receptorFile.endswith(CIFext):
+        receptorFile = pdbFromASFile(receptorFile, self.getReceptorPDB())
+
       if receptorFile.endswith(PDBext):
         self.convertReceptor2PDBQT(receptorFile)
-        shutil.copy(receptorFile, self.getReceptorPDB())
+        if receptorFile != self.getReceptorPDB():
+          shutil.copy(receptorFile, self.getReceptorPDB())
       elif receptorFile.endswith(PDBQText):
         self.convertReceptor2PDB(receptorFile)
         shutil.copy(receptorFile, self.getReceptorPDBQT())
