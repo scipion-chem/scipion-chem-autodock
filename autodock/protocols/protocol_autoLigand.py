@@ -132,6 +132,7 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
     def convertInputStep(self):
         '''Moves necessary files to current extra path'''
         receptorFile = self.getOriginalReceptorFile()
+        # todo: ensure proper conversion if cif
         if receptorFile.endswith('.pdb'):
             self.convertReceptor2PDBQT(receptorFile)
             shutil.copy(receptorFile, self.getReceptorPDB())

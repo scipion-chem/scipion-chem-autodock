@@ -34,7 +34,7 @@ from pyworkflow.utils.path import makePath, createLink
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseName, relabelMapAtomsMol2, \
-  insistentRun, getBaseFileName, makeSubsets, convertToSdf, calculateCoordLimits
+  insistentRun, getBaseFileName, makeSubsets, convertToSdf, calculateCoordLimits, pdbFromASFile
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import MGL_DIC, OPENBABEL_DIC
 
@@ -308,11 +308,9 @@ class ProtChemAutodockBase(EMProtocol):
         return os.path.abspath(self._getExtraPath(f'{self.getReceptorName()}.pdb'))
 
     def convertReceptor2PDB(self, proteinFile):
-        inExt = os.path.splitext(os.path.basename(proteinFile))[1]
         oFile = self.getReceptorPDB()
         if not os.path.exists(oFile):
-          args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(proteinFile), oFile)
-          runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
+          pdbFromASFile(proteinFile, self.getReceptorPDB(), AS=self.inputAtomStruct.get())
         return oFile
 
     def convertReceptor2PDBQT(self, cleanedPDB):
