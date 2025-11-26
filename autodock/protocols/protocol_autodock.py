@@ -366,7 +366,8 @@ class ProtChemAutodockBase(EMProtocol):
     def convertReceptor2PDB(self, proteinFile):
         oFile = self.getReceptorPDB()
         if not os.path.exists(oFile):
-          pdbFromASFile(proteinFile, self.getReceptorPDB(), atomStruct=self.inputAtomStruct.get())
+          ats = self.inputAtomStruct.get() if hasattr(self, 'inputAtomStruct') else None
+          pdbFromASFile(proteinFile, self.getReceptorPDB(), atomStruct=ats)
         return oFile
 
     def convertReceptor2PDBQT(self, cleanedPDB):
