@@ -67,9 +67,10 @@ class ProtCrankPep(EMProtocol):
     def createFilesStep(self):
         targetFile = os.path.abspath(self.inputGrids.get().getFirstItem().getFileName())
         for grid in self.inputGrids.get():
-            protFile = (grid.getAttributeValue('_peptideFile'))
-            protName = os.path.splitext(os.path.basename(protFile))[0]
-            pdbFile = os.path.abspath(os.path.join(self._getExtraPath(protName + '.pdb')))
+            protFile = grid.getAttributeValue('_peptideFile')
+            protName = self.getBaseName(protFile)
+            pdbFile = os.path.abspath(os.path.join(self._getExtraPath(f"{protName}.pdb")))
+
             pdbqt2other(self, protFile, pdbFile)
 
             seq = self.getSequenceFromPdb(pdbFile)
@@ -80,8 +81,7 @@ class ProtCrankPep(EMProtocol):
             if (self.cys.get()):
                 args.append(f'-cys')
 
-            resultsFolder = os.path.abspath(os.path.join(self._getPath(), protName))
-            os.makedirs(resultsFolder, exist_ok=True)
+            resultsFolder = self.getResultsFolder(protName)
             Plugin.runADCP(self, args, cwd=resultsFolder)
 
     def createOutputStep(self):
@@ -93,33 +93,36 @@ class ProtCrankPep(EMProtocol):
         for grid in self.inputGrids.get():
             protFile = grid.getAttributeValue('_peptideFile')
             recFile = grid.getAttributeValue('_proteinFile')
-            protName = os.path.splitext(os.path.basename(protFile))[0]
-            resultsFolder = os.path.abspath(os.path.join(self._getPath(), protName))
+            protName = self.getBaseName(protFile)
+            resultsFolder = self.getResultsFolder(protName)
             rankedFiles = self.rankedFiles(resultsFolder)
             data = outputLogData[i]
             mappingFile = os.path.abspath(grid.getFileName())
 
             for file in rankedFiles:
-                newMol = SmallMolecule(smallMolFilename=protFile, proteinFile=recFile, molName=protName, type='Autodock-CrankPep')
                 m = re.search(r'_ranked_(\d+)', file)
-                if m:
-                    modeNum = int(m.group(1))
-                    if modeNum in data:
-                        affinity = data[modeNum]["affinity"]
-                        energy = data[modeNum]["energy"]
-                        bestRun = data[modeNum]["bestRun"]
-                        newMol.setPoseFile(os.path.abspath(os.path.join(resultsFolder,file)))
-                        newMol.setMappingFile(mappingFile)
-                        newMol.setConfId(modeNum)
-                        newMol.setGridId(1)
-                        newMol.setPoseId(modeNum)
-                        newMol.setDockId(bestRun)
-                        newMol.setEnergy(energy)
-                        newMol._ligandAffinity = pyworkflow.object.Float()
-                        newMol.setAttributeValue('_ligandAffinity', affinity)
-                        outputMols.append(newMol)
+                if not m:
+                    continue
 
-            i=i+1
+                modeNum = int(m.group(1))
+                if modeNum not in data:
+                    continue
+
+                affinity = data[modeNum]["affinity"]
+                energy = data[modeNum]["energy"]
+                bestRun = data[modeNum]["bestRun"]
+                poseFile = os.path.abspath(os.path.join(resultsFolder, file))
+
+                newMol = self.createDockedMolecule(
+                    protFile, recFile, protName,
+                    poseFile, mappingFile,
+                    modeNum, energy, affinity, bestRun
+                )
+
+                outputMols.append(newMol)
+
+            i += 1
+
         outputMols.setDocked(True)
         recFile = grid.getAttributeValue('_proteinFile')
         outputMols.setProteinFile(recFile)
@@ -265,3 +268,33 @@ class ProtCrankPep(EMProtocol):
                 allRuns.append(dockingData)
 
         return allRuns
+
+    def getBaseName(self, filePath):
+        return os.path.splitext(os.path.basename(filePath))[0]
+
+    def getResultsFolder(self, name):
+        folder = os.path.abspath(os.path.join(self._getPath(), name))
+        os.makedirs(folder, exist_ok=True)
+        return folder
+
+    def createDockedMolecule(self, protFile, recFile, protName, poseFile, mappingFile,
+                              modeNum, energy, affinity, bestRun):
+
+        mol = SmallMolecule(
+            smallMolFilename=protFile,
+            proteinFile=recFile,
+            molName=protName,
+            type='Autodock-CrankPep'
+        )
+
+        mol.setPoseFile(poseFile)
+        mol.setMappingFile(mappingFile)
+        mol.setConfId(modeNum)
+        mol.setGridId(1)
+        mol.setPoseId(modeNum)
+        mol.setDockId(bestRun)
+        mol.setEnergy(energy)
+        mol._ligandAffinity = Float()
+        mol.setAttributeValue('_ligandAffinity', affinity)
+
+        return mol

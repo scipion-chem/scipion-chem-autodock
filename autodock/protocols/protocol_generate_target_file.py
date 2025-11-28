@@ -78,12 +78,12 @@ class ProtGenerateTargetFile(EMProtocol):
         recFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
         peptides = self.inputPeptides.get()
         for prot in peptides:
-            protFile = os.path.abspath(prot.getFileName())
+            protFile, protName, _ = self.getProtInfo(prot)
+
+            protFile = self.convertCifIfNeeded(protFile, self._getExtraPath())
 
             if not protFile.endswith('.pdbqt'):
                 protFile = self.preparePeptidePDBQT(protFile, self._getExtraPath())
-
-            protName = os.path.splitext(os.path.basename(protFile))[0]
 
             args = [f'-r {recFile} -l {os.path.abspath(protFile)} -o {protName} -P {self.padding.get()}']
 
@@ -95,8 +95,8 @@ class ProtGenerateTargetFile(EMProtocol):
     def extractFileStep(self):
         peptides = self.inputPeptides.get()
         for prot in peptides:
-            protFile = os.path.abspath(prot.getFileName())
-            protName = os.path.splitext(os.path.basename(protFile))[0]
+            protFile, protName, _ = self.getProtInfo(prot)
+
             extraDir = self._getExtraPath()
             outputDir = self._getPath(f'{protName}')
             os.makedirs(outputDir, exist_ok=True)
@@ -117,41 +117,40 @@ class ProtGenerateTargetFile(EMProtocol):
         recFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
         grids = SetOfGridADT(filename=self._getPath('setOfGrids.sqlite'))
         peptides = self.inputPeptides.get()
+
         for prot in peptides:
-            origFile = os.path.abspath(prot.getFileName())
-            ext = os.path.splitext(origFile)[1].lower()
-            if ext == '.cif':
-                protFile = os.path.abspath(os.path.join(self._getExtraPath(), os.path.splitext(os.path.basename(origFile))[0] + '.pdb'))
-            else:
-                protFile = origFile
+            protFile, protName, _ = self.getProtInfo(prot)
+            protFile = self.convertCifIfNeeded(protFile, self._getExtraPath())
 
-            protName = os.path.splitext(os.path.basename(origFile))[0]
             logFile = os.path.abspath(self._getExtraPath(f'{protName}.log'))
-
             data = self.getInfo(logFile)
 
             fileName = os.path.join(self._getPath(f"{protName}"), f"{protName}.trg")
-            grid = GridADT(fileName, proteinFile=recFile, spacing=data['spacing'], massCX=data['center'][0], massCY=data['center'][1], massCZ=data['center'][2], tool='AGFR')
-            grid._peptideFile = pyworkflow.object.String()
-            grid._XLength = pyworkflow.object.Float()
-            grid._YLength = pyworkflow.object.Float()
-            grid._ZLength = pyworkflow.object.Float()
-            grid._XSize = pyworkflow.object.Float()
-            grid._YSize = pyworkflow.object.Float()
-            grid._ZSize = pyworkflow.object.Float()
-            grid._numPockets = pyworkflow.object.Integer()
+            grid = GridADT(
+                fileName,
+                proteinFile=recFile,
+                spacing=data['spacing'],
+                massCX=data['center'][0],
+                massCY=data['center'][1],
+                massCZ=data['center'][2],
+                tool='AGFR'
+            )
+
+            self.initGridAttributes(grid)
 
             grid.setAttributeValue('_peptideFile', protFile)
-            grid.setAttributeValue('_XLength' , data['length'][0])
-            grid.setAttributeValue('_YLength' , data['length'][1])
-            grid.setAttributeValue('_ZLength' , data['length'][2])
+            grid.setAttributeValue('_XLength', data['length'][0])
+            grid.setAttributeValue('_YLength', data['length'][1])
+            grid.setAttributeValue('_ZLength', data['length'][2])
             grid.setAttributeValue('_XSize', data['size'][0])
             grid.setAttributeValue('_YSize', data['size'][1])
             grid.setAttributeValue('_ZSize', data['size'][2])
             grid.setAttributeValue('_numPockets', data['numPockets'])
+
             grids.append(grid)
 
         self._defineOutputs(outputGrids=grids)
+
 
 
 # --------------------------- INFO functions -----------------------------------
@@ -220,3 +219,31 @@ class ProtGenerateTargetFile(EMProtocol):
         self.runJob(program, arguments, cwd=outDir)
 
         return pdbqtFile
+
+    def getProtInfo(self, prot):
+        filePath = os.path.abspath(prot.getFileName())
+        name = os.path.splitext(os.path.basename(filePath))[0]
+        ext = os.path.splitext(filePath)[1].lower()
+        return filePath, name, ext
+
+    def convertCifIfNeeded(self, filePath, outDir):
+        if filePath.lower().endswith('.cif'):
+            pdbFile = os.path.join(outDir, os.path.splitext(os.path.basename(filePath))[0] + '.pdb')
+            if not os.path.exists(pdbFile):
+                cifToPdb(filePath, pdbFile)
+            return pdbFile
+        return filePath
+
+    def initGridAttributes(self, grid):
+        attrs = {
+            '_peptideFile': String,
+            '_XLength': Float,
+            '_YLength': Float,
+            '_ZLength': Float,
+            '_XSize': Float,
+            '_YSize': Float,
+            '_ZSize': Float,
+            '_numPockets': Integer
+        }
+        for attr, cls in attrs.items():
+            setattr(grid, attr, cls())
