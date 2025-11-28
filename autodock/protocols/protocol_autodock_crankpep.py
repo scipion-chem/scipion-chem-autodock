@@ -77,15 +77,15 @@ class ProtCrankPep(EMProtocol):
             args = [f'-t {targetFile} -s {seq} -N {self.nRuns.get()} -o {protName}_docking -ref {pdbFile}']
 
             if(self.cyc.get()):
-                args.append(f'-cyc')
+                args.append('-cyc')
             if (self.cys.get()):
-                args.append(f'-cys')
+                args.append('-cys')
 
             resultsFolder = self.getResultsFolder(protName)
             Plugin.runADCP(self, args, cwd=resultsFolder)
 
     def createOutputStep(self):
-        logFile = os.path.abspath(self._getPath(f'logs/run.stdout'))
+        logFile = os.path.abspath(self._getPath('logs/run.stdout'))
         outputLogData = self.readOutputData(logFile)
         i = 0
         outputMols = SetOfSmallMolecules().create(outputPath=self._getPath())
@@ -165,11 +165,11 @@ class ProtCrankPep(EMProtocol):
         except IndexError:
             data['center'] = data['length'] = data['size'] = (None, None, None)
 
-        spacing_match = re.search(r'spacing\s+: +([\d\.]+)', log)
-        data['spacing'] = float(spacing_match.group(1)) if spacing_match else None
+        spacingMatch = re.search(r'spacing\s+: +([\d\.]+)', log)
+        data['spacing'] = float(spacingMatch.group(1)) if spacingMatch else None
 
-        pocket_match = re.search(r'found\s+(\d+)\s+pocket\(s\)', log)
-        data['numPockets'] = int(pocket_match.group(1)) if pocket_match else 0
+        pocketMatch = re.search(r'found\s+(\d+)\s+pocket\(s\)', log)
+        data['numPockets'] = int(pocketMatch.group(1)) if pocketMatch else 0
 
         return data
 
@@ -178,7 +178,13 @@ class ProtCrankPep(EMProtocol):
         Extracts peptide sequence from a PDB file.
         Uppercase for helix (H), lowercase for coil/other.
         """
-        sequence = []
+        helixResidues = self.extractHelixResidues(pdbFile)
+        seqDict = self.extractResidues(pdbFile, helixResidues)
+
+        sequence = [seqDict[key] for key in sorted(seqDict)]
+        return ''.join(sequence)
+
+    def extractHelixResidues(self, pdbFile):
         helixResidues = set()
         with open(pdbFile, 'r') as f:
             for line in f:
@@ -186,25 +192,28 @@ class ProtCrankPep(EMProtocol):
                     startRes = int(line[21:25].strip())
                     endRes = int(line[33:37].strip())
                     chain = line[19]
-                    helixResidues.update((chain, i) for i in range(startRes, endRes+1))
+                    helixResidues.update((chain, i) for i in range(startRes, endRes + 1))
+        return helixResidues
+
+    def extractResidues(self, pdbFile, helixResidues):
         seqDict = {}
-        for line in open(pdbFile, 'r'):
-            if line.startswith("ATOM") and line[13:15].strip() == "CA":
+        with open(pdbFile, 'r') as f:
+            for line in f:
+                if not (line.startswith("ATOM") and line[13:15].strip() == "CA"):
+                    continue
+
                 resname = line[17:20].strip()
                 chain = line[21]
                 resnum = int(line[22:26].strip())
                 aa = self.threetToOne(resname)
-                if aa:
-                    if (chain, resnum) in helixResidues:
-                        aa = aa.upper()
-                    else:
-                        aa = aa.lower()
-                    seqDict[(chain, resnum)] = aa
+                if not aa:
+                    continue
 
-        for key in sorted(seqDict):
-            sequence.append(seqDict[key])
+                # Helix uppercase, coil lowercase
+                aa = aa.upper() if (chain, resnum) in helixResidues else aa.lower()
+                seqDict[(chain, resnum)] = aa
 
-        return ''.join(sequence)
+        return seqDict
 
 
     def threetToOne(self, resname):
@@ -230,44 +239,54 @@ class ProtCrankPep(EMProtocol):
         with open(logFile, 'r') as f:
             for line in f:
                 line = line.strip()
-                if line.startswith("Performing search"):
+                if self.isStartSearch(line):
                     if dockingData:
                         allRuns.append(dockingData)
                         dockingData = {}
                     tableStarted = False
                     continue
 
-                if line.startswith("mode |  affinity"):
+                if self.isTableHeader(line):
                     tableStarted = True
                     continue
 
-                if not line or line.startswith("|") or line.startswith("-----"):
-                    continue
-
-                if line.startswith("clean up"):
+                if self.isEndSearch(line):
                     if dockingData:
                         allRuns.append(dockingData)
                         dockingData = {}
                     tableStarted = False
                     continue
 
-                if tableStarted:
-                    parts = line.split()
-                    if len(parts) >= 9 and parts[0].isdigit():
-                        mode = int(parts[0])
-                        affinity = float(parts[1])
-                        energy = float(parts[7])
-                        bestRun = int(parts[8])
-                        dockingData[mode] = {
-                            "affinity": affinity,
-                            "energy": energy,
-                            "bestRun": bestRun
-                        }
+                if not tableStarted or not self.isTableLine(line):
+                    continue
 
-            if dockingData:
+                parsed = self.parseTableLine(line)
+                if parsed:
+                    mode, affinity, energy, bestRun = parsed
+                    dockingData[mode] = {"affinity": affinity, "energy": energy, "bestRun": bestRun}
+
+        if dockingData:
                 allRuns.append(dockingData)
 
         return allRuns
+
+    def isStartSearch(self, line):
+        return line.startswith("Performing search")
+
+    def isTableHeader(self, line):
+        return line.startswith("mode |  affinity")
+
+    def isTableLine(self, line):
+        return line and not line.startswith("|") and not line.startswith("-----")
+
+    def isEndSearch(self, line):
+        return line.startswith("clean up")
+
+    def parseTableLine(self, line):
+        parts = line.split()
+        if len(parts) >= 9 and parts[0].isdigit():
+            return int(parts[0]), float(parts[1]), float(parts[7]), int(parts[8])
+        return None
 
     def getBaseName(self, filePath):
         return os.path.splitext(os.path.basename(filePath))[0]
