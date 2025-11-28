@@ -232,43 +232,47 @@ class ProtCrankPep(EMProtocol):
         return rankedFiles
 
     def readOutputData(self, logFile):
-        allRuns = []
+        """Read docking log and return a list of docking data per search."""
+
+        with open(logFile, 'r') as f:
+            allRuns = list(self.parseBlocks(f))
+
+        return allRuns
+
+    def parseBlocks(self, f):
         dockingData = {}
         tableStarted = False
 
-        with open(logFile, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if self.isStartSearch(line):
-                    if dockingData:
-                        allRuns.append(dockingData)
-                        dockingData = {}
-                    tableStarted = False
-                    continue
+        for line in f:
+            line = line.strip()
+            if self.isStartSearch(line):
+                if dockingData:
+                    yield dockingData
+                    dockingData = {}
+                tableStarted = False
+                continue
 
-                if self.isTableHeader(line):
-                    tableStarted = True
-                    continue
+            if self.isTableHeader(line):
+                tableStarted = True
+                continue
 
-                if self.isEndSearch(line):
-                    if dockingData:
-                        allRuns.append(dockingData)
-                        dockingData = {}
-                    tableStarted = False
-                    continue
+            if self.isEndSearch(line):
+                if dockingData:
+                    yield dockingData
+                    dockingData = {}
+                tableStarted = False
+                continue
 
-                if not tableStarted or not self.isTableLine(line):
-                    continue
+            if not tableStarted or not self.isTableLine(line):
+                continue
 
-                parsed = self.parseTableLine(line)
-                if parsed:
-                    mode, affinity, energy, bestRun = parsed
-                    dockingData[mode] = {"affinity": affinity, "energy": energy, "bestRun": bestRun}
+            parsed = self.parseTableLine(line)
+            if parsed:
+                mode, affinity, energy, bestRun = parsed
+                dockingData[mode] = {"affinity": affinity, "energy": energy, "bestRun": bestRun}
 
         if dockingData:
-                allRuns.append(dockingData)
-
-        return allRuns
+            yield dockingData
 
     def isStartSearch(self, line):
         return line.startswith("Performing search")
