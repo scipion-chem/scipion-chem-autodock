@@ -95,7 +95,7 @@ class ProtGenerateTargetFile(EMProtocol):
     def extractFileStep(self):
         peptides = self.inputPeptides.get()
         for prot in peptides:
-            protFile, protName, _ = self.getProtInfo(prot)
+            _, protName, _ = self.getProtInfo(prot)
 
             extraDir = self._getExtraPath()
             outputDir = self._getPath(f'{protName}')
