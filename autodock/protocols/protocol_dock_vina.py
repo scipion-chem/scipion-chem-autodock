@@ -73,21 +73,21 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
       nt = self.numberOfThreads.get()
       subsets = makeSubsets(inMols, nt - 1, cloneItem=True)
 
-      cRStep = self._insertFunctionStep('convertReceptorStep', prerequisites=[], needsGPU=False)
+      cRStep = self._insertFunctionStep(self.convertReceptorStep, prerequisites=[], needsGPU=False)
 
       cSteps, dockSteps = [], []
       for it, molSet in enumerate(subsets):
-        cSteps.append(self._insertFunctionStep('convertLigandsStep', molSet, it, prerequisites=[], needsGPU=False))
+        cSteps.append(self._insertFunctionStep(self.convertLigandsStep, molSet, it, prerequisites=[], needsGPU=False))
 
         convReqs = [cRStep, cSteps[-1]]
         if self.fromReceptor.get() == 0:
-            dockId = self._insertFunctionStep('dockStep', it, prerequisites=convReqs, needsGPU=False)
+            dockId = self._insertFunctionStep(self.dockStep, it, prerequisites=convReqs, needsGPU=False)
             dockSteps.append(dockId)
         else:
           for pocket in self.inputStructROIs.get():
-              dockId = self._insertFunctionStep('dockStep', it, pocket.clone(), prerequisites=convReqs, needsGPU=False)
+              dockId = self._insertFunctionStep(self.dockStep, it, pocket.clone(), prerequisites=convReqs, needsGPU=False)
               dockSteps.append(dockId)
-      self._insertFunctionStep('createOutputStep', prerequisites=dockSteps, needsGPU=False)
+      self._insertFunctionStep(self.createOutputStep, prerequisites=dockSteps, needsGPU=False)
 
 
     def dockStep(self, it, pocket=None):
