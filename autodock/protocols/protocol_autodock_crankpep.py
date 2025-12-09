@@ -243,12 +243,12 @@ class ProtCrankPep(EMProtocol):
         dockingData = {}
         tableStarted = False
 
-        for line in f:
-            line = line.strip()
-            if self.isStartSearch(line):
-                if dockingData:
-                    yield dockingData
-                    dockingData = {}
+        for rawLine in f:
+            line = rawLine.strip()
+
+            if self._isSearchBoundary(line):
+                yield from self._flushData(dockingData)
+                dockingData = {}
                 tableStarted = False
                 continue
 
@@ -256,23 +256,31 @@ class ProtCrankPep(EMProtocol):
                 tableStarted = True
                 continue
 
-            if self.isEndSearch(line):
-                if dockingData:
-                    yield dockingData
-                    dockingData = {}
-                tableStarted = False
+            if not tableStarted:
                 continue
 
-            if not tableStarted or not self.isTableLine(line):
-                continue
-
-            parsed = self.parseTableLine(line)
+            parsed = self._processTableLine(line)
             if parsed:
                 mode, affinity, energy, bestRun = parsed
-                dockingData[mode] = {"affinity": affinity, "energy": energy, "bestRun": bestRun}
+                dockingData[mode] = {
+                    "affinity": affinity,
+                    "energy": energy,
+                    "bestRun": bestRun,
+                }
 
+        yield from self._flushData(dockingData)
+
+    def _isSearchBoundary(self, line):
+        return self.isStartSearch(line) or self.isEndSearch(line)
+
+    def _flushData(self, dockingData):
         if dockingData:
             yield dockingData
+
+    def _processTableLine(self, line):
+        if not self.isTableLine(line):
+            return None
+        return self.parseTableLine(line)
 
     def isStartSearch(self, line):
         return line.startswith("Performing search")
@@ -281,7 +289,7 @@ class ProtCrankPep(EMProtocol):
         return line.startswith("mode |  affinity")
 
     def isTableLine(self, line):
-        return line and not line.startswith("|") and not line.startswith("-----")
+        return bool(line) and not line.startswith(("|", "-----"))
 
     def isEndSearch(self, line):
         return line.startswith("clean up")
