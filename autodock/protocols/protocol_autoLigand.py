@@ -39,7 +39,8 @@ from pyworkflow.protocol import params
 
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.constants import MGL_DIC
-from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, insistentRun, calculateCoordLimits
+from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, insistentRun, calculateCoordLimits, \
+  pdbFromASFile
 from pwchem import Plugin as pwchem_plugin
 
 from autodock import Plugin as autodock_plugin
@@ -132,6 +133,9 @@ class ProtChemAutoLigand(ProtChemAutodockBase):
     def convertInputStep(self):
         '''Moves necessary files to current extra path'''
         receptorFile = self.getOriginalReceptorFile()
+        if receptorFile.endswith('.cif'):
+          receptorFile = pdbFromASFile(receptorFile, self.getReceptorPDB())
+
         if receptorFile.endswith('.pdb'):
             self.convertReceptor2PDBQT(receptorFile)
             shutil.copy(receptorFile, self.getReceptorPDB())
