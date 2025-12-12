@@ -29,7 +29,8 @@ import zipfile
 
 import pyworkflow
 from pwchem import MGL_DIC
-from pwchem.objects import SetOfSmallMolecules
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule
+from pwchem.utils import pdbqt2other
 from pwem.convert import cifToPdb
 from pwem.objects import SetOfAtomStructs
 from pwem.protocols import EMProtocol
@@ -43,8 +44,8 @@ INPUT_TYPE = ['SetOfSmallMolecules', 'SetOfAtomStructs']
 
 
 class ProtGenerateTargetFile(EMProtocol):
-    """Prepare target file for AGFR docking."""
-    _label = 'Grid generation with AGFR'
+    """Perform a docking experiment with AutoDock-CrankPep https://github.com/ccsb-scripps/ADCP"""
+    _label = 'AutoDock-CrankPep docking'
     _program = ""
 
     def _defineParams(self, form):
@@ -57,7 +58,7 @@ class ProtGenerateTargetFile(EMProtocol):
                       label='Input peptides:', allowsNull=True,
                       help='It must be in pdb or mol2 format, you may use Schrodinger convert to change it.')
 
-        conformers = form.addGroup("Parameters")
+        conformers = form.addGroup("Grid")
         conformers.addParam('padding', params.FloatParam, default=4.0,
                             label='Padding: ',
                             help='Amount of padding added to each side of the box.')
@@ -67,14 +68,26 @@ class ProtGenerateTargetFile(EMProtocol):
         conformers.addParam('flexibleString', params.StringParam, condition="flexRes", default='',
                             label='Flexible residues string: ',
                             help='Input flexible residues in the format "A:ILE10,VAL32;B:SER48".')
+
+        conformers = form.addGroup("Docking")
+        conformers.addParam('nRuns', params.IntParam, label='Number of docking runs: ', default=50,
+                            help='Number of independent runs using the stochastic procedure. \n'
+                                 'Different docking positions will be found for each of them.')
+        conformers.addParam('cyc', params.BooleanParam, default=False,
+                            label='Cyclic peptide through backbone: ',
+                            help='Choose whether there are cyclic peptides through the backbone.')
+        conformers.addParam('cys', params.BooleanParam, default=False,
+                            label='Cyclic peptide through CYS-S-S-CYS: ',
+                            help='Choose whether there are cyclic peptides through CYS-S-S-CYS.')
         form.addParallelSection(threads=4, mpi=1)
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('createFileStep')
+        self._insertFunctionStep('gridGenerationStep')
         self._insertFunctionStep('extractFileStep')
+        self._insertFunctionStep('dockingStep')
         self._insertFunctionStep('createOutputStep')
 
-    def createFileStep(self):
+    def gridGenerationStep(self):
         recFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
         peptides = self.inputPeptides.get()
         for prot in peptides:
@@ -114,42 +127,68 @@ class ProtGenerateTargetFile(EMProtocol):
                 zip_ref.extractall(outputDir)
 
     def createOutputStep(self):
-        recFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
-        grids = SetOfGridADT(filename=self._getPath('setOfGrids.sqlite'))
+        logFile = os.path.abspath(self._getPath('logs/run.stdout'))
+        outputLogData = self.readOutputData(logFile)
+        i = 0
+        outputMols = SetOfSmallMolecules().create(outputPath=self._getPath())
+
+        peptides = self.inputPeptides.get()
+        recFile = self.inputAtomStruct.get().getFileName()
+        for prot in peptides:
+            protFile, protName, _ = self.getProtInfo(prot)
+            resultsFolder = self.getResultsFolder(f'{protName}_docking')
+            rankedFiles = self.rankedFiles(resultsFolder)
+            data = outputLogData[i]
+            targetFile = os.path.abspath(os.path.join(self._getPath(f"{protName}"), f"{protName}.trg"))
+
+            for file in rankedFiles:
+                m = re.search(r'_ranked_(\d+)', file)
+                if not m:
+                    continue
+
+                modeNum = int(m.group(1))
+                if modeNum not in data:
+                    continue
+
+                affinity = data[modeNum]["affinity"]
+                energy = data[modeNum]["energy"]
+                bestRun = data[modeNum]["bestRun"]
+                poseFile = os.path.abspath(os.path.join(resultsFolder, file))
+
+                newMol = self.createDockedMolecule(
+                    protFile, recFile, protName,
+                    poseFile, targetFile,
+                    modeNum, energy, affinity, bestRun
+                )
+
+                outputMols.append(newMol)
+
+            i += 1
+
+        outputMols.setDocked(True)
+        outputMols.setProteinFile(recFile)
+        self._defineOutputs(outputSmallMolecules=outputMols)
+
+    def dockingStep(self):
         peptides = self.inputPeptides.get()
 
         for prot in peptides:
             protFile, protName, _ = self.getProtInfo(prot)
-            protFile = self.convertCifIfNeeded(protFile, self._getExtraPath())
+            targetFile = os.path.join(self._getPath(f"{protName}"), f"{protName}.trg")
+            pdbFile = os.path.abspath(os.path.join(self._getExtraPath(f"{protName}.pdb")))
 
-            logFile = os.path.abspath(self._getExtraPath(f'{protName}.log'))
-            data = self.getInfo(logFile)
+            cifToPdb(protFile, pdbFile)
 
-            fileName = os.path.join(self._getPath(f"{protName}"), f"{protName}.trg")
-            grid = GridADT(
-                fileName,
-                proteinFile=recFile,
-                spacing=data['spacing'],
-                massCX=data['center'][0],
-                massCY=data['center'][1],
-                massCZ=data['center'][2],
-                tool='AGFR'
-            )
+            seq = self.getSequenceFromPdb(pdbFile)
+            args = [f'-t {os.path.abspath(targetFile)} -s {seq} -N {self.nRuns.get()} -o {protName}_docking -ref {pdbFile}']
 
-            self.initGridAttributes(grid)
+            if (self.cyc.get()):
+                args.append('-cyc')
+            if (self.cys.get()):
+                args.append('-cys')
 
-            grid.setAttributeValue('_peptideFile', protFile)
-            grid.setAttributeValue('_XLength', data['length'][0])
-            grid.setAttributeValue('_YLength', data['length'][1])
-            grid.setAttributeValue('_ZLength', data['length'][2])
-            grid.setAttributeValue('_XSize', data['size'][0])
-            grid.setAttributeValue('_YSize', data['size'][1])
-            grid.setAttributeValue('_ZSize', data['size'][2])
-            grid.setAttributeValue('_numPockets', data['numPockets'])
-
-            grids.append(grid)
-
-        self._defineOutputs(outputGrids=grids)
+            resultsFolder = self.getResultsFolder(f'{protName}_docking')
+            Plugin.runADCP(self, args, cwd=resultsFolder)
 
 
 
@@ -171,6 +210,168 @@ class ProtGenerateTargetFile(EMProtocol):
         return warnings
 
 # --------------------------- UTILS functions -----------------------------------
+    def getResultsFolder(self, name):
+        folder = os.path.abspath(os.path.join(self._getPath(), f'{name}_docking'))
+        os.makedirs(folder, exist_ok=True)
+        return folder
+
+    def getSequenceFromPdb(self, pdbFile):
+        """
+        Extracts peptide sequence from a PDB file.
+        Uppercase for helix (H), lowercase for coil/other.
+        """
+        helixResidues = self.extractHelixResidues(pdbFile)
+        seqDict = self.extractResidues(pdbFile, helixResidues)
+        sequence = [seqDict[key] for key in sorted(seqDict)]
+        return ''.join(sequence)
+
+    def extractHelixResidues(self, pdbFile):
+        helixResidues = set()
+        with open(pdbFile, 'r') as f:
+            for line in f:
+                if line.startswith("HELIX"):
+                    startRes = int(line[21:25].strip())
+                    endRes = int(line[33:37].strip())
+                    chain = line[19]
+                    helixResidues.update((chain, i) for i in range(startRes, endRes + 1))
+        return helixResidues
+
+    def extractResidues(self, pdbFile, helixResidues):
+        seqDict = {}
+        with open(pdbFile, 'r') as f:
+            for line in f:
+                if not (line.startswith("ATOM") and line[13:15].strip() == "CA"):
+                    continue
+
+                resname = line[17:20].strip()
+                chain = line[21]
+                resnum = int(line[22:26].strip())
+                aa = self.threetToOne(resname)
+                if not aa:
+                    continue
+
+                # Helix uppercase, coil lowercase
+                aa = aa.upper() if (chain, resnum) in helixResidues else aa.lower()
+                seqDict[(chain, resnum)] = aa
+
+        return seqDict
+
+
+    def threetToOne(self, resname):
+        """Convert 3-letter amino acid code to 1-letter."""
+        aaDict = {
+            'ALA':'A', 'CYS':'C', 'ASP':'D', 'GLU':'E', 'PHE':'F', 'GLY':'G',
+            'HIS':'H', 'ILE':'I', 'LYS':'K', 'LEU':'L', 'MET':'M', 'ASN':'N',
+            'PRO':'P', 'GLN':'Q', 'ARG':'R', 'SER':'S', 'THR':'T', 'VAL':'V',
+            'TRP':'W', 'TYR':'Y'
+        }
+        return aaDict.get(resname.upper())
+
+    def rankedFiles(self, directory):
+        allFiles = os.listdir(directory)
+        rankedFiles = [f for f in allFiles if '_ranked_' in f]
+        return rankedFiles
+
+    def readOutputData(self, logFile):
+        """Read docking log and return a list of docking data per search."""
+
+        with open(logFile, 'r') as f:
+            allRuns = list(self.parseBlocks(f))
+
+        return allRuns
+
+    def parseBlocks(self, f):
+        dockingData = {}
+        tableStarted = False
+
+        for rawLine in f:
+            line = rawLine.strip()
+
+            if self._isSearchBoundary(line):
+                yield from self._flushData(dockingData)
+                dockingData = {}
+                tableStarted = False
+                continue
+
+            if self.isTableHeader(line):
+                tableStarted = True
+                continue
+
+            if not tableStarted:
+                continue
+
+            parsed = self._processTableLine(line)
+            if parsed:
+                mode, affinity, energy, bestRun = parsed
+                dockingData[mode] = {
+                    "affinity": affinity,
+                    "energy": energy,
+                    "bestRun": bestRun,
+                }
+
+        yield from self._flushData(dockingData)
+
+    def _isSearchBoundary(self, line):
+        return self.isStartSearch(line) or self.isEndSearch(line)
+
+    def _flushData(self, dockingData):
+        if dockingData:
+            yield dockingData
+
+    def _processTableLine(self, line):
+        if not self.isTableLine(line):
+            return None
+        return self.parseTableLine(line)
+
+    def isStartSearch(self, line):
+        return line.startswith("Performing search")
+
+    def isTableHeader(self, line):
+        return line.startswith("mode |  affinity")
+
+    def isTableLine(self, line):
+        return bool(line) and not line.startswith(("|", "-----"))
+
+    def isEndSearch(self, line):
+        return line.startswith("clean up")
+
+    def parseTableLine(self, line):
+        parts = line.split()
+        if len(parts) >= 9 and parts[0].isdigit():
+            return int(parts[0]), float(parts[1]), float(parts[7]), int(parts[8])
+        return None
+
+    def getBaseName(self, filePath):
+        return os.path.splitext(os.path.basename(filePath))[0]
+
+    def getResultsFolder(self, name):
+        folder = os.path.abspath(os.path.join(self._getPath(), name))
+        os.makedirs(folder, exist_ok=True)
+        return folder
+
+    def createDockedMolecule(self, protFile, recFile, protName, poseFile, mappingFile,
+                              modeNum, energy, affinity, bestRun):
+
+        mol = SmallMolecule(
+            smallMolFilename=protFile,
+            proteinFile=recFile,
+            molName=protName,
+            type='Autodock-CrankPep'
+        )
+
+        mol.setPoseFile(poseFile)
+        mol.setMappingFile(mappingFile)
+        mol.setConfId(modeNum)
+        mol.setGridId(1)
+        mol.setPoseId(modeNum)
+        mol.setDockId(bestRun)
+        mol.setEnergy(energy)
+        mol._ligandAffinity = Float()
+        mol.setAttributeValue('_ligandAffinity', affinity)
+
+        return mol
+
+
     def getInfo(self, logFile):
         if not os.path.exists(logFile):
             raise FileNotFoundError(f"AGFR log file not found: {logFile}")
@@ -221,7 +422,7 @@ class ProtGenerateTargetFile(EMProtocol):
         return pdbqtFile
 
     def getProtInfo(self, prot):
-        filePath = os.path.abspath(prot.getFileName())
+        filePath = (prot.getFileName())
         name = os.path.splitext(os.path.basename(filePath))[0]
         ext = os.path.splitext(filePath)[1].lower()
         return filePath, name, ext
