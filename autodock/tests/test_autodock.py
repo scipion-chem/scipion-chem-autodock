@@ -35,7 +35,7 @@ from pwchem.utils import assertHandle
 from .. import tests
 # Plugin imports
 from ..protocols import ProtChemADTPrepareReceptor, ProtChemADTPrepareLigands, ProtChemMeekoLigands, \
-    ProtScrubberPrepareLigands, ProtGenerateTargetFile, ProtCrankPep
+    ProtScrubberPrepareLigands, ProtCrankPep
 from ..protocols import ProtChemAutoLigand, ProtChemAutoSite, ProtChemAutodock
 from ..protocols import ProtChemAutodockGPU, ProtChemVinaDocking, ProtChemAutoSiteGenPharmacophore
 from ..protocols import AutodockGridGeneration, ProtChemAutodockScore
@@ -399,7 +399,6 @@ class TestADCP(TestADPrepareReceptor):
         cls._runImportPDB()
         cls._runImportPeptides()
         cls._runPrepareReceptorADT()
-        cls._runTargetFile()
 
     @classmethod
     def _runImportPDB(cls): #this is the receptor peptide
@@ -428,19 +427,11 @@ class TestADCP(TestADPrepareReceptor):
         cls.launchProtocol(cls.protPrepareReceptor, wait=True)
 
     @classmethod
-    def _runTargetFile(cls):
-        cls.protTargetFile = cls.newProtocol(
-            ProtGenerateTargetFile,
-            inputAtomStruct=cls.protPrepareReceptor.outputStructure,
-            inputPeptides=cls.protImportPeptides.outputAtomStructs
-        )
-        cls.launchProtocol(cls.protTargetFile, wait=True)
-
-    @classmethod
     def _runADCP(cls):
         cls.protADCP = cls.newProtocol(
             ProtCrankPep,
-            inputGrids=cls.protTargetFile.outputGrids,
+            inputAtomStruct=cls.protPrepareReceptor.outputStructure,
+            inputPeptides=cls.protImportPeptides.outputAtomStructs,
             nRuns=5
         )
         cls.proj.launchProtocol(cls.protADCP)
