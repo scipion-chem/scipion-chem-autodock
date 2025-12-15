@@ -24,16 +24,19 @@
 # *
 # **************************************************************************
 import re
-import os
+import shutil, os
+import zipfile
 
-import pyworkflow
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pwchem.utils import pdbqt2other
+from pwchem import MGL_DIC
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule
+from pwem.convert import cifToPdb
 from pwem.protocols import EMProtocol
-from pyworkflow.object import Float
+from pyworkflow.object import String, Float, Integer
 from pyworkflow.protocol import params
 
 from autodock import Plugin
+
+INPUT_TYPE = ['SetOfSmallMolecules', 'SetOfAtomStructs']
 
 
 class ProtCrankPep(EMProtocol):
@@ -43,15 +46,29 @@ class ProtCrankPep(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputGrids', params.PointerParam, pointerClass="SetOfGridADT",
-                      label='Target grid file:', allowsNull=False,
-                      help='Grid prepared with AGFR describing the receptor.')
+        form.addParam('inputAtomStruct', params.PointerParam, pointerClass="AtomStruct",
+                      label='Receptor protein:', allowsNull=False,
+                      help='It must be in pdbqt format.')
 
+        form.addParam('inputPeptides', params.PointerParam, pointerClass="SetOfAtomStructs,SetOfSmallMolecules",
+                      label='Input peptides:', allowsNull=True,
+                      help='It must be in pdb or mol2 format, you may use Schrodinger convert to change it.')
 
-        conformers = form.addGroup("Parameters")
+        conformers = form.addGroup("Grid")
+        conformers.addParam('padding', params.FloatParam, default=4.0,
+                            label='Padding: ',
+                            help='Amount of padding added to each side of the box.')
+        conformers.addParam('flexRes', params.BooleanParam, default=False,
+                            label='Flexible residues: ',
+                            help='Are there flexible residues?.')
+        conformers.addParam('flexibleString', params.StringParam, condition="flexRes", default='',
+                            label='Flexible residues string: ',
+                            help='Input flexible residues in the format "A:ILE10,VAL32;B:SER48".')
+
+        conformers = form.addGroup("Docking")
         conformers.addParam('nRuns', params.IntParam, label='Number of docking runs: ', default=50,
                             help='Number of independent runs using the stochastic procedure. \n'
-                            'Different docking positions will be found for each of them.')
+                                 'Different docking positions will be found for each of them.')
         conformers.addParam('cyc', params.BooleanParam, default=False,
                             label='Cyclic peptide through backbone: ',
                             help='Choose whether there are cyclic peptides through the backbone.')
@@ -61,28 +78,49 @@ class ProtCrankPep(EMProtocol):
         form.addParallelSection(threads=4, mpi=1)
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('createFilesStep')
+        self._insertFunctionStep('gridGenerationStep')
+        self._insertFunctionStep('extractFileStep')
+        self._insertFunctionStep('dockingStep')
         self._insertFunctionStep('createOutputStep')
 
-    def createFilesStep(self):
-        targetFile = os.path.abspath(self.inputGrids.get().getFirstItem().getFileName())
-        for grid in self.inputGrids.get():
-            protFile = grid.getAttributeValue('_peptideFile')
-            protName = self.getBaseName(protFile)
-            pdbFile = os.path.abspath(os.path.join(self._getExtraPath(f"{protName}.pdb")))
+    def gridGenerationStep(self):
+        recFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
+        peptides = self.inputPeptides.get()
+        for prot in peptides:
+            protFile, protName, _ = self.getProtInfo(prot)
 
-            pdbqt2other(self, protFile, pdbFile)
+            protFile = self.convertCifIfNeeded(protFile, self._getExtraPath())
 
-            seq = self.getSequenceFromPdb(pdbFile)
-            args = [f'-t {targetFile} -s {seq} -N {self.nRuns.get()} -o {protName}_docking -ref {pdbFile}']
+            if not protFile.endswith('.pdbqt'):
+                protFile = self.preparePeptidePDBQT(protFile, self._getExtraPath())
 
-            if(self.cyc.get()):
-                args.append('-cyc')
-            if (self.cys.get()):
-                args.append('-cys')
+            args = [f'-r {recFile} -l {os.path.abspath(protFile)} -o {protName} -P {self.padding.get()}']
 
-            resultsFolder = self.getResultsFolder(protName)
-            Plugin.runADCP(self, args, cwd=resultsFolder)
+            if(self.flexRes.get()):
+                args.append(f'-f {self.flexibleString.get()}')
+
+            Plugin.runAGFR(self, args, cwd=self._getExtraPath())
+
+    def extractFileStep(self):
+        peptides = self.inputPeptides.get()
+        for prot in peptides:
+            _, protName, _ = self.getProtInfo(prot)
+
+            extraDir = self._getExtraPath()
+            outputDir = self._getPath(f'{protName}')
+            os.makedirs(outputDir, exist_ok=True)
+
+            zipFile = os.path.join(extraDir, f"{protName}.trg")
+            if not os.path.exists(zipFile):
+                self.error(f"AGFR output ZIP not found: {zipFile}")
+                return
+
+            zipOutput = os.path.join(outputDir, f"{protName}.trg")
+            shutil.copy(zipFile, zipOutput)
+            os.remove(zipFile)
+
+            with zipfile.ZipFile(zipOutput, 'r') as zip_ref:
+                zip_ref.extractall(outputDir)
 
     def createOutputStep(self):
         logFile = os.path.abspath(self._getPath('logs/run.stdout'))
@@ -90,14 +128,14 @@ class ProtCrankPep(EMProtocol):
         i = 0
         outputMols = SetOfSmallMolecules().create(outputPath=self._getPath())
 
-        for grid in self.inputGrids.get():
-            protFile = grid.getAttributeValue('_peptideFile')
-            recFile = grid.getAttributeValue('_proteinFile')
-            protName = self.getBaseName(protFile)
-            resultsFolder = self.getResultsFolder(protName)
+        peptides = self.inputPeptides.get()
+        recFile = self.inputAtomStruct.get().getFileName()
+        for prot in peptides:
+            protFile, protName, _ = self.getProtInfo(prot)
+            resultsFolder = self.getResultsFolder(f'{protName}_docking')
             rankedFiles = self.rankedFiles(resultsFolder)
             data = outputLogData[i]
-            mappingFile = os.path.abspath(grid.getFileName())
+            targetFile = os.path.abspath(os.path.join(self._getPath(f"{protName}"), f"{protName}.trg"))
 
             for file in rankedFiles:
                 m = re.search(r'_ranked_(\d+)', file)
@@ -115,7 +153,7 @@ class ProtCrankPep(EMProtocol):
 
                 newMol = self.createDockedMolecule(
                     protFile, recFile, protName,
-                    poseFile, mappingFile,
+                    poseFile, targetFile,
                     modeNum, energy, affinity, bestRun
                 )
 
@@ -124,9 +162,30 @@ class ProtCrankPep(EMProtocol):
             i += 1
 
         outputMols.setDocked(True)
-        recFile = grid.getAttributeValue('_proteinFile')
         outputMols.setProteinFile(recFile)
         self._defineOutputs(outputSmallMolecules=outputMols)
+
+    def dockingStep(self):
+        peptides = self.inputPeptides.get()
+
+        for prot in peptides:
+            protFile, protName, _ = self.getProtInfo(prot)
+            targetFile = os.path.join(self._getPath(f"{protName}"), f"{protName}.trg")
+            pdbFile = os.path.abspath(os.path.join(self._getExtraPath(f"{protName}.pdb")))
+
+            cifToPdb(protFile, pdbFile)
+
+            seq = self.getSequenceFromPdb(pdbFile)
+            args = [f'-t {os.path.abspath(targetFile)} -s {seq} -N {self.nRuns.get()} -o {protName}_docking -ref {pdbFile}']
+
+            if (self.cyc.get()):
+                args.append('-cyc')
+            if (self.cys.get()):
+                args.append('-cys')
+
+            resultsFolder = self.getResultsFolder(f'{protName}_docking')
+            Plugin.runADCP(self, args, cwd=resultsFolder)
+
 
 
 # --------------------------- INFO functions -----------------------------------
@@ -147,31 +206,10 @@ class ProtCrankPep(EMProtocol):
         return warnings
 
 # --------------------------- UTILS functions -----------------------------------
-    def getInfo(self, logFile):
-        if not os.path.exists(logFile):
-            raise FileNotFoundError(f"AGFR log file not found: {logFile}")
-
-        with open(logFile, 'r') as f:
-            log = f.read()
-
-        data = {}
-
-        try:
-            data['center'] = tuple(
-                map(float, re.findall(r'Box center:\s+([\d\.\-]+)\s+([\d\.\-]+)\s+([\d\.\-]+)', log)[0]))
-            data['length'] = tuple(
-                map(float, re.findall(r'Box length:\s+([\d\.\-]+)\s+([\d\.\-]+)\s+([\d\.\-]+)', log)[0]))
-            data['size'] = tuple(map(int, re.findall(r'Box size\s+: +(\d+)\s+(\d+)\s+(\d+)', log)[0]))
-        except IndexError:
-            data['center'] = data['length'] = data['size'] = (None, None, None)
-
-        spacingMatch = re.search(r'spacing\s+: +([\d\.]+)', log)
-        data['spacing'] = float(spacingMatch.group(1)) if spacingMatch else None
-
-        pocketMatch = re.search(r'found\s+(\d+)\s+pocket\(s\)', log)
-        data['numPockets'] = int(pocketMatch.group(1)) if pocketMatch else 0
-
-        return data
+    def getResultsFolder(self, name):
+        folder = os.path.abspath(os.path.join(self._getPath(), f'{name}_docking'))
+        os.makedirs(folder, exist_ok=True)
+        return folder
 
     def getSequenceFromPdb(self, pdbFile):
         """
@@ -180,7 +218,6 @@ class ProtCrankPep(EMProtocol):
         """
         helixResidues = self.extractHelixResidues(pdbFile)
         seqDict = self.extractResidues(pdbFile, helixResidues)
-
         sequence = [seqDict[key] for key in sorted(seqDict)]
         return ''.join(sequence)
 
@@ -300,9 +337,6 @@ class ProtCrankPep(EMProtocol):
             return int(parts[0]), float(parts[1]), float(parts[7]), int(parts[8])
         return None
 
-    def getBaseName(self, filePath):
-        return os.path.splitext(os.path.basename(filePath))[0]
-
     def getResultsFolder(self, name):
         folder = os.path.abspath(os.path.join(self._getPath(), name))
         os.makedirs(folder, exist_ok=True)
@@ -329,3 +363,40 @@ class ProtCrankPep(EMProtocol):
         mol.setAttributeValue('_ligandAffinity', affinity)
 
         return mol
+
+    def preparePeptidePDBQT(self, peptideFile, outDir):
+        """
+        Convert a peptide PDB/MOL2 file to PDBQT using prepare_ligand4.py via pythonsh.
+        """
+        ext = os.path.splitext(peptideFile)[1].lower()
+
+        if ext == '.cif':
+            pdbFile = os.path.join(outDir, os.path.splitext(os.path.basename(peptideFile))[0] + '.pdb')
+            cifToPdb(peptideFile, pdbFile)
+            peptideFile = pdbFile
+
+        pdbqtFile = os.path.join(outDir, os.path.splitext(os.path.basename(peptideFile))[0] + '.pdbqt')
+        prog = 'prepare_ligand4'
+        pythonsh = Plugin.getProgramHome(MGL_DIC, 'bin/pythonsh ')
+        scriptPath = Plugin.getADTPath(f'Utilities24/{prog}.py ')
+        program = pythonsh + scriptPath
+
+        arguments = f"-l {os.path.abspath(peptideFile)} -o {os.path.abspath(pdbqtFile)}"
+
+        self.runJob(program, arguments, cwd=outDir)
+
+        return pdbqtFile
+
+    def getProtInfo(self, prot):
+        filePath = (prot.getFileName())
+        name = os.path.splitext(os.path.basename(filePath))[0]
+        ext = os.path.splitext(filePath)[1].lower()
+        return filePath, name, ext
+
+    def convertCifIfNeeded(self, filePath, outDir):
+        if filePath.lower().endswith('.cif'):
+            pdbFile = os.path.join(outDir, os.path.splitext(os.path.basename(filePath))[0] + '.pdb')
+            if not os.path.exists(pdbFile):
+                cifToPdb(filePath, pdbFile)
+            return pdbFile
+        return filePath

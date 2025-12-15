@@ -27,7 +27,6 @@
 # Preparation receptor
 from .protocol_preparation_receptor import ProtChemADTPrepareReceptor
 from .protocol_generate_grid import AutodockGridGeneration
-from .protocol_generate_target_file import ProtGenerateTargetFile
 
 # Preparation ligans
 from .protocol_preparation_ligands import ProtChemADTPrepareLigands
