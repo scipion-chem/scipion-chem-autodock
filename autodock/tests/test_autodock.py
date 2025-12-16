@@ -228,7 +228,7 @@ class TestAutoDock(TestAutoSite, TestADMeekoLigands):
                 inputSmallMolecules=self.protOBabel.outputSmallMolecules,
                 fromReceptor=0, radius=24, nRuns=2,
                 numberOfThreads=4)
-            self.proj.launchProtocol(protAutoDock, wait=False)
+            self.proj.launchProtocol(protAutoDock, wait=True)
 
         else:
             protAutoDock = self.newProtocol(
@@ -237,7 +237,7 @@ class TestAutoDock(TestAutoSite, TestADMeekoLigands):
                 inputSmallMolecules=self.protPrepareLigandADT.outputSmallMolecules,
                 fromReceptor=1, pocketRadiusN=1.2, nRuns=2,
                 numberOfThreads=4)
-            self.proj.launchProtocol(protAutoDock, wait=False)
+            self.proj.launchProtocol(protAutoDock, wait=True)
 
         return protAutoDock
 
@@ -247,7 +247,7 @@ class TestAutoDock(TestAutoSite, TestADMeekoLigands):
 
         print('Docking with autodock in predicted pockets')
         protAutoLig = self._runAutoSiteFind()
-        self._waitOutput(protAutoLig, 'outputStructROIs', sleepTime=5)
+        self._waitOutput(protAutoLig, 'outputStructROIs', sleepTime=10)
         self._runSetFilter(inProt=protAutoLig, number=2, property='_score')
         self._waitOutput(self.protFilter, 'outputStructROIs', sleepTime=10)
 
