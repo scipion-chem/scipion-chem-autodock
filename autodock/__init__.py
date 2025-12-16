@@ -152,9 +152,14 @@ class Plugin(pwchemPlugin):
             targetsFlag = f' TARGETS={compCap}' if compCap else ''
 
             # Installing package
-            installer.getCloneCommand(cls.getAutoDockGPUGithub(), binaryFolderName=cls._atdgpuBinary, targeName='ATDGPU_CLONED')\
-                .addCommand(f'cd {cls._atdgpuBinary} && make DEVICE=GPU OVERLAP=ON{targetsFlag}', 'ATDGPU_COMPILED')\
-                .addPackage(env, dependencies=['git', 'make'], default=default, vars=enVars, updateCuda=True)
+            make_cmd = f'cd {cls._atdgpuBinary} && CC=/usr/bin/gcc-12 CXX=/usr/bin/g++-12 make DEVICE=GPU OVERLAP=ON{targetsFlag}'
+
+            installer.getCloneCommand(cls.getAutoDockGPUGithub(),
+                                      binaryFolderName=cls._atdgpuBinary,
+                                      targeName='ATDGPU_CLONED') \
+                .addCommand(make_cmd, 'ATDGPU_COMPILED') \
+                .addPackage(env, dependencies=['git', 'make'], default=default)
+
 
     @classmethod
     def addVinaPackage(cls, env, default=True):
