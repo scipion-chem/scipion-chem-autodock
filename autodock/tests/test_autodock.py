@@ -167,7 +167,7 @@ class TestAutoSite(TestADPrepareReceptor):
             ProtChemAutoSite,
             inputAtomStruct=cls.protPrepareReceptor.outputStructure)
 
-        cls.proj.launchProtocol(protPocketFinder, wait=False)
+        cls.proj.launchProtocol(protPocketFinder, wait=True)
         return protPocketFinder
 
     def test(self):
