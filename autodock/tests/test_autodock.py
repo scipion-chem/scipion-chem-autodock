@@ -164,7 +164,7 @@ class TestAutoSite(TestADPrepareReceptor):
     @classmethod
     def _runAutoSiteFind(cls):
         protPocketFinder = cls.newProtocol(
-            ProtChemAutoSite, nneighbors=6,
+            ProtChemAutoSite,
             inputAtomStruct=cls.protPrepareReceptor.outputStructure)
 
         cls.proj.launchProtocol(protPocketFinder, wait=True)
@@ -249,7 +249,7 @@ class TestAutoDock(TestAutoSite, TestADMeekoLigands):
         protAutoLig = self._runAutoSiteFind()
         self._waitOutput(protAutoLig, 'outputStructROIs', sleepTime=10)
         self._runSetFilter(inProt=protAutoLig, number=2, property='_score')
-        self._waitOutput(self.protFilter, 'outputStructROIs', sleepTime=100)
+        self._waitOutput(self.protFilter, 'outputStructROIs', sleepTime=10)
 
         protAutoDock2 = self._runAutoDock(self.protFilter)
 
@@ -351,7 +351,7 @@ class TestAutoSitePharmacophore(TestAutoSite):
     def test(self):
         self._runPrepareReceptorADT()
         protAutoSite = self._runAutoSiteFind()
-        self._waitOutput(protAutoSite, 'outputStructROIs', sleepTime=100)
+        self._waitOutput(protAutoSite, 'outputStructROIs', sleepTime=10)
         protPharm = self._runAutoSitePharm(protAutoSite)
         self._waitOutput(protPharm, 'outputPharmacophore', sleepTime=5)
         assertHandle(self.assertIsNotNone, getattr(protPharm, 'outputPharmacophore', None), cwd=protPharm.getWorkingDir())
