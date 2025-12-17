@@ -189,7 +189,7 @@ landscape of a receptor."""
                 pLine = line.strip().split()
                 coords = [float(c) for c in pLine[5:8]]
                 replacements = [str(i + 1), f'{pLine[2]}{i + 1}', 'STP', 'C', 1, pocketK, *coords]
-                cifLine = writeCIFLine(*replacements, type_symbol=pLine[2])
+                cifLine = writeCIFLine(*replacements, typeSymbol=pLine[2])
                 outStr += cifLine
 
         oFile = pdbFile.replace('.pdb', '.cif')
