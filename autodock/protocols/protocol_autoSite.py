@@ -114,9 +114,10 @@ class ProtChemAutoSite(ProtChemAutodockBase):
             pock.setVolume(pock.getPocketVolume())
             outPockets.append(pock)
 
+        self._defineOutputs(outputStructROIs=outPockets)
+
         if len(outPockets) > 0:
             outPockets.buildPDBhetatmFile()
-            self._defineOutputs(outputStructROIs=outPockets)
 
 
     # --------------------------- Utils functions --------------------
