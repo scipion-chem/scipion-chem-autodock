@@ -208,8 +208,8 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
                 chainIds = [x.split('-')[1] for x in modelChains.split(',')]
 
         het2keep = self.het2keep.get().split(', ')
-        inFile = self.getInpFilePDB()
-        cleanedPDB = cleanPDB(inFile, fnPdb,False, self.HETATM.get(), chainIds, het2keep)
+        cleanedPDB = cleanPDB(self.inputAtomStruct.get().getFileName(), fnPdb,
+                               False, self.HETATM.get(), chainIds, het2keep)
 
         fnOut = self.getReceptorPDBQT()
         if self.prepProg.get() == MGL:
@@ -241,13 +241,3 @@ class ProtChemADTPrepareReceptor(ProtChemADTPrepare):
         if self.rchains.get() and not self.chain_name.get():
             errors.append('You must specify the chains to be maintained')
         return errors
-
-    def getInpFilePDB(self):
-        inFile = self.inputAtomStruct.get().getFileName()
-        base, ext = os.path.splitext(inFile)
-
-        pdbFile = f"{base}.pdb"
-        if os.path.exists(pdbFile):
-            return os.path.abspath(pdbFile)
-
-        return os.path.abspath(self._getPath(f'{getBaseName(inFile)}{ext}'))
