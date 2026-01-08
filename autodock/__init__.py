@@ -108,7 +108,7 @@ class Plugin(pwchemPlugin):
 		cls.addADTPackage(env)
 		cls.addAutoDockGPUPackage(env)
 		cls.addVinaPackage(env)
-		#cls.addVinaGPUPackage(env)
+		cls.addVinaGPUPackage(env)
 		cls.addAutoSitePackage(env)
 		cls.addRingtailPackage(env)
 		cls.addScrubberPackage(env)
@@ -181,28 +181,41 @@ class Plugin(pwchemPlugin):
 
 		# Defining GPU platform and OpenCL version
 		gpuPlatform = '-DNVIDIA_PLATFORM' if cls.getGPUPlatform() == 'nvidia' else '-DAMD_PLATFORM'
-		openCLVersion = '-OPENCL_3_0' if cls.getOpenCLVersion() == '3.0' else '-OPENCL_2_0'
+		openCLVersion = '-DOPENCL_3_0' if cls.getOpenCLVersion() == '3.0' else '-DOPENCL_2_0'
+
+		# Cloning AutoDock-VinaGPU
+		installer.getCloneCommand('https://github.com/DeltaGroupNJUPT/Vina-GPU-2.1.git',
+															binaryFolderName=cls._vinagpuBinary, targeName='VINA_GPU_CLONED')
+
+		# Downloading and extracting Boost library
+		installer.getExtraFile('https://archives.boost.io/release/1.74.0/source/boost_1_74_0.tar.gz',
+													 'BOOST_DOWNLOADED', fileName=boostFilename)\
+			.addCommand(f'mkdir -p {boostFoldername} && tar -xf {boostFilename} --strip-components 1 -C {boostFoldername} '
+									f'&& rm {boostFilename}', 'BOOST_EXTRACTED')\
+			.getCondaEnvCommand(requirementsFile=False)
+		
+		# Installing CUDA in a Conda enviroment
+		installer.addCondaPackages(['cuda'], channel="\"nvidia/label/cuda-11.7.0\"")
 
 		# Defining the path to the script that modifies the makefile
 		makefileModifier = os.path.join(os.path.dirname(__file__), 'utils', 'modify_atdvinagpu_makefile.py')
 
 		# Defining AutoDock-VinaGPU makefile location
-		makefile = os.path.join(cls._vinagpuBinary, 'Vina-GPU+', 'Makefile')
+		softwares = ['AutoDock-Vina-GPU-2.1', 'QuickVina2-GPU-2.1', 'QuickVina-W-GPU-2.1']
 
-		# Cloning AutoDock-VinaGPU
-		installer.getCloneCommand('https://github.com/DeltaGroupNJUPT/Vina-GPU-2.0.git', binaryFolderName=cls._vinagpuBinary, targeName='VINA_GPU_CLONED')
+		for i, soft in enumerate(softwares):
+				softDir = os.path.join(cls._vinagpuBinary, soft)
+				makefile = os.path.join(softDir, 'Makefile')
+				softBin = f'{soft[:-2]}-{soft[-1]}'
+				oldStrConfig = "/home/shidi/Vina-GPU-2.1"
 
-		# Downloading and extracting Boost library
-		installer.getExtraFile('https://boostorg.jfrog.io/artifactory/main/release/1.82.0/source/boost_1_82_0.tar.gz', 'BOOST_DOWNLOADED', fileName=boostFilename)\
-			.addCommand(f'mkdir -p {boostFoldername} && tar -xf {boostFilename} --strip-components 1 -C {boostFoldername} && rm {boostFilename}', 'BOOST_EXTRACTED')\
-			.getCondaEnvCommand(requirementsFile=False)
-		
-		# Installing CUDA in a Conda enviroment
-		installer.addCondaPackages(['cuda'], channel="\"nvidia/label/cuda-11.5.0\"")
-
-		# Modifying makefile and compiling
-		installer.addCommand(f'{cls.getEnvActivationCommand(VINAGPU_DIC)} && python3 {makefileModifier} {makefile} {boostPath} $CONDA_PREFIX {openCLVersion} {gpuPlatform}', 'MAKEFILE_MODIFIED')\
-			.addCommand('make source && ./Vina-GPU+ --config ./input_file_example/2bm2_config.txt && make clean && make', 'VINA_GPU_COMPILED', workDir=os.path.dirname(makefile))
+				# Modifying makefile and compiling
+				installer.addCommand(f"{cls.getEnvActivationCommand(VINAGPU_DIC)} && python3 {makefileModifier} {makefile} "
+														 f"{boostPath} $CONDA_PREFIX {openCLVersion} {gpuPlatform} && "
+														 f"sed -i 's|{oldStrConfig}|{cls._vinagpuBinary}|g' {softDir}/input_file_example/2bm2_config.txt",
+														 f"MAKEFILE_{i}_MODIFIED")\
+					.addCommand(f'make source && ./{softBin} --config ./input_file_example/2bm2_config.txt && '
+											'make clean && make', f'VINAGPU_{i}_COMPILED', workDir=softDir)
 		
 		# Adding package
 		installer.addPackage(env, dependencies=['wget', 'tar', 'conda', 'make'], default=default)

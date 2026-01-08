@@ -3,16 +3,19 @@ This file is used when installing Vina-GPU.
 It modifies the makefile to compile Vina-GPU with the necessary values.
 """
 
-import sys
+import sys, os
 
 def modifyATDVinaGPUMakefile(filePath, boostLibPath, openCLLibPath, openCLVersion, gpuPlatform):
     """ This function receives a makefile and the 4 values neccessary for compiling AutoDock-VinaGPU. """
     # Reading makefile
     with open(filePath, 'r') as f:
         lines = f.readlines()
-    
+
     # Defining the new values for the variables
+    softName = filePath.split('/')[-2]
+    wDir = os.path.join(os.getcwd(), f'AutoDock-VinaGPU/{softName}')
     newValues = {
+        'WORK_DIR': wDir,
         'BOOST_LIB_PATH': boostLibPath,
         'OPENCL_LIB_PATH': openCLLibPath,
         'OPENCL_VERSION': openCLVersion,
