@@ -157,6 +157,8 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       flexReceptorFn = self.getFlexFiles()[0] if self.doFlexRes else None
       outDir = self.getOutputPocketDir(pocket)
 
+      molFns = [self.ensurePDBQT(fn, outDir) for fn in molFns]
+
       fldFile = f'{self.getReceptorName()}.maps.fld'
       self.fixFldFile(os.path.join(outDir, fldFile))
 
@@ -349,3 +351,15 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       with open(self.getSumPath()) as f:
         s.append(f.read())
     return s
+
+  def ensurePDBQT(self, molFn, outDir):
+      if molFn.endswith('.pdbqt'):
+          return molFn
+
+      baseName = getBaseName(molFn)
+      pdbqtFn = os.path.join(outDir, f"{baseName}.pdbqt")
+
+      if not os.path.exists(pdbqtFn):
+          print(f"[INFO] Converting ligand {molFn} ? {pdbqtFn}")
+          autodockPlugin.prepareLigandPDBQT(self, molFn, pdbqtFn)
+      return pdbqtFn
