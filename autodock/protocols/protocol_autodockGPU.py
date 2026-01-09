@@ -270,8 +270,6 @@ molecular dynamics simulations."""
           outputMols = performBatchThreading(self.performOutputCreation, inputMols, nt,
                                              gridId=gridId, pocketDic=pocketDic, recFile=recFile)
 
-          print(f'------output Mols: {outputMols}')
-
           if self.remTmp.get():
             self.removeTmpFiles(pocketDir)
 
@@ -307,8 +305,6 @@ molecular dynamics simulations."""
     for smallMol in mols:
       molFile = smallMol.getFileName()
       molName = getBaseName(molFile)
-      print(f'----mol name:{molName}')
-      print(f'----pocket dic: {pocketDic}')
       if molName in pocketDic:
         molDic = pocketDic[molName]
 
