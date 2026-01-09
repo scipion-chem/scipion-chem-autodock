@@ -229,7 +229,6 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
         with open(pdbqtFile, 'w') as f:
           f.write(pocketDic[molName][modelId]['pdb'])
         pocketDic[molName][modelId]['file'] = pdbqtFile
-
     molLists[it] = [pocketDic]
 
   def performOutputCreation(self, mols, molLists, it, pocketDic, gridId, recFile):
@@ -237,8 +236,15 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     for smallMol in mols:
       molFile = smallMol.getFileName()
       molName = getBaseName(molFile)
-      if molName in pocketDic:
-        molDic = pocketDic[molName]
+      matchingKeys = [
+          k for k in pocketDic
+          if k == molName or k.startswith(molName + '-') or k.startswith('g') and molName in k
+      ]
+      if not matchingKeys:
+          continue
+
+      for key in matchingKeys:
+        molDic = pocketDic[key]
 
         for posId in molDic:
           newSmallMol = SmallMolecule()
