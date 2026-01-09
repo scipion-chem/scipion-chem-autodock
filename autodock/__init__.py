@@ -169,7 +169,7 @@ class Plugin(pwchemPlugin):
 			.addPackage(env, ['git', 'conda'], default=default)
 	
 	@classmethod
-	def addVinaGPUPackage(cls, env, default=True):
+	def addVinaGPUPackage(cls, env, default=True, testSoft=False):
 		""" This function procvides the neccessary commands for installing AutoDock-VinaGPU. """
 		# Instantiating the install helper
 		installer = InstallHelper(VINAGPU_DIC['name'], packageHome=cls.getVar(VINAGPU_DIC['home']), packageVersion=VINAGPU_DIC['version'])
@@ -190,8 +190,10 @@ class Plugin(pwchemPlugin):
 		# Downloading and extracting Boost library
 		installer.getExtraFile('https://archives.boost.io/release/1.74.0/source/boost_1_74_0.tar.gz',
 													 'BOOST_DOWNLOADED', fileName=boostFilename)\
-			.addCommand(f'mkdir -p {boostFoldername} && tar -xf {boostFilename} --strip-components 1 -C {boostFoldername} '
-									f'&& rm {boostFilename}', 'BOOST_EXTRACTED')\
+			.addCommand(f'mkdir -p {boostFoldername} && tar -xf {boostFilename} --strip-components 1 -C '
+						f'{boostFoldername} && rm {boostFilename}', 'BOOST_EXTRACTED')\
+			.addCommand(f'cd {boostFoldername} && ./bootstrap.sh --with-libraries=program_options,system,filesystem && ./b2',
+						'BOOST_INSTALLED') \
 			.getCondaEnvCommand(requirementsFile=False)
 		
 		# Installing CUDA in a Conda enviroment
@@ -210,15 +212,20 @@ class Plugin(pwchemPlugin):
 				oldStrConfig = "/home/shidi/Vina-GPU-2.1"
 
 				# Modifying makefile and compiling
-				installer.addCommand(f"{cls.getEnvActivationCommand(VINAGPU_DIC)} && python3 {makefileModifier} {makefile} "
-														 f"{boostPath} $CONDA_PREFIX {openCLVersion} {gpuPlatform} && "
-														 f"sed -i 's|{oldStrConfig}|{cls._vinagpuBinary}|g' {softDir}/input_file_example/2bm2_config.txt",
-														 f"MAKEFILE_{i}_MODIFIED")\
-					.addCommand(f'make source && ./{softBin} --config ./input_file_example/2bm2_config.txt && '
-											'make clean && make', f'VINAGPU_{i}_COMPILED', workDir=softDir)
+				installer.addCommand(f"{cls.getEnvActivationCommand(VINAGPU_DIC)} && python3 {makefileModifier} "
+									 f"{makefile} {boostPath} $CONDA_PREFIX {openCLVersion} {gpuPlatform} && "
+									 f"sed -i 's|{oldStrConfig}|{cls._vinagpuBinary}|g' {softDir}/input_file_example/2bm2_config.txt",
+									 f"MAKEFILE_{i}_MODIFIED")
+
+				if testSoft:
+					installer.addCommand(f'{cls.getEnvActivationCommand(VINAGPU_DIC)} && '
+										 f'make source && ./{softBin} --config ./input_file_example/2bm2_config.txt',
+										 f'VINAGPU_{i}_TESTED', workDir=softDir)
+				installer.addCommand(f'{cls.getEnvActivationCommand(VINAGPU_DIC)} && make clean && make',
+									 f'VINAGPU_{i}_COMPILED', workDir=softDir)
 		
 		# Adding package
-		installer.addPackage(env, dependencies=['wget', 'tar', 'conda', 'make'], default=default)
+		installer.addPackage(env, dependencies=['wget', 'tar', 'conda', 'make', 'clinfo'], default=default)
 
 	@classmethod
 	def addAutoSitePackage(cls, env, default=True):
