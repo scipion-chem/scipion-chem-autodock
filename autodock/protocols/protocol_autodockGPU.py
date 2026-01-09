@@ -225,8 +225,6 @@ molecular dynamics simulations."""
       flexReceptorFn = self.getFlexFiles()[0] if self.doFlexRes else None
       outDir = self.getOutputPocketDir(pocket)
 
-      molFns = [self.ensurePDBQT(fn, outDir) for fn in molFns]
-
       fldFile = f'{self.getReceptorName()}.maps.fld'
       self.fixFldFile(os.path.join(outDir, fldFile))
 
@@ -272,6 +270,8 @@ molecular dynamics simulations."""
           outputMols = performBatchThreading(self.performOutputCreation, inputMols, nt,
                                              gridId=gridId, pocketDic=pocketDic, recFile=recFile)
 
+          print(f'------output Mols: {outputMols}')
+
           if self.remTmp.get():
             self.removeTmpFiles(pocketDir)
 
@@ -307,6 +307,8 @@ molecular dynamics simulations."""
     for smallMol in mols:
       molFile = smallMol.getFileName()
       molName = getBaseName(molFile)
+      print(f'----mol name:{molName}')
+      print(f'----pocket dic: {pocketDic}')
       if molName in pocketDic:
         molDic = pocketDic[molName]
 
@@ -419,15 +421,3 @@ molecular dynamics simulations."""
       with open(self.getSumPath()) as f:
         s.append(f.read())
     return s
-
-  def ensurePDBQT(self, molFn, outDir):
-      if molFn.endswith('.pdbqt'):
-          return molFn
-
-      baseName = getBaseName(molFn)
-      pdbqtFn = os.path.join(outDir, f"{baseName}.pdbqt")
-
-      if not os.path.exists(pdbqtFn):
-          print(f"[INFO] Converting ligand {molFn} ? {pdbqtFn}")
-          autodockPlugin.prepareLigandPDBQT(self, molFn, pdbqtFn)
-      return pdbqtFn

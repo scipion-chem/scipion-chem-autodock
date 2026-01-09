@@ -282,7 +282,9 @@ class ProtChemAutodockBase(EMProtocol):
           args = f'-i {sdfFile} -o {oFile} '
           try:
             autodockPlugin.runMeekoLigand(self, args)
-          except: pass
+          except Exception as e:
+              print(f"Meeko failed for {sdfFile}: {e}")
+              raise
           if remove:
             os.remove(sdfFile)
 
