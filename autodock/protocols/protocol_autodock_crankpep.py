@@ -33,6 +33,7 @@ from pwem.convert import cifToPdb
 from pwem.protocols import EMProtocol
 from pyworkflow.object import String, Float, Integer
 from pyworkflow.protocol import params
+from pwchem.utils import RESIDUES3TO1
 
 from autodock import Plugin
 
@@ -242,7 +243,7 @@ class ProtCrankPep(EMProtocol):
                 resname = line[17:20].strip()
                 chain = line[21]
                 resnum = int(line[22:26].strip())
-                aa = self.threetToOne(resname)
+                aa = RESIDUES3TO1.get(resname.upper())
                 if not aa:
                     continue
 
@@ -251,17 +252,6 @@ class ProtCrankPep(EMProtocol):
                 seqDict[(chain, resnum)] = aa
 
         return seqDict
-
-
-    def threetToOne(self, resname):
-        """Convert 3-letter amino acid code to 1-letter."""
-        aaDict = {
-            'ALA':'A', 'CYS':'C', 'ASP':'D', 'GLU':'E', 'PHE':'F', 'GLY':'G',
-            'HIS':'H', 'ILE':'I', 'LYS':'K', 'LEU':'L', 'MET':'M', 'ASN':'N',
-            'PRO':'P', 'GLN':'Q', 'ARG':'R', 'SER':'S', 'THR':'T', 'VAL':'V',
-            'TRP':'W', 'TYR':'Y'
-        }
-        return aaDict.get(resname.upper())
 
     def rankedFiles(self, directory):
         allFiles = os.listdir(directory)
