@@ -256,7 +256,8 @@ class Plugin(pwchemPlugin):
 												 'RINGTAIL_INSTALLED'). \
 			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install --no-deps '
 								 f'{MEEKO_DIC["name"]}=={MEEKO_DIC["version"]} prody==2.4', 'MEEKO_INSTALLED'). \
-			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && conda install -y gemmi==0.7.3', 'MEEKO_DEPS_INSTALLED'). \
+			addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && conda install -y conda-forge::gemmi==0.7.3',
+								 'MEEKO_DEPS_INSTALLED'). \
 			addPackage(env, dependencies=['conda'], default=default)
 
 	@classmethod
