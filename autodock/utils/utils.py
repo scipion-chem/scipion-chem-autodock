@@ -68,3 +68,27 @@ def splitSDF(sdfFile, oriName=None, oDir=None):
     molDic = {molName: [(sdfFile, confFile)]}
 
   return molDic
+
+def parseDockedPDBQT(pdbqtFile):
+  dockedDic = {}
+  towrite = ''
+  with open(pdbqtFile) as fIn:
+    for line in fIn:
+      if line.startswith('MODEL'):
+        if towrite != '':
+          newFile = pdbqtFile.replace('.pdbqt', '_{}.pdbqt'.format(modelId))
+          dockedDic[modelId] = {'file': newFile, 'energy': energy}
+          with open(newFile, 'w') as f:
+            f.write(towrite)
+        towrite = ''
+        modelId = line.strip().split()[1]
+      elif line.startswith('REMARK VINA RESULT:'):
+        energy = line.split()[3]
+      else:
+        towrite += line
+  if towrite:
+    newFile = pdbqtFile.replace('.pdbqt', '_{}.pdbqt'.format(modelId))
+    dockedDic[modelId] = {'file': newFile, 'energy': energy}
+    with open(newFile, 'w') as f:
+      f.write(towrite)
+  return dockedDic

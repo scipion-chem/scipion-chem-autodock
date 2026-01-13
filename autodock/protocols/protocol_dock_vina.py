@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os, shutil
+import os
 
 from pyworkflow.protocol import params
 import pyworkflow.object as pwobj
@@ -39,6 +39,7 @@ from autodock import Plugin as autodockPlugin
 from autodock.protocols.protocol_autodock import ProtChemAutodockBase
 from autodock.constants import VINA_DIC, VINA, SCRUBBER_DIC
 from autodock.objects import RingtailDatabase
+from autodock.utils import parseDockedPDBQT
 
 meekoScript = 'meeko_preparation.py'
 scriptName = 'vina_docking.py'
@@ -165,7 +166,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
           dockFiles = self.getDockedLigandsFiles(pocketDir)
           for dockFile in dockFiles:
               molName = getBaseName(dockFile)
-              pocketDic[molName] = self.parseDockedPDBQT(dockFile)
+              pocketDic[molName] = parseDockedPDBQT(dockFile)
 
           for smallMol in self.inputSmallMolecules.get():
               molName = smallMol.getUniqueName(conf=True)
@@ -279,30 +280,6 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
         for mf in molFiles:
             ds.append(os.path.dirname(mf))
         return list(set(ds))
-
-    def parseDockedPDBQT(self, pdbqtFile):
-        dockedDic = {}
-        towrite = ''
-        with open(pdbqtFile) as fIn:
-            for line in fIn:
-                if line.startswith('MODEL'):
-                    if towrite != '':
-                        newFile = pdbqtFile.replace(PDBQText, '_{}.pdbqt'.format(modelId))
-                        dockedDic[modelId] = {'file': newFile, 'energy': energy}
-                        with open(newFile, 'w') as f:
-                            f.write(towrite)
-                    towrite = ''
-                    modelId = line.strip().split()[1]
-                elif line.startswith('REMARK VINA RESULT:'):
-                    energy = line.split()[3]
-                else:
-                    towrite += line
-        if towrite:
-            newFile = pdbqtFile.replace(PDBQText, '_{}.pdbqt'.format(modelId))
-            dockedDic[modelId] = {'file': newFile, 'energy': energy}
-            with open(newFile, 'w') as f:
-                f.write(towrite)
-        return dockedDic
 
     def getDockedLigandsFiles(self, outDir):
         dockFiles = []

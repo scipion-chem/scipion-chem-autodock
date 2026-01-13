@@ -184,7 +184,7 @@ class Plugin(pwchemPlugin):
 		openCLVersion = '-DOPENCL_3_0' if cls.getOpenCLVersion() == '3.0' else '-DOPENCL_2_0'
 
 		# Cloning AutoDock-VinaGPU
-		installer.getCloneCommand('https://github.com/DeltaGroupNJUPT/Vina-GPU-2.1.git',
+		installer.getCloneCommand(f'https://github.com/DeltaGroupNJUPT/Vina-GPU-{VINAGPU_DIC["version"]}.git',
 															binaryFolderName=cls._vinagpuBinary, targeName='VINA_GPU_CLONED')
 
 		# Downloading and extracting Boost library
@@ -203,13 +203,15 @@ class Plugin(pwchemPlugin):
 		makefileModifier = os.path.join(os.path.dirname(__file__), 'utils', 'modify_atdvinagpu_makefile.py')
 
 		# Defining AutoDock-VinaGPU makefile location
-		softwares = ['AutoDock-Vina-GPU-2.1', 'QuickVina2-GPU-2.1', 'QuickVina-W-GPU-2.1']
+		softwares = [f'AutoDock-Vina-GPU-{VINAGPU_DIC["version"]}',
+								 f'QuickVina2-GPU-{VINAGPU_DIC["version"]}',
+								 f'QuickVina-W-GPU-{VINAGPU_DIC["version"]}']
 
 		for i, soft in enumerate(softwares):
 				softDir = os.path.join(cls._vinagpuBinary, soft)
 				makefile = os.path.join(softDir, 'Makefile')
 				softBin = f'{soft[:-2]}-{soft[-1]}'
-				oldStrConfig = "/home/shidi/Vina-GPU-2.1"
+				oldStrConfig = f"/home/shidi/Vina-GPU-{VINAGPU_DIC['version']}"
 
 				# Modifying makefile and compiling
 				installer.addCommand(f"{cls.getEnvActivationCommand(VINAGPU_DIC)} && python3 {makefileModifier} "
@@ -313,6 +315,26 @@ class Plugin(pwchemPlugin):
 			insistentRun(protocol, program, args, **kwargs)
 		else:
 			print('No autodock_gpu binary was found in {}'.format(progDir))
+
+	@classmethod
+	def runVinaGPU(cls, protocol, program, args):
+		""" Run Vina GPU command from a given protocol """
+		progPath = cls.getVinaGPUBinary(program)
+		progDir = os.path.dirname(progPath)
+
+		if os.path.exists(progPath):
+			kwargs = {"cwd": progDir}
+			insistentRun(protocol, progPath, args, **kwargs)
+		else:
+
+			print('No Vina GPU binary was found in {}'.format(progDir))
+
+	@classmethod
+	def getVinaGPUBinary(cls, program):
+		progBin = f'{program}-GPU-{VINAGPU_DIC["version"]}'
+		progDir = pwchemPlugin.getProgramHome(VINAGPU_DIC, path=f'AutoDock-VinaGPU/{progBin}')
+		progPath = os.path.join(progDir, f'{progBin[:-2]}-{progBin[-1]}')
+		return progPath
 
 	@classmethod
 	def runVina(cls, protocol, program="vina", args=None, cwd=None):
