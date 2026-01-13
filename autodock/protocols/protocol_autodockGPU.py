@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os, glob
+import os, glob, re
 
 from pyworkflow.protocol.params import IntParam, FloatParam, BooleanParam, \
   LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam
@@ -304,10 +304,8 @@ molecular dynamics simulations."""
     for smallMol in mols:
       molFile = smallMol.getFileName()
       molName = getBaseName(molFile)
-      matchingKeys = [
-          k for k in pocketDic
-          if k == molName or k.startswith(molName + '-') or k.startswith('g') and molName in k
-      ]
+      pattern = re.compile(rf'^(?:{re.escape(molName)}(?:-|$)|g_.*\b{re.escape(molName)}\b)')
+      matchingKeys = [k for k in pocketDic if pattern.search(k)]
       if not matchingKeys:
           continue
 
