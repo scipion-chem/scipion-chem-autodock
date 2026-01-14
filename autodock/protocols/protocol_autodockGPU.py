@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os, glob
+import os, glob, re
 
 from pyworkflow.protocol.params import IntParam, FloatParam, BooleanParam, \
   LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam
@@ -229,7 +229,6 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
         with open(pdbqtFile, 'w') as f:
           f.write(pocketDic[molName][modelId]['pdb'])
         pocketDic[molName][modelId]['file'] = pdbqtFile
-
     molLists[it] = [pocketDic]
 
   def performOutputCreation(self, mols, molLists, it, pocketDic, gridId, recFile):
@@ -237,8 +236,13 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     for smallMol in mols:
       molFile = smallMol.getFileName()
       molName = getBaseName(molFile)
-      if molName in pocketDic:
-        molDic = pocketDic[molName]
+      pattern = re.compile(rf'^(?:{re.escape(molName)}(?:-|$)|g_.*\b{re.escape(molName)}\b)')
+      matchingKeys = [k for k in pocketDic if pattern.search(k)]
+      if not matchingKeys:
+          continue
+
+      for key in matchingKeys:
+        molDic = pocketDic[key]
 
         for posId in molDic:
           newSmallMol = SmallMolecule()
