@@ -91,26 +91,6 @@ class GridADT(data.EMFile):
     def getFilesDirectory(self):
         return '/'.join(self.getProteinFile().split('/')[:-1])
 
-class SetOfGridADT(data.EMSet):
-    """ Set of Binding sites """
-    ITEM_TYPE = GridADT
-
-    def __init__(self, filename=None, **kwargs):
-        super().__init__(filename, **kwargs)
-
-    def __str__(self):
-        s = '{} ({} items)'.format(self.getClassName(), self.getSize())
-        return s
-
-    def clone(self):
-        clone = self.getClass()()
-        clone.copy(self, ignoreAttrs=[])
-        return clone
-
-    def append(self, item, update=False):
-        super().append(item)
-
-
 class RingtailDatabase(data.EMFile):
     """A Scipion object to refer to a RingTail virtual screening database"""
     def __init__(self, receptorFile=None, dbType=ADGPU, **kwargs):
