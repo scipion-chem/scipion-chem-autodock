@@ -181,7 +181,7 @@ class Plugin(pwchemPlugin):
 
 		# Defining GPU platform and OpenCL version
 		gpuPlatform = '-DNVIDIA_PLATFORM' if cls.getGPUPlatform() == 'nvidia' else '-DAMD_PLATFORM'
-		openCLVersion = '-DOPENCL_3_0' if cls.getOpenCLVersion() == '3.0' else '-DOPENCL_2_0'
+		openCLVersion = '-DOPENCL_2_0' if cls.getOpenCLVersion() == '2.0' else '-DOPENCL_3_0'
 
 		# Cloning AutoDock-VinaGPU
 		installer.getCloneCommand(f'https://github.com/DeltaGroupNJUPT/Vina-GPU-{VINAGPU_DIC["version"]}.git',
