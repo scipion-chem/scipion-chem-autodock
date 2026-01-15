@@ -25,6 +25,7 @@
 # **************************************************************************
 
 import os, glob, re
+import shutil
 
 from pyworkflow.protocol.params import IntParam, FloatParam, BooleanParam, \
   LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam
@@ -285,10 +286,10 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
     with open(batchFile, 'w') as f:
       f.write(f'{fldFile}\n')
       for molFn in molFns:
-        molBase = molFn.split('/')[-1]
-        molLink = os.path.join(outDir, molBase)
-        if not os.path.exists(molLink):
-          os.link(molFn, molLink)
+          molBase = os.path.basename(molFn)
+          molCopy = os.path.join(outDir, molBase)
+
+          shutil.copy(molFn, molCopy)
 
         f.write(f'{molBase}\n{getBaseName(molBase)}\n')
     return batchFile
