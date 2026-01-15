@@ -291,7 +291,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
           shutil.copy(molFn, molCopy)
 
-        f.write(f'{molBase}\n{getBaseName(molBase)}\n')
+          f.write(f'{molBase}\n{getBaseName(molBase)}\n')
     return batchFile
 
   def getADGPUArgs(self):
