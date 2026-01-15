@@ -220,7 +220,10 @@ class ProtChemAutodockBase(EMProtocol):
       if molExt == '.pdbqt':
         for molFile in molFiles:
           fnSmall = os.path.abspath(os.path.join(oDir, getBaseFileName(molFile)))
-          os.link(molFile, fnSmall)
+          #os.link(molFile, fnSmall)
+          if os.path.exists(fnSmall):
+              os.remove(fnSmall)
+          shutil.copy(molFile, fnSmall)
       else:
         for molFile in molFiles:
           sdfFile = os.path.join(oDir, getBaseName(molFile) + '.sdf')
