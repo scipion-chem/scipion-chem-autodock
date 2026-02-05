@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-# todo: add the flex res option
+# todo: try whether it works on big GPU memories (on laptop it crashed unknown error)
 
 import os, glob
 
@@ -63,6 +63,7 @@ class ProtChemVinaGPU(ProtChemAutodockBase):
                    help="Add a list of GPU devices that can be used")
 
     super()._defineInput(form)
+    flexGroup = self._defineFlexParams(form)
     form.addParam('remTmp', BooleanParam, label='Remove intermediate files: ', default=True,
                   expertLevel=LEVEL_ADVANCED,
                   help='Whether to remove the intermediate files generate by AutoDock to reduce the memory usage')
@@ -90,7 +91,7 @@ class ProtChemVinaGPU(ProtChemAutodockBase):
   def _insertAllSteps(self):
       inMols = self.inputSmallMolecules.get()
       nt = self.numberOfThreads.get()
-      subsets = makeSubsets(inMols, nt - 1, cloneItem=True)
+      subsets = makeSubsets(inMols, max(nt - 1, 1), cloneItem=True)
 
       cRStep = self._insertFunctionStep(self.convertReceptorStep, prerequisites=[], needsGPU=False)
 
@@ -203,6 +204,10 @@ class ProtChemVinaGPU(ProtChemAutodockBase):
 
   def writeConfigFile(self, pocket):
     fnReceptor = self.getReceptorPDBQT()
+    flexFn = None
+    if self.doFlexRes:
+      flexFn, fnReceptor = self.buildFlexReceptor(fnReceptor)
+
     ligDir = self.getLigConvertedDir()
     outDir = self.getOutputPocketDir(pocket)
 
@@ -212,6 +217,8 @@ class ProtChemVinaGPU(ProtChemAutodockBase):
     confFile = self.getConfigFile(pocket)
     with open(confFile, 'w') as f:
         f.write(f'receptor = {fnReceptor}\n')
+        if flexFn is not None:
+          f.write(f'flex = {flexFn}\n')
         f.write(f'ligand_directory = {ligDir}\n')
         f.write(f'output_directory = {outDir}\n')
 
