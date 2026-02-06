@@ -213,7 +213,7 @@ search and scoring behaviors."""
               pocketDic[molName] = self.parseDockedPDBQT(dockFile)
 
           for smallMol in self.inputSmallMolecules.get():
-              molName = smallMol.getUniqueName(conf=True)
+              molName = smallMol.getUniqueName(grid=False, conf=False, pose=False, dock=False)
               if molName in pocketDic:
                 molDic = pocketDic[molName]
 
