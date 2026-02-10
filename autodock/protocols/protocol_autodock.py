@@ -36,7 +36,7 @@ from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseName, relabelMapAtomsMol2, \
   insistentRun, getBaseFileName, makeSubsets, convertToSdf, calculateCoordLimits, pdbFromASFile
 from pwchem import Plugin as pwchemPlugin
-from pwchem.constants import MGL_DIC, OPENBABEL_DIC
+from pwchem.constants import MGL_DIC, OPENBABEL_DIC, RDKIT_DIC
 
 from autodock import Plugin as autodockPlugin
 from autodock.constants import SCRUBBER_DIC
@@ -134,7 +134,9 @@ class ProtChemAutodockBase(EMProtocol):
       if self.getEnumText('convSoft') == MGL:
         self.performMGLLigConversion(molSet, it)
       else:
-        self.performMeekoLigandConversion(molSet, it, remove=True)
+        molFiles = [mol.getFileName() for mol in molSet]
+        self.performMeekoPrep(molFiles, it, oDir=self.getLigConvertedDirs(it)[0])
+        #self.performMeekoLigandConversion(molSet, it)
 
     def generateGridsStep(self, pocket=None, addLigType=True):
       ligFiles = self.getConvertedLigandsFiles()
@@ -467,6 +469,33 @@ class ProtChemAutodockBase(EMProtocol):
                                               'DOCKED: BEGIN_RES', 'DOCKED: END_RES']:
             molDic[posId]['pdb'] += line[8:]
       return molDic
+
+    def writeMeekoParamsFile(self, molFiles, oDir, hydrate=False, it=None):
+        paramsFile = os.path.abspath(self._getExtraPath('inputParams.txt'))
+        if it is not None:
+            paramsFile = paramsFile.replace('.txt', f'_{it}.txt')
+
+        with open(paramsFile, 'w') as f:
+            f.write(f'ligandFiles:: {" ".join(molFiles)}\n')
+            f.write(f'hydrate:: {hydrate}\n')
+
+            f.write(f'outDir:: {oDir}\n')
+
+        return paramsFile
+
+    def performMeekoPrep(self, molFiles, it, hydrate=False, oDir=None):
+        oDir = self.getPreparedDirPath(it) if oDir is None else oDir
+        if not os.path.exists(oDir):
+            os.makedirs(oDir)
+
+        toConvertFiles = [f for f in molFiles if not f.endswith('.pdbqt')]
+        if len(toConvertFiles) > 0:
+            paramsFile = self.writeMeekoParamsFile(toConvertFiles, oDir, hydrate, it)
+            autodockPlugin.runScript(self, 'meeko_preparation.py', paramsFile, RDKIT_DIC)
+
+        pdbqtFiles = [f for f in molFiles if f.endswith('.pdbqt')]
+        for f in pdbqtFiles:
+            shutil.copy(f, os.path.join(oDir, getBaseFileName(f)))
 
     def _validate(self):
       vals = []
