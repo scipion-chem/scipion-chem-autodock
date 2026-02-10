@@ -88,27 +88,7 @@ class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
 
     def preparationStep(self, molSet, it):
         molFiles = [mol.getFileName() for mol in molSet]
-        self.performMeekoPrep(molFiles, it)
-
-    def performMeekoPrep(self, molFiles, it):
-      oDir = self.getPreparedDirPath(it)
-      if not os.path.exists(oDir):
-        os.makedirs(oDir)
-      paramsFile = self.writeParamsFile(molFiles, oDir, it)
-      Plugin.runScript(self, scriptName, paramsFile, RDKIT_DIC)
-
-    def writeParamsFile(self, molFiles, oDir, it=None):
-        paramsFile = os.path.abspath(self._getExtraPath('inputParams.txt'))
-        if it is not None:
-          paramsFile = paramsFile.replace('.txt', f'_{it}.txt')
-
-        with open(paramsFile, 'w') as f:
-          f.write(f'ligandFiles:: {" ".join(molFiles)}\n')
-          f.write(f'hydrate:: {self.hydrate.get()}\n')
-
-          f.write(f'outDir:: {oDir}\n')
-
-        return paramsFile
+        self.performMeekoPrep(molFiles, it, self.hydrate.get())
 
     def _warnings(self):
         return []
