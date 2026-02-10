@@ -36,7 +36,7 @@ from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, generate_gpf, calculate_centerMass, getBaseName, relabelMapAtomsMol2, \
   insistentRun, getBaseFileName, makeSubsets, convertToSdf, calculateCoordLimits, pdbFromASFile
 from pwchem import Plugin as pwchemPlugin
-from pwchem.constants import MGL_DIC, OPENBABEL_DIC
+from pwchem.constants import MGL_DIC, OPENBABEL_DIC, RDKIT_DIC
 
 from autodock import Plugin as autodockPlugin
 from autodock.constants import SCRUBBER_DIC
@@ -137,7 +137,8 @@ class ProtChemAutodockBase(EMProtocol):
       if self.getEnumText('convSoft') == MGL:
         self.performMGLLigConversion(molSet, ligDir)
       else:
-        self.performMeekoLigandConversion(molSet, ligDir, remove=True)
+        molFiles = [mol.getFileName() for mol in molSet]
+        self.performMeekoPrep(molFiles, it, oDir=self.getLigConvertedDirs(it)[0])
 
     def generateGridsStep(self, pocket=None, addLigType=True):
       ligFiles = self.getConvertedLigandsFiles()
@@ -212,28 +213,6 @@ class ProtChemAutodockBase(EMProtocol):
           fnSmall = self.convertLigand2PDBQT(mol, oDir)[0]
         convMols.append(fnSmall)
       return convMols
-
-    def performMeekoLigandConversion(self, inMols, oDir, remove=True):
-      os.makedirs(oDir, exist_ok=True)
-      molFiles = [mol.getFileName() for mol in inMols]
-
-      molExt = os.path.splitext(molFiles[-1])[-1]
-      if molExt == '.pdbqt':
-        for molFile in molFiles:
-          fnSmall = os.path.abspath(os.path.join(oDir, getBaseFileName(molFile)))
-          os.link(molFile, fnSmall)
-      else:
-        for molFile in molFiles:
-          sdfFile = os.path.join(oDir, getBaseName(molFile) + '.sdf')
-          convertToSdf(self, molFile, sdfFile)
-
-          oFile = os.path.abspath(os.path.join(oDir, getBaseName(sdfFile) + PDBQText))
-          args = f'-i {sdfFile} -o {oFile} '
-          try:
-            autodockPlugin.runMeekoLigand(self, args)
-          except: pass
-          if remove:
-            os.remove(sdfFile)
 
     def convertLigand2PDBQT(self, smallMol, oDir, pose=False, popen=False):
         '''Convert ligand to pdbqt using prepare_ligand4 of ADT'''
@@ -466,6 +445,43 @@ class ProtChemAutodockBase(EMProtocol):
                                               'DOCKED: BEGIN_RES', 'DOCKED: END_RES']:
             molDic[posId]['pdb'] += line[8:]
       return molDic
+
+    def writeMeekoParamsFile(self, molFiles, oDir, hydrate=False, it=None):
+        paramsFile = os.path.abspath(self._getExtraPath('inputParams.txt'))
+        if it is not None:
+            paramsFile = paramsFile.replace('.txt', f'_{it}.txt')
+
+        with open(paramsFile, 'w') as f:
+            f.write(f'ligandFiles:: {" ".join(molFiles)}\n')
+            f.write(f'hydrate:: {hydrate}\n')
+
+            f.write(f'outDir:: {oDir}\n')
+
+        return paramsFile
+
+    def filesToSdf(self, molFiles, oDir):
+        sdfFiles = []
+        for molFile in molFiles:
+          sdfFile = os.path.join(oDir, getBaseName(molFile) + '.sdf')
+          convertToSdf(self, molFile, sdfFile)
+          sdfFiles.append(sdfFile)
+        return sdfFiles
+
+    def performMeekoPrep(self, molFiles, it, hydrate=False, oDir=None, remove=True):
+        oDir = self.getPreparedDirPath(it) if oDir is None else oDir
+        os.makedirs(oDir, exist_ok=True)
+
+        toConvertFiles = [f for f in molFiles if not f.endswith('.pdbqt')]
+        if len(toConvertFiles) > 0:
+            sdfFiles = self.filesToSdf(toConvertFiles, oDir)
+            paramsFile = self.writeMeekoParamsFile(sdfFiles, oDir, hydrate, it)
+            autodockPlugin.runScript(self, 'meeko_preparation.py', paramsFile, RDKIT_DIC)
+            if remove:
+                [os.remove(sdfFile) for sdfFile in sdfFiles]
+
+        pdbqtFiles = [f for f in molFiles if f.endswith('.pdbqt')]
+        for f in pdbqtFiles:
+            shutil.copy(f, os.path.join(oDir, getBaseFileName(f)))
 
     def _validate(self):
       vals = []
