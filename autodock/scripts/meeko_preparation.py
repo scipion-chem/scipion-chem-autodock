@@ -63,6 +63,7 @@ if __name__ == "__main__":
     hydra = eval(paramsDic['hydrate'])
 
     outDir = paramsDic['outDir']
+    writeOut = paramsDic['writeOut'] if 'writeOut' in paramsDic else False
 
 
 #####################################################################
@@ -79,8 +80,9 @@ if __name__ == "__main__":
             preparator.write_pdbqt_file(outFile)
             outFiles.append(outFile)
 
-        with open(os.path.join(outDir, 'meeko_files.txt'), 'w') as f:
-            f.write('\n'.join(outFiles))
+        if writeOut:
+            with open(os.path.join(outDir, 'meeko_files.txt'), 'w') as f:
+                f.write('\n'.join(outFiles))
 
     else:
         print('None of the input molecules could be read by RDKit.\n'

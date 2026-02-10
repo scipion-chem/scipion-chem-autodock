@@ -188,7 +188,6 @@ class ProtChemAutodockBase(EMProtocol):
       else:
         molFiles = [mol.getFileName() for mol in molSet]
         self.performMeekoPrep(molFiles, it, oDir=self.getLigConvertedDirs(it)[0])
-        #self.performMeekoLigandConversion(molSet, it)
 
     def generateGridsStep(self, pocket=None, addLigType=True):
       ligFiles = self.getConvertedLigandsFiles()
@@ -264,31 +263,6 @@ class ProtChemAutodockBase(EMProtocol):
           fnSmall = self.convertLigand2PDBQT(mol, oDir)[0]
         convMols.append(fnSmall)
       return convMols
-
-    def performMeekoLigandConversion(self, inMols, it, remove=True):
-      oDir = self.getLigConvertedDirs(it)[0]
-      os.makedirs(oDir, exist_ok=True)
-      molFiles = [mol.getFileName() for mol in inMols]
-
-      molExt = os.path.splitext(molFiles[-1])[-1]
-      if molExt == '.pdbqt':
-        for molFile in molFiles:
-          fnSmall = os.path.abspath(os.path.join(oDir, getBaseFileName(molFile)))
-          os.link(molFile, fnSmall)
-      else:
-        for molFile in molFiles:
-          sdfFile = os.path.join(oDir, getBaseName(molFile) + '.sdf')
-          convertToSdf(self, molFile, sdfFile)
-
-          oFile = os.path.abspath(os.path.join(oDir, getBaseName(sdfFile) + PDBQText))
-          args = f'-i {sdfFile} -o {oFile} '
-          try:
-            autodockPlugin.runMeekoLigand(self, args)
-          except Exception as e:
-              print(f"Meeko failed for {sdfFile}: {e}")
-              raise
-          if remove:
-            os.remove(sdfFile)
 
     def convertLigand2PDBQT(self, smallMol, oDir, pose=False, popen=False):
         '''Convert ligand to pdbqt using prepare_ligand4 of ADT'''
@@ -535,15 +509,25 @@ class ProtChemAutodockBase(EMProtocol):
 
         return paramsFile
 
-    def performMeekoPrep(self, molFiles, it, hydrate=False, oDir=None):
+    def filesToSdf(self, molFiles, oDir):
+        sdfFiles = []
+        for molFile in molFiles:
+          sdfFile = os.path.join(oDir, getBaseName(molFile) + '.sdf')
+          convertToSdf(self, molFile, sdfFile)
+          sdfFiles.append(sdfFile)
+        return sdfFiles
+
+    def performMeekoPrep(self, molFiles, it, hydrate=False, oDir=None, remove=True):
         oDir = self.getPreparedDirPath(it) if oDir is None else oDir
-        if not os.path.exists(oDir):
-            os.makedirs(oDir)
+        os.makedirs(oDir, exist_ok=True)
 
         toConvertFiles = [f for f in molFiles if not f.endswith('.pdbqt')]
         if len(toConvertFiles) > 0:
-            paramsFile = self.writeMeekoParamsFile(toConvertFiles, oDir, hydrate, it)
+            sdfFiles = self.filesToSdf(toConvertFiles, oDir)
+            paramsFile = self.writeMeekoParamsFile(sdfFiles, oDir, hydrate, it)
             autodockPlugin.runScript(self, 'meeko_preparation.py', paramsFile, RDKIT_DIC)
+            if remove:
+                [os.remove(sdfFile) for sdfFile in sdfFiles]
 
         pdbqtFiles = [f for f in molFiles if f.endswith('.pdbqt')]
         for f in pdbqtFiles:
