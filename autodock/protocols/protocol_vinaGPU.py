@@ -96,8 +96,10 @@ class ProtChemVinaGPU(ProtChemAutodockBase):
       cRStep = self._insertFunctionStep(self.convertReceptorStep, prerequisites=[], needsGPU=False)
 
       cSteps = []
+
       for it, molSet in enumerate(subsets):
-        cSteps.append(self._insertFunctionStep(self.convertLigandsStep, molSet, it, prerequisites=[], needsGPU=False))
+        cSteps.append(self._insertFunctionStep(self.convertLigandsStep, molSet, it,
+                                               self.getLigConvertedDir(), prerequisites=[], needsGPU=False))
 
       dockSteps = []
       gridReqs = [cRStep] + cSteps
@@ -110,16 +112,6 @@ class ProtChemVinaGPU(ProtChemAutodockBase):
             dockSteps.append(dockId)
 
       self._insertFunctionStep(self.createOutputStep, prerequisites=dockSteps, needsGPU=False)
-
-  def convertLigandsStep(self, molSet, it):
-    ligDir = self.getLigConvertedDir()
-    if not os.path.exists(ligDir):
-      os.mkdir(ligDir)
-
-    if self.getEnumText('convSoft') == MGL:
-      self.performMGLLigConversion(molSet, ligDir)
-    else:
-      self.performMeekoLigandConversion(molSet, ligDir, remove=True)
 
   def dockStep(self, pocket=None):
       confFile, valid = self.writeConfigFile(pocket)

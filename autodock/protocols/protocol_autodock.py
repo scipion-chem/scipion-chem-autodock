@@ -129,16 +129,15 @@ class ProtChemAutodockBase(EMProtocol):
         self.convertReceptor2PDB(receptorFile)
         shutil.copy(receptorFile, self.getReceptorPDBQT())
 
-    def convertLigandsStep(self, molSet, it):
-      ligDir = self.getLigConvertedDirs(it)[0]
-      if not os.path.exists(ligDir):
-        os.mkdir(ligDir)
+    def convertLigandsStep(self, molSet, it, ligDir=None):
+      ligDir = self.getLigConvertedDirs(it)[0] if ligDir is None else ligDir
+      os.makedirs(ligDir, exist_ok=True)
 
       if self.getEnumText('convSoft') == MGL:
         self.performMGLLigConversion(molSet, ligDir)
       else:
         molFiles = [mol.getFileName() for mol in molSet]
-        self.performMeekoPrep(molFiles, it, oDir=self.getLigConvertedDirs(it)[0])
+        self.performMeekoPrep(molFiles, it, oDir=ligDir)
 
     def generateGridsStep(self, pocket=None, addLigType=True):
       ligFiles = self.getConvertedLigandsFiles()
