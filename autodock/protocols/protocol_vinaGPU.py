@@ -24,8 +24,6 @@
 # *
 # **************************************************************************
 
-# todo: try whether it works on big GPU memories (on laptop it crashed unknown error)
-
 import os, glob
 
 from pyworkflow.protocol.params import IntParam, FloatParam, BooleanParam, \
@@ -63,7 +61,7 @@ class ProtChemVinaGPU(ProtChemAutodockBase):
                    help="Add a list of GPU devices that can be used")
 
     super()._defineInput(form)
-    flexGroup = self._defineFlexParams(form)
+    #self._defineFlexParams(form)
     form.addParam('remTmp', BooleanParam, label='Remove intermediate files: ', default=True,
                   expertLevel=LEVEL_ADVANCED,
                   help='Whether to remove the intermediate files generate by AutoDock to reduce the memory usage')
@@ -136,7 +134,7 @@ class ProtChemVinaGPU(ProtChemAutodockBase):
         pocketDic[molName] = parseDockedPDBQT(dockFile)
 
       for smallMol in self.inputSmallMolecules.get():
-        molName = smallMol.getUniqueName(conf=True)
+        molName = getBaseName(smallMol.getFileName())
         if molName in pocketDic:
           molDic = pocketDic[molName]
 
@@ -197,8 +195,8 @@ class ProtChemVinaGPU(ProtChemAutodockBase):
   def writeConfigFile(self, pocket):
     fnReceptor = self.getReceptorPDBQT()
     flexFn = None
-    if self.doFlexRes:
-      flexFn, fnReceptor = self.buildFlexReceptor(fnReceptor)
+    #if self.doFlexRes:
+      #flexFn, fnReceptor = self.buildFlexReceptor(fnReceptor)
 
     ligDir = self.getLigConvertedDir()
     outDir = self.getOutputPocketDir(pocket)
@@ -230,9 +228,6 @@ class ProtChemVinaGPU(ProtChemAutodockBase):
 
         if self.searchDepth.get() > 1:
           f.write(f'search_depth = {self.searchDepth.get()}\n')
-
-        # if self.doFlexRes:
-        #   args += f'-F {flexReceptorFn} '
 
     return confFile, valid
 

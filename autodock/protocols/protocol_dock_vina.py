@@ -169,7 +169,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
               pocketDic[molName] = parseDockedPDBQT(dockFile)
 
           for smallMol in self.inputSmallMolecules.get():
-              molName = smallMol.getUniqueName(grid=False, conf=False, pose=False, dock=False)
+              molName = getBaseName(smallMol.getFileName())
               if molName in pocketDic:
                 molDic = pocketDic[molName]
 
