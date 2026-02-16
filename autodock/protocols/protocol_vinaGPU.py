@@ -26,18 +26,13 @@
 
 import os, glob
 
-from pyworkflow.protocol.params import IntParam, FloatParam, BooleanParam, \
+from pyworkflow.protocol.params import IntParam, BooleanParam, \
   LEVEL_ADVANCED, USE_GPU, GPU_LIST, StringParam, EnumParam
-import pyworkflow.object as pwobj
-from pyworkflow.utils.path import makePath
 
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import getBaseName, performBatchThreading, replaceInFiles, makeSubsets, \
-  calculate_centerMass, calculateCoordLimits
+from pwchem.utils import makeSubsets, calculate_centerMass, calculateCoordLimits
 
 from autodock import Plugin as autodockPlugin
-from autodock.protocols.protocol_autodock import ProtChemAutodockBase
-from autodock.utils import parseDockedPDBQT
+from autodock.protocols.protocol_dock_vina import ProtChemVinaDocking
 
 MGL = 'MGLTools'
 
@@ -45,7 +40,7 @@ ADT, QUICK2, QUICKW = 0, 1, 2
 DOCKSOFT = ['AutoDock-Vina', 'QuickVina2', 'QuickVina-W']
 
 
-class ProtChemVinaGPU(ProtChemAutodockBase):
+class ProtChemVinaGPU(ProtChemVinaDocking):
   """Perform a docking experiment with Vina-GPU https://github.com/DeltaGroupNJUPT/Vina-GPU-2.1"""
   _label = 'Vina-GPU docking'
   _program = ""
@@ -121,54 +116,7 @@ class ProtChemVinaGPU(ProtChemAutodockBase):
 
   def createOutputStep(self):
     recFile = self.getReceptorPDBQT()
-    outDir = self._getPath('outputLigands')
-    makePath(outDir)
-    outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
-
-    for pocketDir in self.getPocketDirs():
-      pocketDic = {}
-      gridId = self.getGridId(pocketDir)
-      dockFiles = self.getDockedLigandsFiles(pocketDir)
-      for dockFile in dockFiles:
-        molName = getBaseName(dockFile)
-        pocketDic[molName] = parseDockedPDBQT(dockFile)
-
-      for smallMol in self.inputSmallMolecules.get():
-        molName = getBaseName(smallMol.getFileName())
-        if molName in pocketDic:
-          molDic = pocketDic[molName]
-
-          for posId in molDic:
-              newSmallMol = SmallMolecule()
-              newSmallMol.copy(smallMol, copyId=False)
-              newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
-
-              poseFile = molDic[posId]['file']
-              if os.path.getsize(poseFile) > 0:
-
-                filename = f'g{gridId}_{os.path.split(poseFile)[-1]}'
-                newPoseFile = os.path.join(outDir, filename)
-                os.rename(poseFile, newPoseFile)
-
-                newSmallMol.poseFile.set(newPoseFile)
-                newSmallMol.setPoseId(posId)
-                newSmallMol.gridId.set(gridId)
-                newSmallMol.setMolClass('VinaGPU')
-                newSmallMol.setDockId(self.getObjId())
-
-                outputSet.append(newSmallMol)
-
-        else:
-          print(f'Molecule {molName} was not found in the docking results')
-
-      if self.remTmp.get():
-        self.removeTmpFiles(pocketDir)
-
-    outputSet.updateMolClass()
-    outputSet.setProteinFile(recFile)
-    outputSet.setDocked(True)
-    self._defineOutputs(outputSmallMolecules=outputSet)
-    self._defineSourceRelation(self.inputSmallMolecules, outputSet)
+    self.createMolSetOutput(recFile, 'VinaGPU')
 
     self.cleanTmpFiles()
 

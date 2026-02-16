@@ -140,69 +140,72 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
               args = "--batch {}/*.pdbqt --maps {} --config {}".format(molDir, self.getReceptorName(), paramsFile)  # batch cannot be read from config
               self.runJob(pwchem_plugin.getEnvPath(VINA_DIC, 'bin/vina'), args, cwd=outDir)
 
-    def createOutputStep(self):
-      recFile = self.getReceptorPDBQT()
-      if self.ringtailOutput.get():
-        nt = self.numberOfThreads.get()
-        outDir = os.path.abspath(self._getExtraPath())
-        args = f'write --file_path {outDir} --recursive -o ringtail.db -m vina -sr -rf {os.path.abspath(recFile)} ' \
-               f'-mpr {nt} --overwrite'
-        autodockPlugin.runRingtail(self, args, cwd=self._getPath())
-
-        outputDB = RingtailDatabase(filename=self._getPath('ringtail.db'))
-        outputDB.setReceptorFile(recFile)
-        outputDB.setType(VINA)
-        outputDB.createSumFile(self.getSumPath())
-        outputDB.performBaseFilter()
-        self._defineOutputs(outputRingtail=outputDB)
-      else:
+    def createMolSetOutput(self, recFile, dockName, doFlexRes=False):
         outDir = self._getPath('outputLigands')
         makePath(outDir)
         outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
 
         for pocketDir in self.getPocketDirs():
-          pocketDic = {}
-          gridId = self.getGridId(pocketDir)
-          dockFiles = self.getDockedLigandsFiles(pocketDir)
-          for dockFile in dockFiles:
-              molName = getBaseName(dockFile)
-              pocketDic[molName] = parseDockedPDBQT(dockFile)
+            pocketDic = {}
+            gridId = self.getGridId(pocketDir)
+            dockFiles = self.getDockedLigandsFiles(pocketDir)
+            for dockFile in dockFiles:
+                molName = getBaseName(dockFile)
+                pocketDic[molName] = parseDockedPDBQT(dockFile)
 
-          for smallMol in self.inputSmallMolecules.get():
-              molName = getBaseName(smallMol.getFileName())
-              if molName in pocketDic:
-                molDic = pocketDic[molName]
+            for smallMol in self.inputSmallMolecules.get():
+                molName = getBaseName(smallMol.getFileName())
+                if molName in pocketDic:
+                    molDic = pocketDic[molName]
 
-                for posId in molDic:
-                  newSmallMol = SmallMolecule()
-                  newSmallMol.copy(smallMol, copyId=False)
-                  newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
+                    for posId in molDic:
+                        newSmallMol = SmallMolecule()
+                        newSmallMol.copy(smallMol, copyId=False)
+                        newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
 
-                  poseFile = molDic[posId]['file']
-                  if os.path.getsize(poseFile) > 0:
-                    if self.doFlexRes:
-                      poseFile, curRecFile = self.makeFlexPoseFiles(poseFile, recFile)
-                      newSmallMol.setProteinFile(os.path.relpath(curRecFile))
+                        poseFile = molDic[posId]['file']
+                        if os.path.getsize(poseFile) > 0:
+                            if doFlexRes:
+                                poseFile, curRecFile = self.makeFlexPoseFiles(poseFile, recFile)
+                                newSmallMol.setProteinFile(os.path.relpath(curRecFile))
 
-                    filename = f'g{gridId}_{os.path.split(poseFile)[-1]}'
-                    newPoseFile = os.path.join(outDir, filename)
-                    os.rename(poseFile, newPoseFile)
+                            filename = f'g{gridId}_{os.path.split(poseFile)[-1]}'
+                            newPoseFile = os.path.join(outDir, filename)
+                            os.rename(poseFile, newPoseFile)
 
-                    newSmallMol.poseFile.set(newPoseFile)
-                    newSmallMol.setPoseId(posId)
-                    newSmallMol.gridId.set(gridId)
-                    newSmallMol.setMolClass('AutodockVina')
-                    newSmallMol.setDockId(self.getObjId())
+                            newSmallMol.poseFile.set(newPoseFile)
+                            newSmallMol.setPoseId(posId)
+                            newSmallMol.gridId.set(gridId)
+                            newSmallMol.setMolClass(dockName)
+                            newSmallMol.setDockId(self.getObjId())
 
-                    outputSet.append(newSmallMol)
-              else:
-                print(f'Molecule {molName} was not found in the docking results')
+                            outputSet.append(newSmallMol)
+                else:
+                    print(f'Molecule {molName} was not found in the docking results')
 
         outputSet.updateMolClass()
         outputSet.setProteinFile(recFile)
         outputSet.setDocked(True)
         self._defineOutputs(outputSmallMolecules=outputSet)
         self._defineSourceRelation(self.inputSmallMolecules, outputSet)
+
+    def createOutputStep(self):
+      recFile = self.getReceptorPDBQT()
+      if self.ringtailOutput.get():
+            nt = self.numberOfThreads.get()
+            outDir = os.path.abspath(self._getExtraPath())
+            args = f'write --file_path {outDir} --recursive -o ringtail.db -m vina -sr -rf {os.path.abspath(recFile)} ' \
+                   f'-mpr {nt} --overwrite'
+            autodockPlugin.runRingtail(self, args, cwd=self._getPath())
+
+            outputDB = RingtailDatabase(filename=self._getPath('ringtail.db'))
+            outputDB.setReceptorFile(recFile)
+            outputDB.setType(VINA)
+            outputDB.createSumFile(self.getSumPath())
+            outputDB.performBaseFilter()
+            self._defineOutputs(outputRingtail=outputDB)
+      else:
+            self.createMolSetOutput(recFile, 'AutodockVina', self.doFlexRes.get())
 
       self.cleanTmpFiles()
 
