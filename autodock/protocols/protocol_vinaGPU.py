@@ -56,6 +56,9 @@ class ProtChemVinaGPU(ProtChemVinaDocking):
                    help="Add a list of GPU devices that can be used")
 
     super()._defineInput(form)
+    # MGLTools as default pdbqt converter (some Meeko atom types are not understood)
+    convSoftParam = form.getParam('convSoft')
+    convSoftParam.setDefault(1)
     #self._defineFlexParams(form)
     form.addParam('remTmp', BooleanParam, label='Remove intermediate files: ', default=True,
                   expertLevel=LEVEL_ADVANCED,

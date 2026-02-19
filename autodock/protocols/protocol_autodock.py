@@ -218,7 +218,7 @@ class ProtChemAutodockBase(EMProtocol):
         inFile = smallMol.getFileName() if not pose else smallMol.getPoseFile()
         if os.path.splitext(inFile)[1] not in [PDBext, '.mol2', '.pdbq']:
             # Convert to formats recognized by ADT
-            outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
+            outName, outDir = getBaseName(inFile), os.path.abspath(self._getTmpPath())
             args = ' -i "{}" -of mol2 --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
                                                                                os.path.abspath(outDir), outName)
             pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=popen)
@@ -229,7 +229,7 @@ class ProtChemAutodockBase(EMProtocol):
           os.mkdir(oDir)
 
         inExt = os.path.splitext(os.path.basename(inFile))[1]
-        oFile = os.path.abspath(os.path.join(oDir, smallMol.getUniqueName() + PDBQText))
+        oFile = os.path.abspath(os.path.join(oDir, getBaseName(inFile) + PDBQText))
 
         if inExt != PDBQText:
           args = '-l {} -o {}'.format(inFile, oFile)
