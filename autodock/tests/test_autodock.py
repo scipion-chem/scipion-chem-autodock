@@ -415,7 +415,7 @@ class TestAutoDockScoring(TestAutoDockGPU):
         protScore = self._runScoring(protAutoDock1)
         assertHandle(self.assertIsNotNone, getattr(protScore, 'outputSmallMolecules', None), cwd=protScore.getWorkingDir())
 
-class TestADCP(TestADPrepareReceptor):
+class TestADCrankPep(TestADPrepareReceptor):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -453,7 +453,7 @@ class TestADCP(TestADPrepareReceptor):
         cls.launchProtocol(cls.protPrepareReceptor, wait=True)
 
     @classmethod
-    def _runADCP(cls):
+    def _runADCrankPep(cls):
         cls.protADCP = cls.newProtocol(
             ProtCrankPep,
             inputAtomStruct=cls.protPrepareReceptor.outputStructure,
@@ -464,7 +464,7 @@ class TestADCP(TestADPrepareReceptor):
         return cls.protADCP
 
     def test(self):
-        protADCP = self._runADCP()
+        protADCP = self._runADCrankPep()
         self._waitOutput(protADCP, 'molecules', sleepTime=10)
         (self.assertIsNotNone, getattr(protADCP, 'molecules', None))
 
