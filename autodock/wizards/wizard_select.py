@@ -39,7 +39,7 @@ from pwchem.wizards import *
 from pwchem.utils import RESIDUES1TO3
 
 from autodock.protocols import ProtChemADTPrepareReceptor, ProtChemAutodock, ProtChemVinaDocking, ProtChemAutodockGPU, \
-  ProtEncoderDockScoring, ProtRingtailFilter, ProtChemAutoSiteGenPharmacophore
+  ProtEncoderDockScoring, ProtRingtailFilter, ProtChemAutoSiteGenPharmacophore, ProtChemVinaGPU
 from autodock.viewers import ViewerRingtail
 from autodock import Plugin as autodockPlugin
 
@@ -60,6 +60,11 @@ SelectChainWizardQT().addTarget(protocol=ProtChemVinaDocking,
                                 outputs=['flexChain'])
 
 SelectChainWizardQT().addTarget(protocol=ProtChemAutodockGPU,
+                                targets=['flexChain'],
+                                inputs=[{'fromReceptor': ['inputAtomStruct', 'inputStructROIs']}],
+                                outputs=['flexChain'])
+
+SelectChainWizardQT().addTarget(protocol=ProtChemVinaGPU,
                                 targets=['flexChain'],
                                 inputs=[{'fromReceptor': ['inputAtomStruct', 'inputStructROIs']}],
                                 outputs=['flexChain'])
@@ -89,6 +94,11 @@ SelectResidueWizardQT().addTarget(protocol=ProtChemAutodockGPU,
                                   inputs=[{'fromReceptor': ['inputAtomStruct', 'inputStructROIs']}, 'flexChain'],
                                   outputs=['flexPosition'])
 
+SelectResidueWizardQT().addTarget(protocol=ProtChemVinaGPU,
+                                  targets=['flexPosition'],
+                                  inputs=[{'fromReceptor': ['inputAtomStruct', 'inputStructROIs']}, 'flexChain'],
+                                  outputs=['flexPosition'])
+
 SelectMultiLigandWizard().addTarget(protocol=ProtChemADTPrepareReceptor,
                                targets=['het2keep'],
                                inputs=['inputAtomStruct'],
@@ -100,7 +110,10 @@ SelectAttributeWizard().addTarget(protocol=ProtEncoderDockScoring,
                                   outputs=['scoreName'])
 
 class AddFlexibleWizard(EmWizard):
-  _targets = [(ProtChemAutodock, ['addFlex']), (ProtChemVinaDocking, ['addFlex']), (ProtChemAutodockGPU, ['addFlex'])]
+  _targets = [(ProtChemAutodock, ['addFlex']),
+              (ProtChemVinaDocking, ['addFlex']),
+              (ProtChemAutodockGPU, ['addFlex']),
+              (ProtChemVinaGPU, ['addFlex'])]
 
   def show(self, form, *params):
     protocol = form.protocol

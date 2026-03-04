@@ -128,7 +128,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       inMols = self.inputSmallMolecules.get()
       nt = self.numberOfThreads.get()
       gpuList = self.getGPU_Ids()
-      subsets = makeSubsets(inMols, nt - 1, cloneItem=True)
+      subsets = makeSubsets(inMols, max(nt - 1, 1), cloneItem=True)
 
       cRStep = self._insertFunctionStep(self.convertReceptorStep, prerequisites=[], needsGPU=False)
 
@@ -206,7 +206,6 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
             self.removeTmpFiles(pocketDir)
 
           for smallMol in outputMols:
-            smallMol.guessMolName()
             outputSet.append(smallMol)
   
         outputSet.setProteinFile(recFile)

@@ -41,6 +41,7 @@ from .protocol_autoSite import ProtChemAutoSite
 #  Docking
 from .protocol_autodock import ProtChemAutodock
 from .protocol_autodockGPU import ProtChemAutodockGPU
+from .protocol_vinaGPU import ProtChemVinaGPU
 from .protocol_dock_vina import ProtChemVinaDocking
 from .protocol_ringtail_create import ProtRingtailCreation
 from .protocol_ringtail_filter import ProtRingtailFilter

@@ -37,7 +37,7 @@ from .. import tests
 from ..protocols import ProtChemADTPrepareReceptor, ProtChemADTPrepareLigands, ProtChemMeekoLigands, \
     ProtScrubberPrepareLigands, ProtCrankPep
 from ..protocols import ProtChemAutoLigand, ProtChemAutoSite, ProtChemAutodock
-from ..protocols import ProtChemAutodockGPU, ProtChemVinaDocking, ProtChemAutoSiteGenPharmacophore
+from ..protocols import ProtChemAutodockGPU, ProtChemVinaDocking, ProtChemVinaGPU, ProtChemAutoSiteGenPharmacophore
 from ..protocols import AutodockGridGeneration, ProtChemAutodockScore
 
 # Receptor and ligands preparations
@@ -335,6 +335,32 @@ class TestVina(TestAutoDock):
         assertHandle(self.assertIsNotNone, getattr(protVina1, 'outputSmallMolecules', None), cwd=protVina1.getWorkingDir())
         self._waitOutput(protVina2, 'outputSmallMolecules', sleepTime=10)
         assertHandle(self.assertIsNotNone, getattr(protVina2, 'outputSmallMolecules', None), cwd=protVina2.getWorkingDir())
+
+class TestVinaGPU(TestAutoDock):
+	def _runVinaGPU(self, pocketsProt=None):
+		protAutoDock = self.newProtocol(
+			ProtChemVinaGPU,
+			fromReceptor=1,
+			inputStructROIs=pocketsProt.outputStructROIs,
+			inputSmallMolecules=self.protPrepareLigandADT.outputSmallMolecules,
+			pocketRadiusN=1.2, nRuns=2,
+			numberOfThreads=4)
+		self.proj.launchProtocol(protAutoDock, wait=False)
+
+		return protAutoDock
+
+	def test(self):
+		print('Docking with VinaGPU in predicted pockets')
+		protAutoLig = self._runAutoSiteFind()
+		self._waitOutput(protAutoLig, 'outputStructROIs', sleepTime=5)
+		self._runSetFilter(inProt=protAutoLig, number=2, property='_score')
+		self._waitOutput(self.protFilter, 'outputStructROIs', sleepTime=5)
+
+		protVina2 = self._runVinaGPU(self.protFilter)
+
+		self._waitOutput(protVina2, 'outputSmallMolecules', sleepTime=10)
+		assertHandle(self.assertIsNotNone, getattr(protVina2, 'outputSmallMolecules', None), cwd=protVina2.getWorkingDir())
+
 
 # Pharmacophore generation
 class TestAutoSitePharmacophore(TestAutoSite):
