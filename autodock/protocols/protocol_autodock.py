@@ -70,47 +70,50 @@ class ProtChemAutodockBase(EMProtocol):
                        condition='doFlexRes', help='List of chain | residues to make flexible. \n')
         return group
 
-    def _defineParams(self, form):
-        form.addSection(label='Input')
-        inputGroup = form.addGroup('Receptor specification')
+    def _defineInput(self, form):
+        inputGroup = form.addGroup('Input specification')
         inputGroup.addParam('fromReceptor', EnumParam, label='Dock on : ', default=1,
-                       choices=['Whole protein', 'SetOfStructROIs'], display=EnumParam.DISPLAY_HLIST,
-                       help='Whether to dock on a whole protein surface or on specific regions')
+                            choices=['Whole protein', 'SetOfStructROIs'], display=EnumParam.DISPLAY_HLIST,
+                            help='Whether to dock on a whole protein surface or on specific regions')
 
         # Docking on whole protein
         inputGroup.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
-                       label='Input atomic structure: ', condition='fromReceptor == 0',
-                       help="The atom structure to use as receptor in the docking")
+                            label='Input atomic structure: ', condition='fromReceptor == 0',
+                            help="The atom structure to use as receptor in the docking")
 
         # Docking on pockets
         inputGroup.addParam('inputStructROIs', PointerParam, pointerClass="SetOfStructROIs",
-                       label='Input pockets: ', condition='not fromReceptor == 0',
-                       help="The protein structural ROIs to dock in")
+                            label='Input pockets: ', condition='not fromReceptor == 0',
+                            help="The protein structural ROIs to dock in")
         inputGroup.addParam('pocketRadiusN', FloatParam, label='Grid radius vs StructROI/AtomStruct radius: ',
-                       default=1.2, allowsNull=False,
-                       help='The radius * n of each StructROI/AtomStruct will be used as grid radius')
+                            default=1.2, allowsNull=False,
+                            help='The radius * n of each StructROI/AtomStruct will be used as grid radius')
 
-        inputGroup.addParam('spacing', FloatParam, label='Spacing of the grids: ', default=0.5, allowsNull=False,
-                       help='Spacing of the generated Autodock grids')
-
-        self._defineFlexParams(form)
-
-        dockGroup = form.addGroup('Docking')
-        dockGroup.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
-                       label='Input small molecules: ', allowsNull=False,
-                       help="Input small molecules to be docked with AutoDock")
-        dockGroup.addParam('convSoft', EnumParam, label='Convert receptor/ligands with : ', default=0,
+        inputGroup.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules",
+                            label='Input small molecules: ', allowsNull=False,
+                            help="Input small molecules to be docked with AutoDock")
+        inputGroup.addParam('convSoft', EnumParam, label='Convert receptor/ligands with : ', default=0,
                             choices=['Meeko', MGL], display=EnumParam.DISPLAY_HLIST, expertLevel=LEVEL_ADVANCED,
                             help='Convert receptor and ligands to pdbqt using this software')
+        return inputGroup
+
+    def _defineParams(self, form):
+        form.addSection(label='Input')
+        inputGroup = self._defineInput(form)
+        flexGroup = self._defineFlexParams(form)
+
+        dockGroup = form.addGroup('Docking')
+        dockGroup.addParam('spacing', FloatParam, label='Spacing of the grids: ', default=0.5, allowsNull=False,
+                           help='Spacing of the generated Autodock grids')
         dockGroup.addParam('nRuns', IntParam, label='Number of docking runs: ', default=10,
-                       help='Number of independent runs using the selected strategy. \n'
-                            'Different docking positions will be found for each of them.')
+                           help='Number of independent runs using the selected strategy. \n'
+                                'Different docking positions will be found for each of them.')
         dockGroup.addParam('rmsTol', FloatParam, label='Cluster tolerance (A): ', expertLevel=LEVEL_ADVANCED,
-                       default=2.0, help='Maximum RMSD for 2 docked structures to be in the same cluster')
+                           default=2.0, help='Maximum RMSD for 2 docked structures to be in the same cluster')
 
         dockGroup.addParam('doZnDock', BooleanParam, label='Perform Zn metalloprotein docking: ', default=False,
-                       expertLevel=LEVEL_ADVANCED,
-                       help='Whether to use the scripts for preparing the metalloprotein receptor containing Zn')
+                           expertLevel=LEVEL_ADVANCED,
+                           help='Whether to use the scripts for preparing the metalloprotein receptor containing Zn')
         return inputGroup, dockGroup
 
     def convertReceptorStep(self):
@@ -126,16 +129,15 @@ class ProtChemAutodockBase(EMProtocol):
         self.convertReceptor2PDB(receptorFile)
         shutil.copy(receptorFile, self.getReceptorPDBQT())
 
-    def convertLigandsStep(self, molSet, it):
-      ligDir = self.getLigConvertedDirs(it)[0]
-      if not os.path.exists(ligDir):
-        os.mkdir(ligDir)
+    def convertLigandsStep(self, molSet, it, ligDir=None):
+      ligDir = self.getLigConvertedDirs(it)[0] if ligDir is None else ligDir
+      os.makedirs(ligDir, exist_ok=True)
 
       if self.getEnumText('convSoft') == MGL:
-        self.performMGLLigConversion(molSet, it)
+        self.performMGLLigConversion(molSet, ligDir)
       else:
         molFiles = [mol.getFileName() for mol in molSet]
-        self.performMeekoPrep(molFiles, it, oDir=self.getLigConvertedDirs(it)[0])
+        self.performMeekoPrep(molFiles, it, oDir=ligDir)
 
     def generateGridsStep(self, pocket=None, addLigType=True):
       ligFiles = self.getConvertedLigandsFiles()
@@ -199,9 +201,8 @@ class ProtChemAutodockBase(EMProtocol):
         ligDirs = self.getLigConvertedDirs(it)
         return [os.path.join(ligDir, file) for ligDir in ligDirs for file in os.listdir(ligDir)]
 
-    def performMGLLigConversion(self, inMols, it):
+    def performMGLLigConversion(self, inMols, oDir):
       convMols = []
-      oDir = self.getLigConvertedDirs(it)[0]
       for mol in inMols:
         molFile = mol.getFileName()
         if molFile.endswith(PDBQText):
@@ -217,7 +218,7 @@ class ProtChemAutodockBase(EMProtocol):
         inFile = smallMol.getFileName() if not pose else smallMol.getPoseFile()
         if os.path.splitext(inFile)[1] not in [PDBext, '.mol2', '.pdbq']:
             # Convert to formats recognized by ADT
-            outName, outDir = os.path.splitext(os.path.basename(inFile))[0], os.path.abspath(self._getTmpPath())
+            outName, outDir = getBaseName(inFile), os.path.abspath(self._getTmpPath())
             args = ' -i "{}" -of mol2 --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
                                                                                os.path.abspath(outDir), outName)
             pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=popen)
@@ -228,7 +229,7 @@ class ProtChemAutodockBase(EMProtocol):
           os.mkdir(oDir)
 
         inExt = os.path.splitext(os.path.basename(inFile))[1]
-        oFile = os.path.abspath(os.path.join(oDir, smallMol.getUniqueName() + PDBQText))
+        oFile = os.path.abspath(os.path.join(oDir, getBaseName(inFile) + PDBQText))
 
         if inExt != PDBQText:
           args = '-l {} -o {}'.format(inFile, oFile)
