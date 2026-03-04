@@ -179,6 +179,11 @@ class Plugin(pwchemPlugin):
         installer = InstallHelper(VINAGPU_DIC['name'], packageHome=cls.getVar(VINAGPU_DIC['home']),
             packageVersion=VINAGPU_DIC['version'])
 
+        # Defining variables
+        boostFoldername = 'boost'
+        boostFilename = boostFoldername + '.tar.gz'
+        boostPath = os.path.join(cls.getVar(VINAGPU_DIC['home']), boostFoldername)
+
         # Defining GPU platform and OpenCL version
         gpuPlatform = '-DNVIDIA_PLATFORM' if cls.getGPUPlatform() == 'nvidia' else '-DAMD_PLATFORM'
         openCLVersion = '-DOPENCL_2_0' if cls.getOpenCLVersion() == '2.0' else '-DOPENCL_3_0'
@@ -197,6 +202,9 @@ class Plugin(pwchemPlugin):
 
         # Installing CUDA in a Conda enviroment
         installer.addCondaPackages(['cuda'], channel="\"nvidia/label/cuda-11.7.0\"")
+
+        # Defining the path to the script that modifies the makefile
+        makefileModifier = os.path.join(os.path.dirname(__file__), 'utils', 'modify_atdvinagpu_makefile.py')
 
         # Defining AutoDock-VinaGPU makefile location
         softwares = [f'AutoDock-Vina-GPU-{VINAGPU_DIC["version"]}',
@@ -229,20 +237,6 @@ class Plugin(pwchemPlugin):
         # Adding package
         installer.addPackage(env,dependencies=['wget', 'tar', 'conda', 'make', 'clinfo'], default=default)
 
-        # Cloning AutoDock-VinaGPU
-        installer.getCloneCommand('https://github.com/DeltaGroupNJUPT/Vina-GPU-2.0.git',
-                                  binaryFolderName=cls._vinagpuBinary,targeName='VINA_GPU_CLONED')
-
-        # Downloading and extracting Boost library
-        (installer.getExtraFile('https://boostorg.jfrog.io/artifactory/main/release/1.82.0/source/boost_1_82_0.tar.gz',
-                               'BOOST_DOWNLOADED', fileName=boostFilename) \
-            .addCommand(f'mkdir -p {boostFoldername} && tar -xf {boostFilename} --strip-components 1 -C '
-            f'{boostFoldername} && rm {boostFilename}','BOOST_EXTRACTED') \
-            .getCondaEnvCommand(requirementsFile=False))
-
-        # Installing CUDA in a Conda enviroment
-        installer.addCondaPackages(['cuda'], channel="\"nvidia/label/cuda-11.5.0\"")
-
     @classmethod
     def addAutoSitePackage(cls, env, default=True):
         """ This function provides the neccessary commands for installing AutoSite. """
@@ -270,7 +264,8 @@ class Plugin(pwchemPlugin):
                                                  'RINGTAIL_INSTALLED'). \
             addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && pip install --no-deps '
                                  f'{MEEKO_DIC["name"]}=={MEEKO_DIC["version"]} prody==2.4', 'MEEKO_INSTALLED'). \
-            addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && conda install -c conda-forge -y gemmi=0.7.3', 'MEEKO_DEPS_INSTALLED'). \
+            addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && conda install -y conda-forge::gemmi==0.7.3',
+                       'MEEKO_DEPS_INSTALLED'). \
             addPackage(env, dependencies=['conda'], default=default)
 
     @classmethod
