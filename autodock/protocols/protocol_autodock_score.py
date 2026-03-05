@@ -150,7 +150,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
         scoresDic[molName] = self.parseDockedMolsDLG(dlgFile)
 
     for smallMol in self.getInputMols():
-      molName = smallMol.getUniqueName()
+      molName = smallMol.getUniqueName(dock=False)
       if molName in scoresDic:
         molDic = scoresDic[molName]
 
@@ -191,7 +191,7 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
       return self.inputSmallMolecules[0].get().getProteinFile()
 
   def getMolLigandName(self, mol):
-    molName = mol.getUniqueName()
+    molName = mol.getUniqueName(dock=False)
     for ligName in self.ligandFileNames:
       if molName + '.pdbqt' in ligName:
         return ligName

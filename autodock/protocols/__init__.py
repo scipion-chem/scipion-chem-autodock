@@ -33,6 +33,7 @@ from .protocol_preparation_ligands import ProtChemADTPrepareLigands
 from .protocol_scrubber_ligand_prep import ProtScrubberPrepareLigands
 from .protocol_meeko_ligands import ProtChemMeekoLigands
 
+
 # ROI definition
 from .protocol_autoLigand import ProtChemAutoLigand
 from .protocol_autoSite import ProtChemAutoSite
@@ -44,6 +45,7 @@ from .protocol_vinaGPU import ProtChemVinaGPU
 from .protocol_dock_vina import ProtChemVinaDocking
 from .protocol_ringtail_create import ProtRingtailCreation
 from .protocol_ringtail_filter import ProtRingtailFilter
+from .protocol_autodock_crankpep import ProtCrankPep
 
 # Pharmacophores
 from .protocol_autoSite_pharmacophore import ProtChemAutoSiteGenPharmacophore

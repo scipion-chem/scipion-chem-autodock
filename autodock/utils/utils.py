@@ -52,6 +52,8 @@ def splitSDF(sdfFile, oriName=None, oDir=None):
 
     for molText in molTexts:
       molName, confId = getMolName(molText)
+      if confId is None:
+          confId = 0
       confId += 1
       oFile = os.path.join(oDir, f'{molName}.sdf')
       if confId is not None:
