@@ -225,8 +225,7 @@ class ProtChemAutodockBase(EMProtocol):
             inFile = self._getTmpPath(outName + '.mol2')
             inFile = relabelMapAtomsMol2(inFile)
 
-        if not os.path.exists(oDir):
-          os.mkdir(oDir)
+        os.makedirs(oDir, exist_ok=True)
 
         inExt = os.path.splitext(os.path.basename(inFile))[1]
         oFile = os.path.abspath(os.path.join(oDir, getBaseName(inFile) + PDBQText))
