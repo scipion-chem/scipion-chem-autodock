@@ -72,13 +72,16 @@ if __name__ == "__main__":
     if len(molFileDic) > 0:
         preparator = MoleculePreparation(hydrate=hydra)
         for mol, molFile in molFileDic.items():
-            mol = fixLigand(mol)
-            mol = getBiggestFrag(mol)
-            preparator.prepare(mol)
+            try:
+                mol = fixLigand(mol)
+                mol = getBiggestFrag(mol)
+                preparator.prepare(mol)
 
-            outFile = os.path.join(outDir, getBaseName(molFile)) + '.pdbqt'
-            preparator.write_pdbqt_file(outFile)
-            outFiles.append(outFile)
+                outFile = os.path.join(outDir, getBaseName(molFile)) + '.pdbqt'
+                preparator.write_pdbqt_file(outFile)
+                outFiles.append(outFile)
+            except:
+                print('Failed to prepare mol: ', molFile)
 
         if writeOut:
             with open(os.path.join(outDir, 'meeko_files.txt'), 'w') as f:
