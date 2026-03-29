@@ -36,7 +36,47 @@ from autodock.protocols import ProtChemADTPrepareLigands
 scriptName = 'meeko_preparation.py'
 
 class ProtChemMeekoLigands(ProtChemADTPrepareLigands):
-    """Prepare ligands using Meeko from Autodock """
+    """Prepare ligands using Meeko from Autodock 
+    
+    User IA Manual: MeekoLigands Protocol
+
+The MeekoLigands protocol is used to prepare ligand molecules for docking by
+converting them from common chemical structure formats, such as SDF or MOL2,
+into the PDBQT format required by AutoDock-based engines. This preparation
+includes steps such as 3D coordinate generation, torsion detection, charge
+assignment, and atom typing, ensuring the ligand is properly configured for
+structure-based virtual screening.
+
+To begin, the user must provide a file containing one or more ligands. These may
+include two-dimensional or three-dimensional structures. If only 2D coordinates
+are present, the protocol attempts to generate a 3D conformation automatically.
+Proper 3D geometry is essential for successful docking, so ligand files must be
+checked to ensure their suitability prior to execution.
+
+The protocol handles key steps such as the assignment of Gasteiger partial
+charges, the addition of hydrogens at physiological pH, and the detection of
+rotatable bonds. It offers the option to enable or disable automatic torsion
+assignment, which can be useful for molecules that require fixed conformations
+or have specific torsional constraints. If needed, users may instruct the
+protocol to preserve original atom names or chemical features that are sensitive
+to stereochemistry and tautomeric forms.
+
+Each processed ligand is written as an individual PDBQT file, with unique
+identifiers to maintain traceability throughout the workflow. These output files
+are fully compatible with downstream protocols such as AutoDock-GPU, AutoDock
+Vina, or EncoderDockScoring. All relevant conformational and chemical
+information is embedded into the output, allowing immediate use for docking or
+rescoring.
+
+Errors encountered during the conversion process, such as missing 3D
+coordinates, undefined stereochemistry, or failures in charge assignment, are
+reported clearly in the log. This ensures that problematic molecules can be
+quickly identified and corrected.
+
+In summary, this protocol provides an automated and reliable interface to Meeko
+for the preparation of ligands in docking-ready format. It integrates smoothly
+into Scipion-Chem workflows and serves as the standard entry point for molecular
+screening campaigns involving structure-based methods."""
     _label = 'meeko ligand preparation'
     _program = ""
 

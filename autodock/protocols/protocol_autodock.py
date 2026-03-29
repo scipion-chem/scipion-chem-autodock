@@ -51,7 +51,59 @@ searchDic = {LGA: 'Lamarckian Genetic Algorithm', GA: 'Genetic Algorithm', LS: '
 meekoScript = 'meeko_preparation.py'
 
 class ProtChemAutodockBase(EMProtocol):
-    """Base class protocol for AutoDock docking protocols"""
+    """Base class protocol for AutoDock docking protocols 
+    User IA Manual: AutoDock Docking Protocol
+
+    Overview:
+    The AutoDock Docking protocol performs molecular docking between a reference receptor and one or more
+    ligands using AutoDock 4.2. It automates the preparation of ligand-specific grid maps, the execution
+    of AutoGrid and AutoDock, and the parsing of resulting poses and scores.
+
+    This protocol requires that both the receptor and the ligands be properly prepared in PDBQT format.
+    The receptor should be a rigid structure without solvent molecules or alternate conformations.
+    Ligands must be correctly protonated and contain all torsional definitions expected by AutoDock.
+
+    Input Parameters:
+    Users must provide a receptor in PDBQT format and a ligand set, usually in the form of a ChemStructSet.
+    Each ligand will be docked individually against the receptor.
+
+    A docking grid box must be defined to specify the search region. This includes the center coordinates
+    (X, Y, Z), the number of points along each axis, and the spacing between grid points. These parameters
+    must be carefully adjusted to ensure that the entire binding site is covered.
+
+    Users can also configure search parameters such as the number of genetic algorithm runs, the maximum
+    number of energy evaluations, and the maximum number of generations. These settings directly affect
+    the quality and duration of the docking simulations.
+
+    Execution:
+    For each ligand, AutoGrid is used to compute the energy grid maps based on the ligand?s atom types.
+    Then AutoDock performs the docking simulation using the defined genetic algorithm parameters.
+    All ligands are processed independently.
+
+    During execution, temporary files such as grid maps, docking logs, and result PDBQT files are generated.
+    These are automatically parsed and included in the output.
+
+    Outputs:
+    The final output is a ChemStructSet containing all docking poses. Each pose is annotated with scoring
+    information including binding free energy, estimated inhibition constant (Ki), torsional energy, and more.
+
+    Results are grouped per ligand, and the best-scoring poses are sorted according to AutoDock?s scoring
+    function. The user can visualize them in Scipion or export them for further analysis.
+
+    Usage Notes:
+    This protocol is suitable for individual docking studies or small-scale screening. For high-throughput
+    applications, consider optimizing grid reuse and parallelization.
+
+    Make sure to define a grid box large enough to contain the binding site, and validate that all ligands
+    are compatible with AutoDock?s requirements.
+
+    Default genetic algorithm parameters offer a good balance, but they can be fine-tuned to trade off
+    between speed and sampling quality.
+
+    Compatibility:
+    The protocol accepts input from any ChemStructSet-based Scipion protocol. Its outputs can be used
+    directly with AutoDock Score, clustering methods, or filtering workflows within Scipion Chem.
+    """
 
     stepsExecutionMode = STEPS_PARALLEL
 

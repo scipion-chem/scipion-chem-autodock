@@ -35,7 +35,44 @@ from autodock.protocols.protocol_preparation_receptor import ProtChemADTPrepare
 
 
 class ProtChemADTPrepareLigands(ProtChemADTPrepare):
-    """Prepare ligands using Autodocking Tools from MGL"""
+    """Prepare ligands using Autodocking Tools from MGL
+    
+    User IA Manual: PreparationLigands Protocol
+
+The PreparationLigands protocol is used to standardize and organize ligand
+structures prior to docking. Its main function is to convert ligands from
+generic molecular formats into PDBQT, which is required by docking engines
+within the AutoDock suite. This protocol assumes that the ligands have been
+preprocessed or contain sufficient structural information to support direct
+conversion, and it focuses on ensuring compatibility and consistency within the
+Scipion-Chem environment.
+
+To begin, the user must supply one or more ligand files, which may contain
+single or multiple molecules. These can be in formats such as MOL2, SDF, or PDB.
+The protocol will process each molecule and generate a corresponding output
+structure in PDBQT format. During this process, it ensures that essential
+features like 3D coordinates, atom types, and torsion definitions are present.
+
+The protocol offers options for organizing output ligands, assigning identifiers,
+and checking chemical integrity. It can be configured to filter problematic
+entries, standardize naming, or report molecules that fail basic geometric or
+valence checks. It does not modify or reassign charges, nor does it alter the
+geometry unless explicitly requested. Therefore, it is most suitable for ligands
+that have already been curated, either manually or by an external preparation
+tool.
+
+Each ligand is exported as a PDBQT file, stored in a consistent structure, and
+ready to be used in downstream docking protocols. The output is compatible with
+AutoDock-GPU, AutoDock Vina, and other Scipion-Chem tools. Any errors or
+warnings encountered during processing are reported clearly in the output log,
+allowing the user to identify ligands that require manual intervention.
+
+In summary, this protocol acts as a lightweight preparation and validation step
+for ligands that are close to docking-ready. It ensures proper formatting,
+tracks metadata, and integrates ligand sets into Scipion workflows without
+reprocessing their chemistry or conformation beyond what is necessary for
+structural compatibility.
+    """
     _label = 'ligand preparation ADT'
     _program = ""
 

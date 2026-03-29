@@ -37,7 +37,47 @@ from autodock.utils import splitSDF
 
 
 class ProtScrubberPrepareLigands(ProtChemADTPrepareLigands):
-    """Prepare ligands using Scrubber from ForliLab"""
+    """Prepare ligands using Scrubber from ForliLab
+    
+    User IA Manual: ScrubberLigandPrep Protocol
+
+The ScrubberLigandPrep protocol is intended to clean and filter ligand
+structures before they are used in docking workflows. It serves as a quality
+control and refinement step, ensuring that input molecules conform to expected
+standards of chemical validity, structural completeness, and format
+compatibility.
+
+The user begins by providing one or more ligand files, typically in MOL2, SDF,
+or PDB formats. These files may contain single or multiple molecules, depending
+on how the screening library has been assembled. The protocol parses these
+structures and applies a series of checks and transformations designed to
+correct or remove problematic entries.
+
+Several configurable parameters control how ligands are handled. The user can
+choose whether to remove molecules with undefined atoms, improper valences,
+missing 3D coordinates, or disconnected fragments. Ligands that violate any of
+these rules can either be excluded from the output or logged for review. The
+protocol can also standardize protonation states, resolve tautomers, or enforce
+stereochemistry definitions if desired.
+
+During this process, ligands are assigned unique identifiers and checked for
+naming consistency. Optional renaming or tag extraction can be applied to ensure
+that metadata is preserved and mapped correctly into downstream steps. The
+protocol also offers the option to reduce molecular complexity by eliminating
+very large molecules, small fragments, or ions that are not suitable for
+docking.
+
+Once cleaned and standardized, the ligands are exported in the selected format,
+retaining their geometry and chemical features. The output set contains only the
+entries that pass all quality filters, ensuring that subsequent preparation or
+docking protocols receive valid and usable inputs. The protocol also generates a
+report summarizing the filtering process, including how many molecules were
+accepted, rejected, or corrected.
+
+In essence, ScrubberLigandPrep acts as a gatekeeper between raw chemical
+libraries and structured docking workflows. It increases reliability,
+reproducibility, and performance by ensuring that all ligands meet the criteria
+needed for successful structure-based modeling."""
     _label = 'ligand preparation Scrubber'
 
     stepsExecutionMode = params.STEPS_PARALLEL

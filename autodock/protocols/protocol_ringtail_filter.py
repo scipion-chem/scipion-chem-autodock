@@ -89,7 +89,42 @@ def splitSDF(sdfFile, oriName=None):
   return molDic, confFile
 
 class ProtRingtailFilter(EMProtocol):
-  """Executes a serie of Ringtail filters over a docking database"""
+  """Executes a serie of Ringtail filters over a docking database
+  
+  User IA Manual: RingtailFilter Protocol
+
+The RingtailFilter protocol is used to query and extract specific ligand poses
+from a docking results database previously generated with the RingtailCreate
+protocol. It allows the user to apply complex filtering conditions to large
+docking campaigns, selecting subsets of poses based on docking score, RMSD,
+ligand identity, clustering, or any combination of available criteria.
+
+To begin, the user must provide a Ringtail database that contains the results of
+a completed docking experiment. This database acts as the source of all poses
+and associated metadata. The filtering process is driven by a query, which can
+be either a predefined selection or a custom SQL expression. This enables
+flexible and precise control over which results are extracted for further use.
+
+The user can define constraints such as the number of poses per ligand, the
+maximum number of ligands to return, or specific score thresholds. It is also
+possible to retrieve only the top-ranked pose per ligand, or poses that belong
+to specific clustering solutions. These parameters help reduce the output to the
+most relevant hits, optimizing downstream analysis or visualization.
+
+Output from the protocol consists of a new collection of ligand poses, written
+in PDBQT format, that match the filtering conditions. These poses are ready to
+be scored, visualized, or used in consensus analyses. The protocol also produces
+a table with information on the selected ligands, including docking scores and
+rankings, which can be inspected within Scipion or exported for reporting.
+
+This filtering step is essential when working with large datasets, as it allows
+the user to focus on the most promising candidates without manual inspection of
+individual docking results. It integrates seamlessly into workflows that involve
+rescoring, pharmacophore analysis, or experimental prioritization.
+
+In summary, RingtailFilter enables powerful post-docking selection based on
+structured database queries, turning raw virtual screening data into manageable
+and actionable subsets for further study."""
   _label = 'Ringtail database filter'
 
   def _defineParams(self, form):
