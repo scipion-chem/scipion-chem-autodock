@@ -202,9 +202,6 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
           outputMols = performBatchThreading(self.performOutputCreation, inputMols, nt,
                                              gridId=gridId, pocketDic=pocketDic, recFile=recFile)
 
-          if self.remTmp.get():
-            self.removeTmpFiles(pocketDir)
-
           for smallMol in outputMols:
             outputSet.append(smallMol)
   
@@ -215,6 +212,9 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
         self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
       self.cleanTmpFiles()
+      if self.remTmp.get():
+        for pocketDir in self.getPocketDirs():
+            self.removeTmpFiles(pocketDir)
 
 
   def performOutputParsing(self, dlgFiles, molLists, it, gridId, outDir):
