@@ -368,6 +368,11 @@ class Plugin(pwchemPlugin):
             subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
     @classmethod
+    def convertPDBQT2SDF(cls, protocol, pdbqtFile, sdfFile):
+        args = f'{pdbqtFile} -s {sdfFile}'
+        Plugin.runCondaCommand(protocol, args, RDKIT_DIC, 'mk_export.py')
+
+    @classmethod
     def runScrubber(cls, protocol, args, cwd=None, popen=False):
         fullProgram = f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && scrub.py '
         if not popen:
