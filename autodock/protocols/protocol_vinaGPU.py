@@ -97,25 +97,27 @@ class ProtChemVinaGPU(ProtChemVinaDocking):
         cSteps.append(self._insertFunctionStep(self.convertLigandsStep, molSet, it,
                                                self.getLigConvertedDir(), prerequisites=[], needsGPU=False))
 
+      gpuIdxs = self.getGPU_Ids()
+
       dockSteps = []
       gridReqs = [cRStep] + cSteps
       if self.fromReceptor.get() == 0:
-          dockId = self._insertFunctionStep(self.dockStep, prerequisites=gridReqs)
+          dockId = self._insertFunctionStep(self.dockStep, gpuIdxs, prerequisites=gridReqs)
           dockSteps.append(dockId)
       else:
         for pocket in self.inputStructROIs.get():
-            dockId = self._insertFunctionStep(self.dockStep, pocket.clone(), prerequisites=gridReqs)
+            dockId = self._insertFunctionStep(self.dockStep, gpuIdxs, pocket.clone(), prerequisites=gridReqs)
             dockSteps.append(dockId)
 
       self._insertFunctionStep(self.createOutputStep, prerequisites=dockSteps, needsGPU=False)
 
-  def dockStep(self, pocket=None):
+  def dockStep(self, gpuIdx, pocket=None):
       confFile, valid = self.writeConfigFile(pocket)
       if valid:
           program = self.getEnumText('dockSoft')
           args = f'--config {confFile}'
 
-          autodockPlugin.runVinaGPU(self, program, args)
+          autodockPlugin.runVinaGPU(self, program, args, gpuIdx=gpuIdx)
 
   def createOutputStep(self):
     recFile = self.getReceptorPDBQT()
