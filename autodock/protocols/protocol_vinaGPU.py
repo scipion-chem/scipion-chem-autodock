@@ -53,7 +53,7 @@ class ProtChemVinaGPU(ProtChemVinaDocking):
                                          Select the one you want to use.")
 
     form.addHidden(GPU_LIST, StringParam, default='0', label="Choose GPU IDs",
-                   help="Add a list of GPU devices that can be used")
+                   help="Add a list of GPU devices that can be used (comma-separated)")
 
     super()._defineInput(form)
     # MGLTools as default pdbqt converter (some Meeko atom types are not understood)
