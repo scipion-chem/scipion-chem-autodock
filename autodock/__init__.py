@@ -152,7 +152,8 @@ class Plugin(pwchemPlugin):
             targetsFlag = f' TARGETS={compCap}' if compCap else ''
 
             # Installing package
-            make_cmd = f'cd {cls._atdgpuBinary} && CC=/usr/bin/gcc-12 CXX=/usr/bin/g++-12 make DEVICE=GPU OVERLAP=ON{targetsFlag}'
+            env_str = ' '.join(f'{k}={v}' for k, v in enVars.items())
+            make_cmd = f'cd {cls._atdgpuBinary} && {env_str} CC=/usr/bin/gcc-12 CXX=/usr/bin/g++-12 make DEVICE=GPU OVERLAP=ON{targetsFlag}'
 
             installer.getCloneCommand(cls.getAutoDockGPUGithub(),
                                       binaryFolderName=cls._atdgpuBinary,
