@@ -164,7 +164,7 @@ class ProtChemVinaDocking(ProtChemAutodockBase):
                         newSmallMol._energy = pwobj.Float(molDic[posId]['energy'])
 
                         poseFile = molDic[posId]['file']
-                        if os.path.getsize(poseFile) > 0:
+                        if os.path.exists(poseFile) and os.path.getsize(poseFile) > 0:
                             if doFlexRes:
                                 poseFile, curRecFile = self.makeFlexPoseFiles(poseFile, recFile)
                                 newSmallMol.setProteinFile(os.path.relpath(curRecFile))
