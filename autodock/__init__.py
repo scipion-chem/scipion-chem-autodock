@@ -310,7 +310,7 @@ class Plugin(pwchemPlugin):
             subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
     @classmethod
-    def runAutodockGPU(cls, protocol, args, cwd=None):
+    def runAutodockGPU(cls, protocol, args, gpuIdx, cwd=None):
         """ Run autodock gpu command from a given protocol """
         program = ''
         progDir = pwchemPlugin.getProgramHome(ADGPU_DIC, path='AutoDockGPU/bin')
@@ -322,7 +322,7 @@ class Plugin(pwchemPlugin):
 
         if program:
             kwargs = {"cwd": cwd}
-            insistentRun(protocol, program, args, **kwargs)
+            insistentRun(protocol, program, args, gpuIdx=gpuIdx, **kwargs)
         else:
             print('No autodock_gpu binary was found in {}'.format(progDir))
 
@@ -333,14 +333,14 @@ class Plugin(pwchemPlugin):
         protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
 
     @classmethod
-    def runVinaGPU(cls, protocol, program, args):
+    def runVinaGPU(cls, protocol, program, args, gpuIdx):
         """ Run Vina GPU command from a given protocol """
         progPath = cls.getVinaGPUBinary(program)
         progDir = os.path.dirname(progPath)
 
         if os.path.exists(progPath):
             kwargs = {"cwd": progDir}
-            insistentRun(protocol, progPath, args, **kwargs)
+            insistentRun(protocol, progPath, args, gpuIdx=gpuIdx, **kwargs)
         else:
 
             print('No Vina GPU binary was found in {}'.format(progDir))

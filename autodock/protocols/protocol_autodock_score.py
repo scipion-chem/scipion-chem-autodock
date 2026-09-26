@@ -96,7 +96,8 @@ class ProtChemAutodockScore(ProtChemAutodockBase):
   def convertStep(self, mols):
     for mol in mols:
         fnSmall, smallDir = self.convertLigand2PDBQT(mol, self._getExtraPath('conformers'), pose=True)
-        self.ligandFileNames.append(fnSmall)
+        if fnSmall and os.path.exists(fnSmall):
+            self.ligandFileNames.append(fnSmall)
 
     receptorFile = self.getOriginalReceptorFile()
     if receptorFile.endswith('.pdb'):

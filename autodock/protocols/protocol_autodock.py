@@ -28,7 +28,7 @@ import os, glob, shutil, subprocess
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam, STEPS_PARALLEL, BooleanParam, \
-  LEVEL_ADVANCED, StringParam, EnumParam, LabelParam, TextParam
+  LEVEL_ADVANCED, StringParam, EnumParam, LabelParam, TextParam, GPU_LIST
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import makePath, createLink
 
@@ -175,6 +175,9 @@ class ProtChemAutodockBase(EMProtocol):
     def getGridId(self, outDir):
         return outDir.split('_')[-1]
 
+    def getGPU_Ids(self):
+        return getattr(self, GPU_LIST).get()
+
     def getLigandsFileNames(self):
       ligFns = []
       for mol in self.inputSmallMolecules.get():
@@ -210,36 +213,40 @@ class ProtChemAutodockBase(EMProtocol):
           shutil.copy(molFile, fnSmall)
         else:
           fnSmall = self.convertLigand2PDBQT(mol, oDir)[0]
-        convMols.append(fnSmall)
+
+        if fnSmall and os.path.exists(fnSmall):
+            convMols.append(fnSmall)
       return convMols
 
     def convertLigand2PDBQT(self, smallMol, oDir, pose=False, popen=False):
         '''Convert ligand to pdbqt using prepare_ligand4 of ADT'''
-        inFile = smallMol.getFileName() if not pose else smallMol.getPoseFile()
-        if os.path.splitext(inFile)[1] not in [PDBext, '.mol2', '.pdbq']:
-            # Convert to formats recognized by ADT
-            outName, outDir = getBaseName(inFile), os.path.abspath(self._getTmpPath())
-            args = ' -i "{}" -of mol2 --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
-                                                                               os.path.abspath(outDir), outName)
-            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=popen)
-            inFile = self._getTmpPath(outName + '.mol2')
-            inFile = relabelMapAtomsMol2(inFile)
+        try:
+            inFile = smallMol.getFileName() if not pose else smallMol.getPoseFile()
+            if os.path.splitext(inFile)[1] not in [PDBext, '.mol2', '.pdbq']:
+                # Convert to formats recognized by ADT
+                outName, outDir = getBaseName(inFile), os.path.abspath(self._getTmpPath())
+                args = ' -i "{}" -of mol2 --outputDir "{}" --outputName {}'.format(os.path.abspath(inFile),
+                                                                                   os.path.abspath(outDir), outName)
+                pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=popen)
+                inFile = self._getTmpPath(outName + '.mol2')
+                inFile = relabelMapAtomsMol2(inFile)
 
-        os.makedirs(oDir, exist_ok=True)
+            os.makedirs(oDir, exist_ok=True)
 
-        inExt = os.path.splitext(os.path.basename(inFile))[1]
-        oFile = os.path.abspath(os.path.join(oDir, getBaseName(inFile) + PDBQText))
+            inExt = os.path.splitext(os.path.basename(inFile))[1]
+            oFile = os.path.abspath(os.path.join(oDir, getBaseName(inFile) + PDBQText))
 
-        if inExt != PDBQText:
-          args = '-l {} -o {}'.format(inFile, oFile)
+            if inExt != PDBQText:
+              args = '-l {} -o {}'.format(inFile, oFile)
 
-          # Neccessary to have a local copy of ligandFile from mgltools 1.5.7
-          createLink(inFile, self._getExtraPath(os.path.basename(inFile)))
+              # Neccessary to have a local copy of ligandFile from mgltools 1.5.7
+              createLink(inFile, self._getExtraPath(os.path.basename(inFile)))
 
-          self.runMGLTool(program='Utilities24/prepare_ligand4.py', args=args, cwd=self._getExtraPath(), popen=True)
-
-        else:
-          createLink(inFile, oFile)
+              self.runMGLTool(program='Utilities24/prepare_ligand4.py', args=args, cwd=self._getExtraPath(), popen=True)
+            else:
+              createLink(inFile, oFile)
+        except:
+            return None, oDir
         return oFile, oDir
 
     def getOriginalReceptorFile(self, getLink=True):

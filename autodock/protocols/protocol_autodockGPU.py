@@ -152,7 +152,7 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
       self._insertFunctionStep(self.createOutputStep, prerequisites=dockSteps, needsGPU=False)
 
-  def dockStep(self, it, gpuIdxs, pocket=None):
+  def dockStep(self, it, gpuIdx, pocket=None):
       molFns = self.getConvertedLigandsFiles(it)
       flexReceptorFn = self.getFlexFiles()[0] if self.doFlexRes else None
       outDir = self.getOutputPocketDir(pocket)
@@ -161,12 +161,12 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
       self.fixFldFile(os.path.join(outDir, fldFile))
 
       batchFile = self.writeBatchFile(fldFile, molFns, outDir, it)
-      args = f"-B {batchFile} -D {','.join(gpuIdxs)} -n {self.nRuns.get()} --rmstol {self.rmsTol.get()} -C 1 " \
+      args = f"-B {batchFile} -n {self.nRuns.get()} --rmstol {self.rmsTol.get()} -C 1 " \
              f"--output-cluster-poses auto "
       if self.doFlexRes:
         args += f'-F {flexReceptorFn} '
       args += self.getADGPUArgs()
-      autodockPlugin.runAutodockGPU(self, args, outDir)
+      autodockPlugin.runAutodockGPU(self, args, gpuIdx=gpuIdx, cwd=outDir)
 
   def getBatchFile(self, outDir, it):
     return os.path.abspath(os.path.join(outDir, f'batchFile_{it}.txt'))
@@ -316,12 +316,6 @@ class ProtChemAutodockGPU(ProtChemAutodockBase):
 
     args += '-s 44 '
     return args
-
-  def getGPU_Ids(self):
-    gpus = []
-    for gp in getattr(self, GPU_LIST).get().split(','):
-      gpus.append(str(int(gp) + 1))
-    return gpus
 
   def commentFirstLine(self, fn):
     with open(fn) as f:
