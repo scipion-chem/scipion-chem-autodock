@@ -8,6 +8,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Install OpenCL development libraries
+        run: sudo apt-get update && sudo apt-get install -y ocl-icd-opencl-dev opencl-headers
+
       - name: Setup enviroment
         uses: scipion-chem/.github/.github/composites/install-scipion@main
 
