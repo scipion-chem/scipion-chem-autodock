@@ -277,7 +277,8 @@ class Plugin(pwchemPlugin):
                                                             packageVersion=SCRUBBER_DIC['version'])
 
         # Installing package
-        installer.getCloneCommand(cls.getScrubberGithub(), targeName='SCRUBBER_CLONED'). \
+        installer.addCommand(f'git clone --branch {SCRUBBER_DIC["version"]} {cls.getScrubberGithub()}',
+                             'SCRUBBER_CLONED'). \
             addCommand(f'conda create --name {cls.getEnvName(SCRUBBER_DIC)} python=3.10 -y'). \
             addCommand(f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && cd molscrub && pip install -e .',
                                  'SCRUBBER_INSTALLED'). \
