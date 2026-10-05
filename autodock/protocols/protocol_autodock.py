@@ -231,9 +231,7 @@ class ProtChemAutodockBase(EMProtocol):
         oFile = os.path.abspath(os.path.join(oDir, getBaseName(inFile) + PDBQText))
 
         if inExt != PDBQText:
-          args = '-l {} -o {}'.format(inFile, oFile)
-
-          # Neccessary to have a local copy of ligandFile from mgltools 1.5.7
+          args = '-l {} -o {}'.format(os.path.abspath(inFile), oFile)
           createLink(inFile, self._getExtraPath(os.path.basename(inFile)))
 
           self.runMGLTool(program='Utilities24/prepare_ligand4.py', args=args, cwd=self._getExtraPath(), popen=True)
