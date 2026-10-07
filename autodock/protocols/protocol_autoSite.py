@@ -107,6 +107,18 @@ class ProtChemAutoSite(ProtChemAutodockBase):
             raise RuntimeError(f'AutoSite did not produce {os.path.basename(summaryFile)}: '
                                f'it failed for receptor {fnReceptor}. See the AutoSite output above in this log.')
 
+        # No pockets would end the protocol without output: report what AutoSite wrote instead
+        clDir = self._getExtraPath(self.getReceptorName())
+        clFiles = [f for f in os.listdir(clDir) if '_cl_' in f] if os.path.isdir(clDir) else []
+        if not clFiles:
+            with open(summaryFile) as f:
+                summaryTail = ''.join(f.readlines()[-15:])
+            clDirContent = sorted(os.listdir(clDir)) if os.path.isdir(clDir) else 'missing'
+            raise RuntimeError(f'AutoSite found no pockets (no *_cl_* files in {clDir}).\n'
+                               f'Content of {clDir}: {clDirContent}\n'
+                               f'Content of {self._getExtraPath()}: {sorted(os.listdir(self._getExtraPath()))}\n'
+                               f'Last lines of {os.path.basename(summaryFile)}:\n{summaryTail}')
+
     def createOutputStep(self):
         outFiles = self.getOutFiles()
         scDic = self.getScoresDic()
