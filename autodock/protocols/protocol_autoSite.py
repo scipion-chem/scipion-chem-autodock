@@ -101,6 +101,12 @@ class ProtChemAutoSite(ProtChemAutodockBase):
         insistentRun(self, autodock_plugin.getPackagePath(package='AUTOSITE', path='bin/autosite'), argsSite,
                      nMax=5, cwd=self._getExtraPath(), sleepTime=5)
 
+        # insistentRun does not raise after its last trial: fail here so the error is not hidden by an empty output
+        summaryFile = self._getExtraPath(self.getReceptorName() + '_AutoSiteSummary.log')
+        if not os.path.exists(summaryFile):
+            raise RuntimeError(f'AutoSite did not produce {os.path.basename(summaryFile)}: '
+                               f'it failed for receptor {fnReceptor}. See the AutoSite output above in this log.')
+
     def createOutputStep(self):
         outFiles = self.getOutFiles()
         scDic = self.getScoresDic()
