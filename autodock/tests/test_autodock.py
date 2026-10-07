@@ -167,7 +167,7 @@ class TestAutoSite(TestADPrepareReceptor):
             ProtChemAutoSite,
             inputAtomStruct=cls.protPrepareReceptor.outputStructure)
 
-        cls.proj.launchProtocol(protPocketFinder, wait=True)
+        cls.launchProtocol(protPocketFinder)  # prints the protocol log and raises if it fails
         return protPocketFinder
 
     def test(self):
@@ -371,7 +371,7 @@ class TestAutoSitePharmacophore(TestAutoSite):
             inputStructROIs=protAutoSite.outputStructROIs,
             inputStructROISelect='Structural ROI 1, AutoSite class')
 
-        cls.proj.launchProtocol(protPocketFinder, wait=True)
+        cls.launchProtocol(protPocketFinder)  # prints the protocol log and raises if it fails
         return protPocketFinder
 
     def test(self):
