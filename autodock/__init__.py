@@ -180,63 +180,65 @@ class Plugin(pwchemPlugin):
         installer = InstallHelper(VINAGPU_DIC['name'], packageHome=cls.getVar(VINAGPU_DIC['home']),
             packageVersion=VINAGPU_DIC['version'])
 
-        # Defining variables
-        boostFoldername = 'boost'
-        boostFilename = boostFoldername + '.tar.gz'
-        boostPath = os.path.join(cls.getVar(VINAGPU_DIC['home']), boostFoldername)
+        # Only install AutoDock-VinaGPU on systems with Nvidia GPUs
+        if cls.getGPUPlatform() == 'nvidia':
+            # Defining variables
+            boostFoldername = 'boost'
+            boostFilename = boostFoldername + '.tar.gz'
+            boostPath = os.path.join(cls.getVar(VINAGPU_DIC['home']), boostFoldername)
 
-        # Defining GPU platform and OpenCL version
-        gpuPlatform = '-DNVIDIA_PLATFORM' if cls.getGPUPlatform() == 'nvidia' else '-DAMD_PLATFORM'
-        openCLVersion = '-DOPENCL_2_0' if cls.getOpenCLVersion() == '2.0' else '-DOPENCL_3_0'
+            # Defining GPU platform and OpenCL version
+            gpuPlatform = '-DNVIDIA_PLATFORM' if cls.getGPUPlatform() == 'nvidia' else '-DAMD_PLATFORM'
+            openCLVersion = '-DOPENCL_2_0' if cls.getOpenCLVersion() == '2.0' else '-DOPENCL_3_0'
 
-        # Cloning AutoDock-VinaGPU
-        installer.getCloneCommand(f'https://github.com/DeltaGroupNJUPT/Vina-GPU-{VINAGPU_DIC["version"]}.git',
-            binaryFolderName=cls._vinagpuBinary, targeName='VINA_GPU_CLONED')
+            # Cloning AutoDock-VinaGPU
+            installer.getCloneCommand(f'https://github.com/DeltaGroupNJUPT/Vina-GPU-{VINAGPU_DIC["version"]}.git',
+                binaryFolderName=cls._vinagpuBinary, targeName='VINA_GPU_CLONED')
 
-        # Downloading and extracting Boost library
-        installer.getExtraFile('https://archives.boost.io/release/1.74.0/source/boost_1_74_0.tar.gz',
-            'BOOST_DOWNLOADED', fileName=boostFilename) \
-            .addCommand(f'mkdir -p {boostFoldername} && tar -xf {boostFilename} --strip-components 1 -C '
-            f'{boostFoldername} && rm {boostFilename}', 'BOOST_EXTRACTED') \
-            .addCommand(f'cd {boostFoldername} && ./bootstrap.sh --with-libraries=program_options,system,filesystem && ./b2',
-            'BOOST_INSTALLED').getCondaEnvCommand(requirementsFile=False)
+            # Downloading and extracting Boost library
+            installer.getExtraFile('https://archives.boost.io/release/1.74.0/source/boost_1_74_0.tar.gz',
+                'BOOST_DOWNLOADED', fileName=boostFilename) \
+                .addCommand(f'mkdir -p {boostFoldername} && tar -xf {boostFilename} --strip-components 1 -C '
+                f'{boostFoldername} && rm {boostFilename}', 'BOOST_EXTRACTED') \
+                .addCommand(f'cd {boostFoldername} && ./bootstrap.sh --with-libraries=program_options,system,filesystem && ./b2',
+                'BOOST_INSTALLED').getCondaEnvCommand(requirementsFile=False)
 
-        # Installing CUDA in a Conda enviroment
-        installer.addCondaPackages(['cuda'], channel="\"nvidia/label/cuda-11.7.0\"")
+            # Installing CUDA in a Conda enviroment
+            installer.addCondaPackages(['cuda'], channel="\"nvidia/label/cuda-11.7.0\"")
 
-        # Defining the path to the script that modifies the makefile
-        makefileModifier = os.path.join(os.path.dirname(__file__), 'utils', 'modify_atdvinagpu_makefile.py')
+            # Defining the path to the script that modifies the makefile
+            makefileModifier = os.path.join(os.path.dirname(__file__), 'utils', 'modify_atdvinagpu_makefile.py')
 
-        # Defining AutoDock-VinaGPU makefile location
-        softwares = [f'AutoDock-Vina-GPU-{VINAGPU_DIC["version"]}',
-                     f'QuickVina2-GPU-{VINAGPU_DIC["version"]}',
-                     f'QuickVina-W-GPU-{VINAGPU_DIC["version"]}']
+            # Defining AutoDock-VinaGPU makefile location
+            softwares = [f'AutoDock-Vina-GPU-{VINAGPU_DIC["version"]}',
+                         f'QuickVina2-GPU-{VINAGPU_DIC["version"]}',
+                         f'QuickVina-W-GPU-{VINAGPU_DIC["version"]}']
 
-        for i, soft in enumerate(softwares):
-            softDir = os.path.join(cls._vinagpuBinary, soft)
-            makefile = os.path.join(softDir, 'Makefile')
-            softBin = f'{soft[:-2]}-{soft[-1]}'
-            oldStrConfig = f"/home/shidi/Vina-GPU-{VINAGPU_DIC['version']}"
+            for i, soft in enumerate(softwares):
+                softDir = os.path.join(cls._vinagpuBinary, soft)
+                makefile = os.path.join(softDir, 'Makefile')
+                softBin = f'{soft[:-2]}-{soft[-1]}'
+                oldStrConfig = f"/home/shidi/Vina-GPU-{VINAGPU_DIC['version']}"
 
-            # Modifying makefile and compiling
-            installer.addCommand(
-                f"{cls.getEnvActivationCommand(VINAGPU_DIC)} && python3 {makefileModifier} "
-                f"{makefile} {boostPath} $CONDA_PREFIX {openCLVersion} {gpuPlatform} && "
-                f"sed -i 's|{oldStrConfig}|{cls._vinagpuBinary}|g' "
-                f"{softDir}/input_file_example/2bm2_config.txt",
-                f"MAKEFILE_{i}_MODIFIED"
-            )
+                # Modifying makefile and compiling
+                installer.addCommand(
+                    f"{cls.getEnvActivationCommand(VINAGPU_DIC)} && python3 {makefileModifier} "
+                    f"{makefile} {boostPath} $CONDA_PREFIX {openCLVersion} {gpuPlatform} && "
+                    f"sed -i 's|{oldStrConfig}|{cls._vinagpuBinary}|g' "
+                    f"{softDir}/input_file_example/2bm2_config.txt",
+                    f"MAKEFILE_{i}_MODIFIED"
+                )
 
-            if testSoft:
-                installer.addCommand(f'{cls.getEnvActivationCommand(VINAGPU_DIC)} && '
-                    f'make source && ./{softBin} --config ./input_file_example/2bm2_config.txt',
-                    f'VINAGPU_{i}_TESTED', workDir=softDir)
+                if testSoft:
+                    installer.addCommand(f'{cls.getEnvActivationCommand(VINAGPU_DIC)} && '
+                        f'make source && ./{softBin} --config ./input_file_example/2bm2_config.txt',
+                        f'VINAGPU_{i}_TESTED', workDir=softDir)
 
-            installer.addCommand(f'{cls.getEnvActivationCommand(VINAGPU_DIC)} && make clean && make',
-                f'VINAGPU_{i}_COMPILED', workDir=softDir)
+                installer.addCommand(f'{cls.getEnvActivationCommand(VINAGPU_DIC)} && make clean && make',
+                    f'VINAGPU_{i}_COMPILED', workDir=softDir)
 
-        # Adding package
-        installer.addPackage(env,dependencies=['wget', 'tar', 'conda', 'make', 'clinfo'], default=default)
+            # Adding package
+            installer.addPackage(env,dependencies=['wget', 'tar', 'conda', 'make', 'clinfo'], default=default)
 
     @classmethod
     def addAutoSitePackage(cls, env, default=True):
@@ -277,7 +279,8 @@ class Plugin(pwchemPlugin):
                                                             packageVersion=SCRUBBER_DIC['version'])
 
         # Installing package
-        installer.getCloneCommand(cls.getScrubberGithub(), targeName='SCRUBBER_CLONED'). \
+        installer.addCommand(f'git clone --branch {SCRUBBER_DIC["version"]} {cls.getScrubberGithub()}',
+                             'SCRUBBER_CLONED'). \
             addCommand(f'conda create --name {cls.getEnvName(SCRUBBER_DIC)} python=3.10 -y'). \
             addCommand(f'{cls.getEnvActivationCommand(SCRUBBER_DIC)} && cd molscrub && pip install -e .',
                                  'SCRUBBER_INSTALLED'). \

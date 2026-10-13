@@ -27,6 +27,8 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
   
+      - name: Install system libraries needed by AutoSite (ADFR suite's OpenBabel links libSM/libICE/X11)
+        run: sudo apt-get update && sudo apt-get install -y libsm6 libice6 libx11-6 libxext6 libxrender1
       - name: Install plugin from pull request
         working-directory: ${{ github.workspace }}
         run: ../scipion/scipion3 installp -p . --devel

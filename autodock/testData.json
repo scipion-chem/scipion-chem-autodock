@@ -3,6 +3,7 @@
 	"skippable": {
 		"gpu": [
 			"test_autodock.TestAutoDockGPU",
+			"test_autodock.TestVinaGPU",
 			"test_autodock.TestAutoDockScoring"
 		],
 		"dependencies": [

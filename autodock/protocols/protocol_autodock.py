@@ -231,9 +231,7 @@ class ProtChemAutodockBase(EMProtocol):
         oFile = os.path.abspath(os.path.join(oDir, getBaseName(inFile) + PDBQText))
 
         if inExt != PDBQText:
-          args = '-l {} -o {}'.format(inFile, oFile)
-
-          # Neccessary to have a local copy of ligandFile from mgltools 1.5.7
+          args = '-l {} -o {}'.format(os.path.abspath(inFile), oFile)
           createLink(inFile, self._getExtraPath(os.path.basename(inFile)))
 
           self.runMGLTool(program='Utilities24/prepare_ligand4.py', args=args, cwd=self._getExtraPath(), popen=True)
@@ -395,15 +393,14 @@ class ProtChemAutodockBase(EMProtocol):
       recDic, nPosFile = self.parseRecepPosFile(posFile)
 
       nRecFile = posFile.replace('.pdbqt', '_rec.pdbqt')
-      with open(recFile) as fIn:
-        with open(nRecFile, 'w') as fOut:
-          for line in fIn:
-            if line.startswith('ATOM'):
-              atName, chain, resNum, coords = self.parsePDBQTLine(line)
-              if chain in recDic and resNum in recDic[chain] and atName in recDic[chain][resNum]:
-                for cIn, cOut in zip(coords, recDic[chain][resNum][atName]):
-                  line = line.replace(cIn, cOut)
-            fOut.write(line)
+      with open(recFile) as fIn, open(nRecFile, 'w') as fOut:
+        for line in fIn:
+          if line.startswith('ATOM'):
+            atName, chain, resNum, coords = self.parsePDBQTLine(line)
+            if chain in recDic and resNum in recDic[chain] and atName in recDic[chain][resNum]:
+              for cIn, cOut in zip(coords, recDic[chain][resNum][atName]):
+                line = line.replace(cIn, cOut)
+          fOut.write(line)
 
       return nPosFile, nRecFile
 
