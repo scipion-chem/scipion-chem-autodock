@@ -20,7 +20,7 @@ with open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
-VERSION_FILE = os.path.join(os.path.dirname(__file__), "pwchem", "version.py")
+VERSION_FILE = os.path.join(here, "autodock", "version.py")
 
 def get_version():
     with open(VERSION_FILE, "r") as f:
@@ -43,7 +43,7 @@ setup(
     install_requires=[requirements],
     include_package_data=True,
     package_data={
-       'pwchem': ['autodock_logo.png'],
+       'autodock': ['autodock_logo.png'],
     },
     entry_points={
         'pyworkflow.plugin': 'autodock = autodock'
