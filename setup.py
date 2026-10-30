@@ -20,9 +20,19 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
+VERSION_FILE = os.path.join(os.path.dirname(__file__), "pwchem", "version.py")
+
+def get_version():
+    with open(VERSION_FILE, "r") as f:
+        content = f.read()
+    match = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', content, re.M)
+    if not match:
+        raise RuntimeError(f"Unable to find version string in {VERSION_FILE}")
+    return match.group(1)
+
 setup(
     name='scipion-chem-autodock',
-    version='1.1.1',
+    version=get_version(),
     description='Scipion framework plugin for the use of tools provided by Autodock software suite',
     long_description=long_description,
     url='https://github.com/scipion-chem/scipion-chem-autodock',
