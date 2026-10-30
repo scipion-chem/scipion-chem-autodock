@@ -22,7 +22,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='scipion-chem-autodock',
-    version='3.0.0',
+    version='1.1.1',
     description='Scipion framework plugin for the use of tools provided by Autodock software suite',
     long_description=long_description,
     url='https://github.com/scipion-chem/scipion-chem-autodock',
